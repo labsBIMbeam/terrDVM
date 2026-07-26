@@ -1,0 +1,42 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.nsec
+
+# Node
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
+# Runtime data and generated artifacts
+.local/
+data/
+jobs/
+artifacts/
+*.glb
+*.tif
+*.tiff
+*.png
+
+# Keep deliberate test fixtures
+!tests/fixtures/**/*.png
+!tests/fixtures/**/*.tif
+!tests/fixtures/**/*.tiff
+!tests/fixtures/**/*.glb
+
+# Editors/OS
+.DS_Store
+.idea/
+.vscode/
