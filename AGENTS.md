@@ -30,6 +30,7 @@ Never start the terrain mesh processor before the invoice/payment/dummy-delivery
 ## Engineering
 
 - Use GSD for discuss → plan → execute → verify.
+- **Model routing:** Use Claude CLI `claude-fable-5` with high effort for roadmap creation and phase planning. Codex remains the primary integrator/executor and deterministic verifier; if Codex fails or cannot complete a bounded task, route that task to Fable 5. Use Opus 5 for independent high-value architecture/security review rather than as the default implementer.
 - Use TDD for protocol/job-state/payment gates.
 - Keep app truth separate from Nostr, Lightning, raster, and Blossom adapters.
 - Validate bounds, CRS, raster size, path safety, subprocess arguments, artifact hashes, and payment state fail-closed.
