@@ -188,20 +188,87 @@ Explicit exclusions prevent scope creep.
 - No processor work was accepted before the paid dummy-delivery gate passed.
 - No artifact is called delivered until exact bytes and hash are read back and verified.
 - External paid calls and public publication remain blocked pending explicit approval.
-- Production build, conformance, browser smoke, each phase's relevant failure-path subset, and the OPS-01 30-minute blocker/fallback law are recurring exit gates even though each requirement has one owning phase.
+- Production build, conformance, browser smoke, each phase's relevant failure-path subset, the OPS-01 30-minute blocker/fallback law, and the VER-06 secret-scan/public-diff-review portion are recurring exit gates even though each requirement has one owning phase.
 
 ## Traceability
 
-Populated during roadmap creation. Every v1 requirement must map to exactly one phase.
+Populated during roadmap creation. Every v1 requirement maps to exactly one owning phase. SBOX-01, SBOX-02, VER-02, VER-03, VER-04, and OPS-01 additionally re-run as standing recurring phase-exit gates in every phase, as does the secret-scan/public-diff-review portion of VER-06 (see ROADMAP.md Standing Rules); ownership below remains singular.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| MAP-01 | Phase 1 | Pending |
+| MAP-02 | Phase 1 | Pending |
+| MAP-03 | Phase 1 | Pending |
+| MAP-04 | Phase 1 | Pending |
+| MAP-05 | Phase 1 | Pending |
+| MAP-06 | Phase 1 | Pending |
+| MAP-07 | Phase 1 | Pending |
+| MAP-08 | Phase 1 | Pending |
+| SBOX-01 | Phase 1 | Pending |
+| SBOX-02 | Phase 1 | Pending |
+| SBOX-03 | Phase 1 | Pending |
+| SBOX-04 | Phase 1 | Pending |
+| SBOX-05 | Phase 2 | Pending |
+| SBOX-06 | Phase 2 | Pending |
+| PROT-01 | Phase 2 | Pending |
+| PROT-02 | Phase 2 | Pending |
+| PROT-03 | Phase 2 | Pending |
+| PROT-04 | Phase 2 | Pending |
+| PROT-05 | Phase 2 | Pending |
+| PROT-06 | Phase 2 | Pending |
+| PROT-07 | Phase 2 | Pending |
+| PROT-08 | Phase 2 | Pending |
+| JOB-01 | Phase 2 | Pending |
+| JOB-02 | Phase 2 | Pending |
+| JOB-03 | Phase 2 | Pending |
+| JOB-04 | Phase 2 | Pending |
+| JOB-05 | Phase 2 | Pending |
+| PAY-01 | Phase 2 | Pending |
+| PAY-02 | Phase 2 | Pending |
+| PAY-03 | Phase 2 | Pending |
+| PAY-04 | Phase 2 | Pending |
+| PAY-05 | Phase 2 | Pending |
+| PAY-06 | Phase 2 | Pending |
+| PAY-07 | Phase 2 | Pending |
+| PAY-08 | Phase 2 | Pending |
+| DUM-01 | Phase 2 | Pending |
+| DUM-02 | Phase 2 | Pending |
+| DUM-03 | Phase 2 | Pending |
+| DUM-04 | Phase 2 | Pending |
+| PROC-01 | Phase 3 | Pending |
+| PROC-02 | Phase 3 | Pending |
+| PROC-03 | Phase 3 | Pending |
+| PROC-04 | Phase 3 | Pending |
+| PROC-05 | Phase 3 | Pending |
+| PROC-06 | Phase 3 | Pending |
+| PROC-07 | Phase 3 | Pending |
+| PROC-08 | Phase 3 | Pending |
+| PROC-09 | Phase 3 | Pending |
+| DIST-01 | Phase 2 | Pending |
+| DIST-02 | Phase 4 | Pending |
+| DIST-03 | Phase 4 | Pending |
+| DIST-04 | Phase 4 | Pending |
+| DIST-05 | Phase 4 | Pending |
+| DIST-06 | Phase 2 | Pending |
+| DIST-07 | Phase 4 | Pending |
+| VIEW-01 | Phase 4 | Pending |
+| VIEW-02 | Phase 4 | Pending |
+| VIEW-03 | Phase 4 | Pending |
+| OPS-01 | Phase 1 | Pending |
+| OPS-02 | Phase 2 | Pending |
+| VER-01 | Phase 2 | Pending |
+| VER-02 | Phase 1 | Pending |
+| VER-03 | Phase 4 | Pending |
+| VER-04 | Phase 4 | Pending |
+| VER-05 | Phase 4 | Pending |
+| VER-06 | Phase 4 | Pending |
+| VER-07 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 67 total
-- Mapped to phases: 0
-- Unmapped: 67 ⚠️
+- Mapped to phases: 67
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-26*
-*Last updated: 2026-07-26 after initial definition*
+*Last updated: 2026-07-26 after roadmap creation (traceability populated 67/67)*

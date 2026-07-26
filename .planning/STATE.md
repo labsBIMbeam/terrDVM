@@ -1,0 +1,85 @@
+---
+gsd_state_version: '1.0'
+status: planning
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-07-26)
+
+**Core value:** A valid signed request must produce an invoice and, only after confirmed payment, deliver verified artifact bytes—first as a structurally valid dummy GLB so payment plus delivery is proven before terrain processing begins.
+**Current focus:** Phase 1 — Sandboxed Bbox and Orthophoto UI
+
+## Current Position
+
+Phase: 1 of 4 (Sandboxed Bbox and Orthophoto UI)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-07-26 — Roadmap created; 67/67 v1 requirements mapped to four fixed-order phases
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: 0.0 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: -
+- Trend: -
+
+*Updated after each plan completion*
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [Roadmap]: Four fixed phases; Phase 3 opens only on recorded DUM-04 executable evidence, never elapsed time.
+- [Roadmap]: DIST-01 and DIST-06 are owned by Phase 2 — authenticated retrievable dummy delivery is the demo core.
+- [Roadmap]: SBOX-01, SBOX-02, VER-02, VER-03, VER-04, OPS-01 have one owning phase plus standing recurring phase-exit gates; VER-06 secret-scan/public-diff review also re-runs every phase because docs/evidence are auto-committed to a public repository.
+- [Roadmap]: MAP-07 uses configured fixed v1 resolution/output defaults; provider server time is the invoice-expiry authority.
+- [Roadmap]: PAY-07 and SBOX-05 resolve during Phase 2 planning before any invoice/artifact endpoint exists.
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+- [Phase 1 entry]: MAP-08 — 21maps v0 source/license/provenance and MapLibre pin must be verified before reuse, else clean fallback source.
+- [Phase 2]: VER-07 approval checkpoint before first live invoice/settlement and first non-local relay publication.
+- [Phase 3 entry]: Recorded DUM-04 evidence, PROC-09 license clearance, pinned WCS/ortho contract, proven Python/GDAL isolation.
+- [Phase 4]: VER-07 approval checkpoint before first Blossom upload; public deployment needs VER-06 approval plus readback.
+
+## Deferred Items
+
+Items acknowledged and carried forward from previous milestone close:
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| *(none)* | | | |
+
+## Session Continuity
+
+Last session: 2026-07-26
+Stopped at: ROADMAP.md and STATE.md created; REQUIREMENTS.md traceability populated 67/67
+Resume file: None
