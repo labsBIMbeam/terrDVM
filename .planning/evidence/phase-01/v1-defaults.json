@@ -3,8 +3,20 @@
   "requirement": "MAP-07",
   "decided_at": "2026-07-27T07:32:25Z",
   "status": "immutable-v1",
-  "human_decision_status": "pending-human-approval",
+  "human_decision_status": "approved",
   "source": ".planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-01-PLAN.md Task 2 and the Phase 1 MAP-07 recorded planning decision",
+  "approval": {
+    "recorded_at": "2026-07-27T08:28:23Z",
+    "source": "Telegram human checkpoint",
+    "response": "approved",
+    "scope": "fixed-v1-defaults",
+    "approved_values": {
+      "RES_M": 5,
+      "OUTPUT_MIME": "model/gltf-binary",
+      "MAX_AREA_KM2": 100,
+      "TIMEOUT_S": 15
+    }
+  },
   "RES_M": 5,
   "OUTPUT_MIME": "model/gltf-binary",
   "MAX_AREA_KM2": 100,
@@ -15,5 +27,5 @@
     "MAX_AREA_KM2": "100 km2 is the immutable v1 fail-closed request-area ceiling selected by Plan 01-01 for MAP-04 validation",
     "TIMEOUT_S": "15 seconds is the immutable v1 resource deadline selected by Plan 01-01 for explicit timeout behavior"
   },
-  "change_control": "Executors and later Phase 1 plans must not choose or drift these values. A rejected value must be re-pinned in this artifact before code consumes it."
+  "change_control": "Executors and later Phase 1 plans must not choose or drift these values. Any change requires a new explicit human checkpoint and re-pinning here before code consumes it."
 }
