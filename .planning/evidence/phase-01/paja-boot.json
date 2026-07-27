@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "case": "boot",
+  "requirement": "SBOX-02",
+  "result": "PASS",
+  "timestamps": {
+    "started_at": "2026-07-27T10:46:19.924Z",
+    "completed_at": "2026-07-27T10:46:24.962Z"
+  },
+  "cli_runtime": {
+    "kehto_cli": {
+      "package": "@kehto/cli",
+      "version": "0.2.16",
+      "source": "existing user-local Deno executable",
+      "project_dependency": false
+    },
+    "paja": {
+      "package": "@kehto/paja",
+      "version": "0.8.0",
+      "source": "existing user-local Deno npm cache",
+      "project_dependency": false
+    },
+    "deno_runtime": {
+      "deno": "2.9.3",
+      "v8": "14.9.207.2-rusty",
+      "typescript": "6.0.3"
+    },
+    "executable": "[USER_DENO_BIN]/kehto",
+    "launch_template": "normal"
+  },
+  "browser": {
+    "playwright_version": "1.59.1",
+    "host_platform_override": "ubuntu24.04-x64",
+    "chromium_revision": 1217,
+    "chromium_executable": "[PLAYWRIGHT_CACHE]/chromium-1217/chrome-linux64/chrome",
+    "browser_version": "147.0.7727.15",
+    "headless": true
+  },
+  "built_artifact": {
+    "path": "apps/napplet/dist/index.html",
+    "sha256": "009aa42da33067fa175063ec7dcd16495c868bf84fbff558926df790e4a97799",
+    "verify_dist": "PASS",
+    "verify_dist_output": "verify-dist: PASS (1 file, dist/index.html is self-contained)",
+    "raw_preview_navigation_used": false,
+    "paja_runtime_origin": "http://127.0.0.1:5197",
+    "napplet_frame_url": "about:srcdoc",
+    "napplet_frame": {
+      "id": "napplet-frame",
+      "title": "Napplet development target",
+      "sandbox": "allow-scripts",
+      "target_url": "http://127.0.0.1:4173/"
+    },
+    "paja_target_proxy_response_sha256": "009aa42da33067fa175063ec7dcd16495c868bf84fbff558926df790e4a97799",
+    "paja_target_proxy_matches_dist": "PASS",
+    "proof": "Paja fetched the strict Vite preview through its loopback target proxy and injected those verified dist bytes into its sandboxed srcdoc napplet frame."
+  },
+  "capability": {
+    "domain": "resource",
+    "state": "on",
+    "recorded_argv_template": "normal",
+    "result": "PASS"
+  },
+  "ui_assertions": {
+    "skip_link_first_focusable": {
+      "expected": {
+        "tag": "a",
+        "text": "Skip to request panel",
+        "href": "#request-panel",
+        "class_name": "skip-link"
+      },
+      "actual": {
+        "tag": "a",
+        "text": "Skip to request panel",
+        "href": "#request-panel",
+        "class_name": "skip-link"
+      },
+      "result": "PASS"
+    },
+    "heading": {
+      "expected": "No area selected",
+      "actual": "No area selected",
+      "result": "PASS"
+    },
+    "resolution": {
+      "expected": "Resolution: 5 m/px — fixed for v1",
+      "actual": "Resolution: 5 m/px — fixed for v1",
+      "result": "PASS"
+    },
+    "output": {
+      "expected": "Output: model/gltf-binary — fixed for v1",
+      "actual": "Output: model/gltf-binary — fixed for v1",
+      "result": "PASS"
+    },
+    "source": {
+      "expected": "Source: — unavailable",
+      "actual": "Source: — unavailable",
+      "result": "PASS"
+    }
+  },
+  "error_assertions": {
+    "console_errors": [],
+    "page_errors": [],
+    "zero_console_errors": "PASS",
+    "zero_page_errors": "PASS"
+  },
+  "request_log": {
+    "capture": "Playwright BrowserContext request event registered before page creation; includes the Paja page and every frame.",
+    "complete": true,
+    "allowlisted_origins": [
+      "http://127.0.0.1:4173",
+      "http://127.0.0.1:5197"
+    ],
+    "urls": [
+      "http://127.0.0.1:5197/",
+      "http://127.0.0.1:5197/__kehto/browser-host.js",
+      "http://127.0.0.1:5197/__kehto/config.json",
+      "http://127.0.0.1:5197/__kehto/target.html"
+    ],
+    "requests": [
+      {
+        "sequence": 1,
+        "url": "http://127.0.0.1:5197/",
+        "method": "GET",
+        "resource_type": "document",
+        "frame_url": "about:blank",
+        "classification": "allowlisted-loopback-network",
+        "origin": "http://127.0.0.1:5197",
+        "allowed": true
+      },
+      {
+        "sequence": 2,
+        "url": "http://127.0.0.1:5197/__kehto/browser-host.js",
+        "method": "GET",
+        "resource_type": "script",
+        "frame_url": "http://127.0.0.1:5197/",
+        "classification": "allowlisted-loopback-network",
+        "origin": "http://127.0.0.1:5197",
+        "allowed": true
+      },
+      {
+        "sequence": 3,
+        "url": "http://127.0.0.1:5197/__kehto/config.json",
+        "method": "GET",
+        "resource_type": "fetch",
+        "frame_url": "http://127.0.0.1:5197/",
+        "classification": "allowlisted-loopback-network",
+        "origin": "http://127.0.0.1:5197",
+        "allowed": true
+      },
+      {
+        "sequence": 4,
+        "url": "http://127.0.0.1:5197/__kehto/target.html",
+        "method": "GET",
+        "resource_type": "fetch",
+        "frame_url": "http://127.0.0.1:5197/",
+        "classification": "allowlisted-loopback-network",
+        "origin": "http://127.0.0.1:5197",
+        "allowed": true
+      }
+    ],
+    "origin_summary": {
+      "http://127.0.0.1:5197": 4
+    },
+    "browser_internal_non_network_requests": [],
+    "external_requests": [],
+    "assertions": {
+      "complete_request_events": "PASS",
+      "paja_runtime_origin_observed": "PASS",
+      "paja_target_proxy_observed": "PASS",
+      "paja_frame_declares_preview_target": "PASS",
+      "paja_target_proxy_matches_verified_dist": "PASS",
+      "loopback_only_network": "PASS",
+      "no_external_hostname_or_nonloopback_address": "PASS",
+      "no_tile_glyph_or_source_request": "PASS"
+    }
+  },
+  "process_logs": {
+    "capture_complete": true,
+    "stdout": "Kehto Paja\nRuntime URL: http://127.0.0.1:5197/\nTarget URL: http://127.0.0.1:4173/\nMode: managed-command\nHMR: iframe-target-url\nSimulation: identity:anon relay:off storage:disabled upload:off theme:dark off:relay,outbox,storage,notify,media,upload,count\nCommand: pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort\n  ➜  Local:   http://127.0.0.1:4173/\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "browser_closed": "PASS",
+    "managed_process_group_gone": "PASS",
+    "tracked_child_process_count": 2,
+    "tracked_child_processes_gone": "PASS",
+    "preview_listener_127_0_0_1_4173_closed": "PASS",
+    "paja_listener_127_0_0_1_5197_closed": "PASS",
+    "result": "PASS"
+  },
+  "failure": null
+}

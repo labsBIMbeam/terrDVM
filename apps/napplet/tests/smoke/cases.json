@@ -1,5 +1,20 @@
 {
   "$comment": "Schema: { id: <kebab-case>, requirement: <REQ-ID>, script: <repo-relative runner file>, args: [--case, <id>], evidence: <repo-relative evidence path> }. Later plans append cases when they create each case script; runner logic is immutable.",
   "schema_version": 1,
-  "cases": []
+  "cases": [
+    {
+      "id": "boot",
+      "requirement": "SBOX-02",
+      "script": "apps/napplet/tests/smoke/paja-harness.mjs",
+      "args": ["--case", "boot"],
+      "evidence": ".planning/evidence/phase-01/paja-boot.json"
+    },
+    {
+      "id": "boot-denied",
+      "requirement": "SBOX-02",
+      "script": "apps/napplet/tests/smoke/paja-harness.mjs",
+      "args": ["--case", "boot-denied"],
+      "evidence": ".planning/evidence/phase-01/paja-boot-denied.json"
+    }
+  ]
 }
