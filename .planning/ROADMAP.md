@@ -33,7 +33,33 @@ terrDVM ships as a fixed four-phase vertical slice: a sandboxed bbox/orthophoto 
   4. Built browser assets and committed code contain no private keys, Lightning admin credentials, Blossom authorization, NIP-46 material, bearer headers, or privileged token-bearing URLs; all signing/relay/resource/storage/payment/upload access goes through feature-detected shell capabilities; and any local shell/backend resource surface introduced by the SBOX-02 fallback is loopback-bound, requires a scoped local auth token on every endpoint, and fails closed on missing auth or unapproved non-loopback exposure
   5. The OPS-01 30-minute blocker law is instituted with a working fallback-activation record (which fallback, when, why), and any Phase 1 blocker over 30 minutes demonstrably took its documented fallback
 **Exit gates (recurring)**: SBOX-01 conformance, SBOX-02 built-artifact smoke, VER-02 clean-checkout typecheck/lint/build/conformance, VER-03 smoke subset (bbox/preview), VER-04 Phase 1 failure subset (VER-04-T1 denied capability, VER-04-T3 resource timeout), OPS-01 fallback ledger review, VER-06 secret-scan and public-diff review of everything this phase commits
-**Plans**: TBD
+**Plans**: 9 plans
+
+- **Wave 1**
+  - [ ] `01-01-PLAN.md` — Provenance, package-audit, fixed defaults, and blocking supply-chain approval
+- **Wave 2** *(blocked on Wave 1 completion)*
+  - [ ] `01-02-PLAN.md` — Exact-pinned workspace, lint/test infrastructure, and manifest runner
+- **Wave 3** *(blocked on Wave 2 completion)*
+  - [ ] `01-03-PLAN.md` — Browser-first shell adapter, production single-file walking skeleton, conformance, and Paja smoke
+- **Wave 4** *(blocked on Wave 3 completion)*
+  - [ ] `01-04-PLAN.md` — Bbox normalization, geodesic area, canonical request DTO, and exact-copy TDD
+- **Wave 5** *(blocked on Wave 4 completion)*
+  - [ ] `01-05-PLAN.md` — Two-role source-policy achievement gate plus map draw/edit/clear UI
+- **Wave 6** *(blocked on Wave 5 both-role live approval)*
+  - [ ] `01-06-PLAN.md` — Bbox-correlated live orthophoto preview and truthful attribution/state UI
+- **Wave 7** *(blocked on Wave 6 completion)*
+  - [ ] `01-07-PLAN.md` — Denied/timeout/failure proofs and conditional SBOX-05 local-adapter branch
+- **Wave 8** *(blocked on Wave 7 completion)*
+  - [ ] `01-08-PLAN.md` — UI/a11y evidence, requirement map, and fail-closed machine-gate tooling
+- **Wave 9** *(blocked on Wave 8 completion)*
+  - [ ] `01-09-PLAN.md` — SHA-bound clean-checkout certification, human public-diff review, and mechanical sign-off
+
+**Cross-cutting constraints:**
+- Browser-first transport only; every production data byte crosses the single shell adapter, with no direct browser egress.
+- Registry/package use is exact-pinned, audit-evidenced, and human-approved before the sole Phase 1 lockfile mutation.
+- All live/fixture/unavailable, capability-denied, timeout, source-policy, and optional local-fallback branches remain fail-closed and evidence-backed.
+- No Phase 2 signing, relay, invoice, payment, artifact-server, processor, viewer, Python, or GDAL surface may enter Phase 1.
+- Production single-file build, actual Paja/Kehto smoke, secret/public-diff scan, clean checkout, machine PASS, and human sign-off are mandatory exit gates.
 **UI hint**: yes
 
 ### Phase 2: Paid DVM Dummy Delivery — Demo Core
