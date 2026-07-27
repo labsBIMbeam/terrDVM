@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: sandboxed-bbox-and-orthophoto-ui
 status: executing
-stopped_at: Completed 01-03-PLAN.md; ready for 01-04
-last_updated: "2026-07-27T10:49:54.395Z"
+stopped_at: Completed 01-04-PLAN.md; ready for 01-05 source-policy gate
+last_updated: "2026-07-27T11:21:13.405Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 9
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 01 (sandboxed-bbox-and-orthophoto-ui) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-07-27 — Phase 01 execution started
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [███░░░░░░░] 33%
 | Phase 01 P01 | 71 min | 3 tasks | 9 files |
 | Phase 01 P02 | 78 min | 2 tasks | 17 files |
 | Phase 01 P03 | 36 min | 3 tasks | 19 files |
+| Phase 01 P04 | 26 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase 01]: The Phase 1 verification runner is append-only and secret-scan evidence remains unchanged on semantic-equivalent PASS reruns. — Future plans must add gates without weakening earlier checks, and successful verification must leave clean checkouts reproducible.
 - [Phase 01]: Paja acceptance requires its sandboxed srcdoc target-proxy bytes to hash-match the independently verified production dist. — Paja 0.8.0 does not navigate the iframe directly to preview; byte equality proves the actual sandbox frame received the intended artifact.
 - [Phase 01]: Exactly one src/shell adapter owns window.napplet and @napplet/sdk access, enforced statically and by loopback-only Paja request logs. — This preserves SBOX-03 and prevents map/preview features from acquiring direct browser authority.
+- [Phase 01]: The under-limit geodesic test uses 0.0898 degrees; 0.09 degrees is 100.15116034642301 km2 and correctly fails the immutable 100 km2 limit. — Independent calculation and @turf/area 7.3.5 agree; rounding 0.09 down would violate MAP-03/MAP-04.
+- [Phase 01]: Map and preview UI must consume the pure bbox validator, geodesic wrapper, canonical request DTO, and typed COPY module rather than duplicate domain rules or strings. — Plan 01-04 froze those contracts with committed RED/GREEN evidence.
 
 ### Pending Todos
 
@@ -103,6 +106,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-27T10:49:54.381Z
-Stopped at: Completed 01-03-PLAN.md; ready for 01-04
-Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-04-PLAN.md
+Last session: 2026-07-27T11:21:13.391Z
+Stopped at: Completed 01-04-PLAN.md; ready for 01-05 source-policy gate
+Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-05-PLAN.md

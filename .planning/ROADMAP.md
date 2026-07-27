@@ -39,12 +39,12 @@ terrDVM ships as a fixed four-phase vertical slice: a sandboxed bbox/orthophoto 
   5. The OPS-01 30-minute blocker law is instituted with a working fallback-activation record (which fallback, when, why), and any Phase 1 blocker over 30 minutes demonstrably took its documented fallback
 
 **Exit gates (recurring)**: SBOX-01 conformance, SBOX-02 built-artifact smoke, VER-02 clean-checkout typecheck/lint/build/conformance, VER-03 smoke subset (bbox/preview), VER-04 Phase 1 failure subset (VER-04-T1 denied capability, VER-04-T3 resource timeout), OPS-01 fallback ledger review, VER-06 secret-scan and public-diff review of everything this phase commits
-**Plans**: 3/9 plans executed
+**Plans**: 4/9 plans executed
 
 - [x] 01-01-PLAN.md
 - [x] 01-02-PLAN.md
 - [x] 01-03-PLAN.md
-- [ ] 01-04-PLAN.md
+- [x] 01-04-PLAN.md
 - [ ] 01-05-PLAN.md
 - [ ] 01-06-PLAN.md
 - [ ] 01-07-PLAN.md
@@ -264,7 +264,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Sandboxed Bbox and Orthophoto UI | 3/9 | In Progress|  |
+| 1. Sandboxed Bbox and Orthophoto UI | 4/9 | In Progress|  |
 | 2. Paid DVM Dummy Delivery — Demo Core | 0/TBD | Not started | - |
 | 3. Bounded Terrain Processor | 0/TBD | Not started | - |
 | 4. Blossom Replication and Built-Napplet Viewer | 0/TBD | Not started | - |
