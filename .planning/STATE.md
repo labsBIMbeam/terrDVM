@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: sandboxed-bbox-and-orthophoto-ui
 status: executing
-stopped_at: Phase 1 planned and independently verified; ready to execute 01-01
-last_updated: "2026-07-27T07:18:55.969Z"
+stopped_at: Completed 01-01-PLAN.md; ready for 01-02
+last_updated: "2026-07-27T08:43:16.214Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 9
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 01 (sandboxed-bbox-and-orthophoto-ui) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 01
+Plan: 2 of 9
+Status: Ready to execute
 Last activity: 2026-07-27 — Phase 01 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 71 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -67,6 +72,9 @@ Recent decisions affecting current work:
 - [Roadmap]: SBOX-01, SBOX-02, VER-02, VER-03, VER-04, OPS-01 have one owning phase plus standing recurring phase-exit gates; VER-06 secret-scan/public-diff review also re-runs every phase because docs/evidence are auto-committed to a public repository.
 - [Roadmap]: MAP-07 uses configured fixed v1 resolution/output defaults; provider server time is the invoice-expiry authority.
 - [Roadmap]: PAY-07 and SBOX-05 resolve during Phase 2 planning before any invoice/artifact endpoint exists.
+- [Phase 01]: MAP-08 remains clean-room-fallback; no 21maps code, assets, styles, or configuration may be copied. — 21maps provenance remained unresolved, so the fail-closed clean-room path is mandatory.
+- [Phase 01]: All 14 exact project pins are approved only for Plan 01-02's one lockfile mutation; Chromium provisioning is limited to the exact no-OS-deps command. — The human checkpoint approved the audited scope without rewriting SUS/UNRESOLVED research verdicts or authorizing host mutation.
+- [Phase 01]: RES_M=5, OUTPUT_MIME=model/gltf-binary, MAX_AREA_KM2=100, and TIMEOUT_S=15 are immutable approved v1 defaults. — The request preview and later signed request must consume one pinned v1 contract rather than executor-invented values.
 
 ### Pending Todos
 
@@ -89,6 +97,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-27T01:12:29.222Z
-Stopped at: Phase 1 planned and independently verified; ready to execute 01-01
-Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-01-PLAN.md
+Last session: 2026-07-27T08:42:58.105Z
+Stopped at: Completed 01-01-PLAN.md; ready for 01-02
+Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-02-PLAN.md
