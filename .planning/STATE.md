@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: sandboxed-bbox-and-orthophoto-ui
 status: executing
-stopped_at: Completed 01-01-PLAN.md; ready for 01-02
-last_updated: "2026-07-27T08:43:16.214Z"
+stopped_at: Completed 01-02-PLAN.md; ready for 01-03
+last_updated: "2026-07-27T10:11:12.882Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 9
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 01 (sandboxed-bbox-and-orthophoto-ui) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-07-27 — Phase 01 execution started
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [██░░░░░░░░] 22%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█░░░░░░░░░] 11%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 71 min | 3 tasks | 9 files |
+| Phase 01 P02 | 78 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 01]: MAP-08 remains clean-room-fallback; no 21maps code, assets, styles, or configuration may be copied. — 21maps provenance remained unresolved, so the fail-closed clean-room path is mandatory.
 - [Phase 01]: All 14 exact project pins are approved only for Plan 01-02's one lockfile mutation; Chromium provisioning is limited to the exact no-OS-deps command. — The human checkpoint approved the audited scope without rewriting SUS/UNRESOLVED research verdicts or authorizing host mutation.
 - [Phase 01]: RES_M=5, OUTPUT_MIME=model/gltf-binary, MAX_AREA_KM2=100, and TIMEOUT_S=15 are immutable approved v1 defaults. — The request preview and later signed request must consume one pinned v1 contract rather than executor-invented values.
+- [Phase 01]: Playwright 1.59.1 on Ubuntu 26.04 uses the human-approved ubuntu24.04-x64 host override with real revision-1217 launch evidence. — The pinned Playwright host table rejects ubuntu26.04-x64; the built-in fallback preserved the exact package pin and avoided OS mutation.
+- [Phase 01]: The Phase 1 verification runner is append-only and secret-scan evidence remains unchanged on semantic-equivalent PASS reruns. — Future plans must add gates without weakening earlier checks, and successful verification must leave clean checkouts reproducible.
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-27T08:42:58.105Z
-Stopped at: Completed 01-01-PLAN.md; ready for 01-02
-Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-02-PLAN.md
+Last session: 2026-07-27T10:11:12.866Z
+Stopped at: Completed 01-02-PLAN.md; ready for 01-03
+Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-03-PLAN.md
