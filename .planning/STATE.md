@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: sandboxed-bbox-and-orthophoto-ui
 status: executing
-stopped_at: Completed 01-02-PLAN.md; ready for 01-03
-last_updated: "2026-07-27T10:11:12.882Z"
+stopped_at: Completed 01-03-PLAN.md; ready for 01-04
+last_updated: "2026-07-27T10:49:54.395Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 01 (sandboxed-bbox-and-orthophoto-ui) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-07-27 — Phase 01 execution started
 
-Progress: [██░░░░░░░░] 22%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██░░░░░░░░] 22%
 |------|----------|-------|-------|
 | Phase 01 P01 | 71 min | 3 tasks | 9 files |
 | Phase 01 P02 | 78 min | 2 tasks | 17 files |
+| Phase 01 P03 | 36 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 01]: RES_M=5, OUTPUT_MIME=model/gltf-binary, MAX_AREA_KM2=100, and TIMEOUT_S=15 are immutable approved v1 defaults. — The request preview and later signed request must consume one pinned v1 contract rather than executor-invented values.
 - [Phase 01]: Playwright 1.59.1 on Ubuntu 26.04 uses the human-approved ubuntu24.04-x64 host override with real revision-1217 launch evidence. — The pinned Playwright host table rejects ubuntu26.04-x64; the built-in fallback preserved the exact package pin and avoided OS mutation.
 - [Phase 01]: The Phase 1 verification runner is append-only and secret-scan evidence remains unchanged on semantic-equivalent PASS reruns. — Future plans must add gates without weakening earlier checks, and successful verification must leave clean checkouts reproducible.
+- [Phase 01]: Paja acceptance requires its sandboxed srcdoc target-proxy bytes to hash-match the independently verified production dist. — Paja 0.8.0 does not navigate the iframe directly to preview; byte equality proves the actual sandbox frame received the intended artifact.
+- [Phase 01]: Exactly one src/shell adapter owns window.napplet and @napplet/sdk access, enforced statically and by loopback-only Paja request logs. — This preserves SBOX-03 and prevents map/preview features from acquiring direct browser authority.
 
 ### Pending Todos
 
@@ -100,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-27T10:11:12.866Z
-Stopped at: Completed 01-02-PLAN.md; ready for 01-03
-Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-03-PLAN.md
+Last session: 2026-07-27T10:49:54.381Z
+Stopped at: Completed 01-03-PLAN.md; ready for 01-04
+Resume file: .planning/phases/01-sandboxed-bbox-and-orthophoto-ui/01-04-PLAN.md
