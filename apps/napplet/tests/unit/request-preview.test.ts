@@ -39,33 +39,34 @@ describe('canonical request preview', () => {
     expect(preview.outputMime).toBe(OUTPUT_MIME);
   });
 
-  it.each<{
-    source: SourceState;
-    expectedSuffix:
-      | 'live'
-      | 'test fixture'
-      | 'local fallback'
-      | 'unavailable';
-  }>([
-    {
-      source: { kind: 'live', name: 'Approved orthophoto' },
-      expectedSuffix: 'live',
-    },
-    {
-      source: { kind: 'fixture', name: 'Bundled orthophoto' },
-      expectedSuffix: 'test fixture',
-    },
-    {
-      source: { kind: 'local-fallback', name: 'Local orthophoto' },
-      expectedSuffix: 'local fallback',
-    },
-    {
-      source: { kind: 'none', name: 'No trusted source' },
-      expectedSuffix: 'unavailable',
-    },
-  ])(
-    'request_preview_names_active_source_or_fallback: $source.kind',
-    ({ source, expectedSuffix }) => {
+  it('request_preview_names_active_source_or_fallback', () => {
+    const cases: Array<{
+      source: SourceState;
+      expectedSuffix:
+        | 'live'
+        | 'test fixture'
+        | 'local fallback'
+        | 'unavailable';
+    }> = [
+      {
+        source: { kind: 'live', name: 'Approved orthophoto' },
+        expectedSuffix: 'live',
+      },
+      {
+        source: { kind: 'fixture', name: 'Bundled orthophoto' },
+        expectedSuffix: 'test fixture',
+      },
+      {
+        source: { kind: 'local-fallback', name: 'Local orthophoto' },
+        expectedSuffix: 'local fallback',
+      },
+      {
+        source: { kind: 'none', name: 'No trusted source' },
+        expectedSuffix: 'unavailable',
+      },
+    ];
+
+    for (const { source, expectedSuffix } of cases) {
       const preview = buildRequestPreview([7, 46, 8, 47], 10, source);
 
       expect(preview.source).toEqual({
@@ -74,6 +75,6 @@ describe('canonical request preview', () => {
       });
       expect(Array.isArray(preview.source.suffix)).toBe(false);
       expect(preview.source.suffix).not.toBe('');
-    },
-  );
+    }
+  });
 });
