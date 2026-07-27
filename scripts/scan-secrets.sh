@@ -110,6 +110,23 @@ printf '%s\n' \
   "timestamp_utc: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   'summary: 0 findings; secret values redacted; raw scanner output not persisted' \
   >"$evidence_tmp"
-mv "$evidence_tmp" "$evidence_path"
 
-printf 'PASS secret-scan — gitleaks %s; 0 findings; redacted evidence written\n' "$actual_version"
+# Keep repeatable successful verification from dirtying a clean checkout merely
+# because wall-clock time advanced. Replace the evidence only when a semantic
+# field other than timestamp changes.
+if [[ -f "$evidence_path" ]] && node - "$evidence_path" "$evidence_tmp" <<'NODE'
+const { readFileSync } = require('node:fs');
+const normalize = (path) => readFileSync(path, 'utf8')
+  .split('\n')
+  .filter((line) => !line.startsWith('timestamp_utc:'))
+  .join('\n');
+process.exit(normalize(process.argv[2]) === normalize(process.argv[3]) ? 0 : 1);
+NODE
+then
+  evidence_state='preserved semantic-equivalent evidence'
+else
+  mv "$evidence_tmp" "$evidence_path"
+  evidence_state='redacted evidence written'
+fi
+
+printf 'PASS secret-scan — gitleaks %s; 0 findings; %s\n' "$actual_version" "$evidence_state"
