@@ -1,3 +1,6 @@
+// This test executes in Node, while the production browser tsconfig
+// intentionally does not install or expose the unapproved @types/node package.
+// @ts-expect-error -- runtime builtin is available to Vitest's Node process.
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';

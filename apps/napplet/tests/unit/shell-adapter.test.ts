@@ -80,9 +80,12 @@ describe('shell resource adapter', () => {
       deadlineMs: TIMEOUT_S * 1_000,
       isAllowed: () => true,
     });
+    // Attach the rejection consumer before advancing fake time so Vitest never
+    // observes the expected timeout as an unhandled rejection.
+    const timeoutAssertion = expectPreviewCode(() => result, 'TIMEOUT');
     await vi.advanceTimersByTimeAsync(TIMEOUT_S * 1_000);
 
-    await expectPreviewCode(() => result, 'TIMEOUT');
+    await timeoutAssertion;
     expect(observedSignal?.aborted).toBe(true);
   });
 
