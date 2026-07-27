@@ -1,0 +1,15 @@
+{
+  "requirement": "MAP-08",
+  "decision": "clean-room-fallback",
+  "decided_at": "2026-07-27T07:21:48Z",
+  "reason": "21maps v0 provenance was unresolved at planning time.",
+  "evidence": {
+    "source_location": null,
+    "version_identity": null,
+    "license": null,
+    "provenance_chain": null,
+    "maplibre_pin": null
+  },
+  "consequence": "The Napplet uses a clean MapLibre-compatible implementation; 21maps code, assets, styles, and configuration are not copied.",
+  "reuse_condition": "if immutable 21maps provenance is independently found during execution BEFORE any map code exists, the decision may be flipped to \"verified-reuse\" only when all five evidence fields are non-empty and pass; the plan does not depend on that happening."
+}
