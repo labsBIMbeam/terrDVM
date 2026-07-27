@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "requirement": "MAP-05/MAP-06 Gate G2",
-  "generated_at": "2026-07-27T12:50:27.369Z",
+  "generated_at": "2026-07-27T13:04:42.166Z",
   "audit": {
     "user_agent": "terrDVM/0.1 (+https://github.com/labsBIMbeam/terrDVM)",
     "methods": [
@@ -114,7 +114,7 @@
             },
             "coverage_bounds": "Finland",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -218,7 +218,7 @@
             },
             "coverage_bounds": "Finland",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -348,7 +348,7 @@
             },
             "coverage_bounds": "United States and territories",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -506,7 +506,7 @@
               "north": 49.037872
             },
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -637,7 +637,7 @@
               "north": 85.05112878
             },
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "live-verified"
           },
           "failed_fields": [],
@@ -646,31 +646,10 @@
       ]
     },
     "imagery": {
-      "status": "blocked",
-      "candidate_count": 5,
-      "winner_id": null,
-      "failed_fields": [
-        "attribution",
-        "auth",
-        "contract.attribution",
-        "contract.cors_shell_behavior",
-        "contract.layer",
-        "cors_shell_behavior",
-        "coverage_madeira",
-        "coverage_runtime_unverified",
-        "credential_reference_not_available",
-        "dataset_terms",
-        "dataset_terms_live_capture",
-        "endpoint_http_status",
-        "layer",
-        "metadata_http_status",
-        "outage_behavior",
-        "rate_limits_provider_published",
-        "sample_content_type",
-        "sample_dns",
-        "sample_http_status",
-        "sample_redirect"
-      ],
+      "status": "live-verified",
+      "candidate_count": 6,
+      "winner_id": "esri-world-imagery-madeira",
+      "failed_fields": [],
       "candidates": [
         {
           "id": "nls-finland-orthophoto-wmts",
@@ -762,7 +741,7 @@
             },
             "coverage_bounds": "Finland",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -864,7 +843,7 @@
             },
             "coverage_bounds": "Finland",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -994,7 +973,7 @@
             },
             "coverage_bounds": "United States and territories",
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -1153,7 +1132,7 @@
               "north": 49.037872
             },
             "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -1420,7 +1399,7 @@
               "north": 33.187
             },
             "outage_behavior": "remain visibly blocked; never substitute TEST FIXTURE as live",
-            "capture_date": "2026-07-27T12:50:27.369Z",
+            "capture_date": "2026-07-27T13:04:42.166Z",
             "status": "blocked"
           },
           "failed_fields": [
@@ -1437,6 +1416,131 @@
             "sample_http_status"
           ],
           "status": "blocked"
+        },
+        {
+          "id": "esri-world-imagery-madeira",
+          "role": "imagery",
+          "provider": "Esri World Imagery",
+          "authoritative": true,
+          "tested_in_this_run": true,
+          "request_count": 3,
+          "requests": [
+            {
+              "kind": "metadata",
+              "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer?f=pjson",
+              "method": "GET",
+              "started_at": "2026-07-27T13:04:42.175Z",
+              "completed_at": "2026-07-27T13:04:42.410Z",
+              "status": 200,
+              "ok": true,
+              "redirected": false,
+              "location": null,
+              "content_type": "application/json",
+              "content_length_header": null,
+              "access_control_allow_origin": "*",
+              "cache_control": "max-age=86400",
+              "bytes_read": 11142,
+              "max_bytes": 1000000,
+              "too_large": false,
+              "sha256": "3c41ca79d7ddc2267fa1ac60c43263acbfed04915e3b2433e6b8e5d30378e2dc",
+              "marker_results": {
+                "World_Imagery": true,
+                "copyrightText": true,
+                "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community": true
+              },
+              "expected_type": "application/json",
+              "error": null
+            },
+            {
+              "kind": "terms",
+              "url": "https://www.esri.com/en-us/legal/terms/master-agreement",
+              "method": "GET",
+              "started_at": "2026-07-27T13:04:42.411Z",
+              "completed_at": "2026-07-27T13:04:42.660Z",
+              "status": 200,
+              "ok": true,
+              "redirected": false,
+              "location": null,
+              "content_type": "text/html;charset=utf-8",
+              "content_length_header": "7538",
+              "access_control_allow_origin": null,
+              "cache_control": null,
+              "bytes_read": 55966,
+              "max_bytes": 1000000,
+              "too_large": false,
+              "sha256": "f9f1469a8ff07d53bcd5bbea9a47a160e2c5a5f9d9beb1999f5d42b9f86f973c",
+              "marker_results": {
+                "Master Agreements": true,
+                "Products and Services Terms of Use": true,
+                "Esri": true
+              },
+              "expected_type": null,
+              "error": null
+            },
+            {
+              "kind": "sample",
+              "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/8/103/115",
+              "method": "GET",
+              "started_at": "2026-07-27T13:04:42.661Z",
+              "completed_at": "2026-07-27T13:04:42.702Z",
+              "status": 200,
+              "ok": true,
+              "redirected": false,
+              "location": null,
+              "content_type": "image/jpeg",
+              "content_length_header": "5982",
+              "access_control_allow_origin": "*",
+              "cache_control": "max-age=86400",
+              "bytes_read": 5982,
+              "max_bytes": 1000000,
+              "too_large": false,
+              "sha256": "714738eb03f0d4ef33a214de5cb99820b6c03346ed27d3c61b8601b9a93f6562",
+              "marker_results": {},
+              "expected_type": "image/jpeg",
+              "error": null
+            }
+          ],
+          "contract": {
+            "scheme": "https",
+            "host": "server.arcgisonline.com",
+            "port": 443,
+            "path_template": "/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            "layer": "World_Imagery",
+            "coverage_id": "Global imagery including Madeira",
+            "tile_matrix": "ArcGIS Online/Bing Maps/Google Maps",
+            "crs": "EPSG:3857",
+            "bbox_order": "ArcGIS tile z/y/x; normalized app bbox remains W,S,E,N EPSG:4326",
+            "format": "image/jpeg",
+            "auth": {
+              "required": false,
+              "credential_reference": null
+            },
+            "cors_shell_behavior": "Access-Control-Allow-Origin: * observed on metadata and Madeira sample; production routes only through sole shell adapter",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "dataset_terms": "Esri service terms and attribution requirements apply; official Products and Services Terms of Use captured live",
+            "endpoint_terms": "Official ArcGIS World Imagery MapServer metadata; selected-bbox/visible-tile use only, no bulk prefetch or scraping",
+            "rate_limits": {
+              "provider_published": "No numeric public quota captured",
+              "application_limit": "Madeira viewport selected/visible tiles only; maximum 16 concurrent requests; no prefetch/scraping"
+            },
+            "max_response_bytes": 1000000,
+            "timeout_ms": 15000,
+            "redirects": {
+              "max": 0,
+              "policy": "fail closed on any redirect"
+            },
+            "coverage_bounds": {
+              "west": -180,
+              "south": -85.05112878,
+              "east": 180,
+              "north": 85.05112878
+            },
+            "outage_behavior": "fail closed to named source-unavailable state; never substitute TEST FIXTURE as live",
+            "capture_date": "2026-07-27T13:04:42.166Z",
+            "status": "live-verified"
+          },
+          "failed_fields": [],
+          "status": "live-verified"
         }
       ]
     }

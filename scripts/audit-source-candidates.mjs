@@ -21,8 +21,8 @@ const REQUIRED_CONTRACT_FIELDS = [
 ];
 const UNKNOWN = 'UNRESOLVED';
 
-function candidate({ id, role, provider, docs, contract, requests, observedRequests = [], expectedStatus = 'blocked', knownFailedFields = [] }) {
-  return { id, role, provider, authoritative: true, official_documentation: docs, contract, requests, observed_requests: observedRequests, expected_status: expectedStatus, known_failed_fields: knownFailedFields };
+function candidate({ id, role, provider, docs, contract, requests, observedRequests = [], expectedStatus = 'blocked', knownFailedFields = [], forceLiveProbe = false }) {
+  return { id, role, provider, authoritative: true, official_documentation: docs, contract, requests, observed_requests: observedRequests, expected_status: expectedStatus, known_failed_fields: knownFailedFields, force_live_probe: forceLiveProbe };
 }
 
 function baseContract(overrides) {
@@ -250,7 +250,7 @@ function validateDescriptor(descriptor) {
     const url = new URL(spec.url);
     if (url.username || url.password || [...url.searchParams.keys()].some((x) => /token|key|secret|auth/i.test(x))) throw new Error('descriptor request URL may not contain credentials');
   }
-  return candidate({ ...descriptor, expectedStatus: 'blocked', knownFailedFields: descriptor.known_failed_fields ?? [] });
+  return candidate({ ...descriptor, expectedStatus: descriptor.expected_status ?? 'blocked', knownFailedFields: descriptor.known_failed_fields ?? [], forceLiveProbe: true });
 }
 
 function evaluateCandidate(definition, requests, capturedAt) {
@@ -318,8 +318,8 @@ async function runAudit(descriptorPath) {
     for (const definition of candidates[role]) {
       if (definition.requests.length + definition.observed_requests.length > MAX_REQUESTS_PER_CANDIDATE) throw new Error(`${definition.id}: request bound exceeded before run`);
       const prior = priorEvidence?.roles?.[role]?.candidates?.find((item) => item.id === definition.id);
-      const requests = definition.observed_requests.length ? [...definition.observed_requests] : (prior?.requests?.length ? [...prior.requests] : []);
-      for (const spec of definition.requests) if (!requests.length) requests.push(await fetchBounded(spec));
+      const requests = definition.observed_requests.length ? [...definition.observed_requests] : (definition.force_live_probe ? [] : (prior?.requests?.length ? [...prior.requests] : []));
+      if (!requests.length) for (const spec of definition.requests) requests.push(await fetchBounded(spec));
       results.push(evaluateCandidate(definition, requests, generatedAt));
       console.log(`${role}/${definition.id}: ${results.at(-1).status} (${requests.length} bounded GETs)`);
     }

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "role": "imagery",
+  "id": "esri-world-imagery-madeira",
+  "provider": "Esri World Imagery",
+  "authoritative": true,
+  "expected_status": "live-verified",
+  "known_failed_fields": [],
+  "official_documentation": [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer?f=pjson",
+    "https://www.esri.com/en-us/legal/terms/master-agreement"
+  ],
+  "contract": {
+    "scheme": "https",
+    "host": "server.arcgisonline.com",
+    "port": 443,
+    "path_template": "/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "layer": "World_Imagery",
+    "coverage_id": "Global imagery including Madeira",
+    "tile_matrix": "ArcGIS Online/Bing Maps/Google Maps",
+    "crs": "EPSG:3857",
+    "bbox_order": "ArcGIS tile z/y/x; normalized app bbox remains W,S,E,N EPSG:4326",
+    "format": "image/jpeg",
+    "auth": { "required": false, "credential_reference": null },
+    "cors_shell_behavior": "Access-Control-Allow-Origin: * observed on metadata and Madeira sample; production routes only through sole shell adapter",
+    "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+    "dataset_terms": "Esri service terms and attribution requirements apply; official Products and Services Terms of Use captured live",
+    "endpoint_terms": "Official ArcGIS World Imagery MapServer metadata; selected-bbox/visible-tile use only, no bulk prefetch or scraping",
+    "rate_limits": { "provider_published": "No numeric public quota captured", "application_limit": "Madeira viewport selected/visible tiles only; maximum 16 concurrent requests; no prefetch/scraping" },
+    "max_response_bytes": 1000000,
+    "timeout_ms": 15000,
+    "redirects": { "max": 0, "policy": "fail closed on any redirect" },
+    "coverage_bounds": { "west": -180, "south": -85.05112878, "east": 180, "north": 85.05112878 },
+    "outage_behavior": "fail closed to named source-unavailable state; never substitute TEST FIXTURE as live"
+  },
+  "requests": [
+    {
+      "kind": "metadata",
+      "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer?f=pjson",
+      "max_bytes": 1000000,
+      "expected_type": "application/json",
+      "markers": ["World_Imagery", "copyrightText", "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"]
+    },
+    {
+      "kind": "terms",
+      "url": "https://www.esri.com/en-us/legal/terms/master-agreement",
+      "max_bytes": 1000000,
+      "markers": ["Master Agreements", "Products and Services Terms of Use", "Esri"]
+    },
+    {
+      "kind": "sample",
+      "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/8/103/115",
+      "max_bytes": 1000000,
+      "expected_type": "image/jpeg",
+      "markers": []
+    }
+  ]
+}
