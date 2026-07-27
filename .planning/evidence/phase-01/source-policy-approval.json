@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "phase": "01",
+  "plan": "01-05",
+  "gate": "G2-source-policy",
+  "outcome": "APPROVE",
+  "approved_at": "2026-07-27T17:35:53Z",
+  "approved_roles": ["basemap", "imagery"],
+  "target_region": "Madeira and Porto Santo",
+  "require_live_command": "node scripts/verify-source-policy.mjs --require-live",
+  "require_live_result": "PASS",
+  "evidence_path": ".planning/evidence/phase-01/source-candidates.json",
+  "policy_path": "apps/napplet/src/config/source-policy.json",
+  "fixture_excluded_from_acceptance": true,
+  "human_decision": "Telegram human checkpoint APPROVE; both roles were live-verified before approval."
+}

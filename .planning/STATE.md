@@ -6,7 +6,7 @@ current_phase: 01
 current_phase_name: sandboxed-bbox-and-orthophoto-ui
 status: executing
 stopped_at: Completed 01-04-PLAN.md; ready for 01-05 source-policy gate
-last_updated: "2026-07-27T11:21:13.405Z"
+last_updated: "2026-07-27T17:36:11.174Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 01 execution started
 progress:
@@ -84,6 +84,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Exactly one src/shell adapter owns window.napplet and @napplet/sdk access, enforced statically and by loopback-only Paja request logs. — This preserves SBOX-03 and prevents map/preview features from acquiring direct browser authority.
 - [Phase 01]: The under-limit geodesic test uses 0.0898 degrees; 0.09 degrees is 100.15116034642301 km2 and correctly fails the immutable 100 km2 limit. — Independent calculation and @turf/area 7.3.5 agree; rounding 0.09 down would violate MAP-03/MAP-04.
 - [Phase 01]: Map and preview UI must consume the pure bbox validator, geodesic wrapper, canonical request DTO, and typed COPY module rather than duplicate domain rules or strings. — Plan 01-04 froze those contracts with committed RED/GREEN evidence.
+- [Phase 01]: Human checkpoint APPROVE: both Madeira basemap and imagery roles are live-verified and may unlock Plan 05 Task 3 and Plan 06. — verify-source-policy --require-live passed against the committed source-candidates evidence; fixture remains excluded from acceptance.
 
 ### Pending Todos
 
