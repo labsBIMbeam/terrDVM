@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "status": "compatible",
+  "probe_timestamp_utc": "2026-07-27T10:25:56Z",
+  "executable": {
+    "path": "[USER_DENO_BIN]/kehto",
+    "path_redaction": "The observed user-local Deno bin directory is represented by [USER_DENO_BIN].",
+    "command_v_exit_code": 0
+  },
+  "runtime": {
+    "deno": "2.9.3",
+    "v8": "14.9.207.2-rusty",
+    "typescript": "6.0.3"
+  },
+  "provenance": {
+    "kehto_cli": {
+      "package": "@kehto/cli",
+      "version": "0.2.16",
+      "source": "existing user-local Deno executable",
+      "project_dependency": false
+    },
+    "paja": {
+      "package": "@kehto/paja",
+      "version": "0.8.0",
+      "source": "existing user-local Deno npm cache",
+      "project_dependency": false
+    }
+  },
+  "observed_help": {
+    "kehto": "Usage:\n  kehto <command> [options]\n\nCommands:\n  paja    Run a napplet app inside the Paja local authoring workshop.\n\nExamples:\n  kehto paja --target-url http://127.0.0.1:5173 -- pnpm vite --host 127.0.0.1\n  kehto paja --config kehto.dev.json\n\nOptions:\n  --help, -h    Show this help.\n",
+    "kehto_paja": "Usage:\n  kehto paja --target-url <url> [options]\n  kehto paja --target-url <url> [options] -- <command...>\n\nOptions:\n  --target-url, -u <url>      App dev-server URL to load in the runtime iframe.\n  --command, -c <command>     Shell command to start before waiting for target URL.\n  -- <command...>             Argv command form; preserves arbitrary framework commands.\n  --host <host>               Runtime host. Default: 127.0.0.1.\n  --port <port>               Runtime port. Default: 5197.\n  --ready-timeout <ms>        Target readiness timeout. Default: 30000.\n  --config <path>             JSON config file using the same option schema.\n  --identity-mode <mode>      anonymous or fixed.\n  --identity-pubkey <hex>     Required when identity mode is fixed.\n  --relay-mode <mode>         live, memory, or disabled.\n  --relay-url <url>           Add a relay URL for live or memory relay backends.\n  --storage-mode <mode>       local, memory, or disabled.\n  --cache-mode <mode>         memory or disabled.\n  --upload-mode <mode>        memory, blossom, or disabled.\n  --upload-rail <name>        Upload rail name for memory uploads.\n  --upload-server <url>       Add a shell-owned Blossom server (repeatable).\n  --media <state>             enabled or disabled.\n  --notifications <state>     enabled or disabled.\n  --notify-grant <bool>       true or false default notification grant.\n  --theme <mode>              dark or light.\n  --config-value <key=json>   Add a JSON config value.\n  --capability <domain:on|off> Toggle an advertised capability domain.\n  --acl-mode <mode>           allow or deny.\n  --firewall-mode <mode>      allow, deny, or observe.\n  --help, -h                  Show this help.\n"
+  },
+  "observed_contract": {
+    "subcommands": [
+      "paja"
+    ],
+    "global_flags": [
+      "--help",
+      "-h"
+    ],
+    "paja_flags_verbatim": [
+      "--target-url, -u <url>",
+      "--command, -c <command>",
+      "-- <command...>",
+      "--host <host>",
+      "--port <port>",
+      "--ready-timeout <ms>",
+      "--config <path>",
+      "--identity-mode <mode>",
+      "--identity-pubkey <hex>",
+      "--relay-mode <mode>",
+      "--relay-url <url>",
+      "--storage-mode <mode>",
+      "--cache-mode <mode>",
+      "--upload-mode <mode>",
+      "--upload-rail <name>",
+      "--upload-server <url>",
+      "--media <state>",
+      "--notifications <state>",
+      "--notify-grant <bool>",
+      "--theme <mode>",
+      "--config-value <key=json>",
+      "--capability <domain:on|off>",
+      "--acl-mode <mode>",
+      "--firewall-mode <mode>",
+      "--help, -h"
+    ],
+    "target_url_supported": true,
+    "argv_after_double_dash_supported": true,
+    "runtime_origin": "http://127.0.0.1:5197",
+    "preview_origin": "http://127.0.0.1:4173"
+  },
+  "launch_command": "[USER_DENO_BIN]/kehto paja --target-url http://127.0.0.1:4173 --host 127.0.0.1 --port 5197 --identity-mode anonymous --relay-mode disabled --storage-mode disabled --cache-mode disabled --upload-mode disabled --media disabled --notifications disabled --capability resource:on --acl-mode deny --firewall-mode deny -- pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
+  "launch_argv_templates": {
+    "normal": [
+      "[USER_DENO_BIN]/kehto",
+      "paja",
+      "--target-url",
+      "http://127.0.0.1:4173",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "5197",
+      "--identity-mode",
+      "anonymous",
+      "--relay-mode",
+      "disabled",
+      "--storage-mode",
+      "disabled",
+      "--cache-mode",
+      "disabled",
+      "--upload-mode",
+      "disabled",
+      "--media",
+      "disabled",
+      "--notifications",
+      "disabled",
+      "--capability",
+      "resource:on",
+      "--acl-mode",
+      "deny",
+      "--firewall-mode",
+      "deny",
+      "--",
+      "pnpm",
+      "--filter",
+      "@terrdvm/napplet",
+      "exec",
+      "vite",
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "4173",
+      "--strictPort"
+    ],
+    "resource_off": [
+      "[USER_DENO_BIN]/kehto",
+      "paja",
+      "--target-url",
+      "http://127.0.0.1:4173",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "5197",
+      "--identity-mode",
+      "anonymous",
+      "--relay-mode",
+      "disabled",
+      "--storage-mode",
+      "disabled",
+      "--cache-mode",
+      "disabled",
+      "--upload-mode",
+      "disabled",
+      "--media",
+      "disabled",
+      "--notifications",
+      "disabled",
+      "--capability",
+      "resource:off",
+      "--acl-mode",
+      "deny",
+      "--firewall-mode",
+      "deny",
+      "--",
+      "pnpm",
+      "--filter",
+      "@terrdvm/napplet",
+      "exec",
+      "vite",
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "4173",
+      "--strictPort"
+    ]
+  },
+  "compatibility": {
+    "result": "PASS",
+    "reason": "Observed help supports a local target URL, an argv command after --, explicit loopback runtime host and port, non-live or disabled capabilities, resource capability toggling, and deny-mode ACL and firewall controls.",
+    "probe_exit_codes": {
+      "kehto_help": 0,
+      "kehto_paja_help": 0,
+      "deno_version": 0
+    }
+  }
+}
