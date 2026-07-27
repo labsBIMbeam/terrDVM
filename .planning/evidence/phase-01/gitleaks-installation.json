@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "tool": "gitleaks",
+  "version": "8.30.1",
+  "source_release": "https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1",
+  "asset": "gitleaks_8.30.1_linux_x64.tar.gz",
+  "checksum_source": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt",
+  "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+  "checksum_verified": true,
+  "installed_scope": "user-local",
+  "installed_path": "[USER_LOCAL_BIN]/gitleaks",
+  "sudo_used": false,
+  "os_packages_installed": false,
+  "approved_via": "Telegram human checkpoint",
+  "installed_at": "2026-07-27T08:48:38Z"
+}
