@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import sourcePolicy from '../../src/config/source-policy.json';
 import {
   assertApprovedSourceRequest,
@@ -71,7 +72,7 @@ describe('source policy', () => {
       .replace('{y}', '13');
 
     expect(basemapTileUrl(7, 11, 13)).toBe(
-      `${contract.scheme}://${contract.host}:${contract.port}${expectedPath}`,
+      `${new URL(`${contract.scheme}://${contract.host}:${contract.port}`).origin}${expectedPath}`,
     );
   });
 

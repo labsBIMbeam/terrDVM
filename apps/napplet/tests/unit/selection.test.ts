@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { errorCopyFor } from '../../src/ui/copy';
 import {
   createInitialSelectionState,
@@ -5,9 +6,16 @@ import {
   type SelectionState,
 } from '../../src/ui/selection';
 
-const validBBox = [-17.2, 32.6, -17.1, 32.7] as const;
-const replacementBBox = [-17.3, 32.5, -17.15, 32.65] as const;
+const validBBox = [-17.2, 32.6, -17.18, 32.62] as const;
+const replacementBBox = [-17.21, 32.61, -17.19, 32.63] as const;
 const invalidBBox = [-17.2, 32.7, -17.1, 32.6] as const;
+
+function bboxOf(state: SelectionState) {
+  if (!('bbox' in state)) {
+    throw new Error(`Expected a state with a bbox, got ${state.kind}.`);
+  }
+  return state.bbox;
+}
 
 function transition(
   state: SelectionState,
@@ -29,7 +37,7 @@ describe('selection state machine', () => {
       bbox: validBBox,
     });
     expect(selected.kind).toBe('SELECTED_VALID');
-    expect(selected.bbox).toEqual(validBBox);
+    expect(bboxOf(selected)).toEqual(validBBox);
   });
 
   it('replaces the existing rectangle only when a second draw completes', () => {
@@ -40,14 +48,14 @@ describe('selection state machine', () => {
     const drawing = transition(selected, { type: 'DRAW_START' });
 
     expect(drawing.kind).toBe('DRAWING');
-    expect(drawing.bbox).toEqual(validBBox);
+    expect(bboxOf(drawing)).toEqual(validBBox);
 
     const replaced = transition(drawing, {
       type: 'DRAW_COMPLETE',
       bbox: replacementBBox,
     });
     expect(replaced.kind).toBe('SELECTED_VALID');
-    expect(replaced.bbox).toEqual(replacementBBox);
+    expect(bboxOf(replaced)).toEqual(replacementBBox);
   });
 
   it('revalidates an edited rectangle to valid or invalid with the first error code', () => {
@@ -69,10 +77,13 @@ describe('selection state machine', () => {
       error: errorCopyFor('ORDER'),
     });
 
-    const valid = transition(invalid, {
-      type: 'EDIT_COMPLETE',
-      bbox: validBBox,
-    });
+    const valid = transition(
+      transition(invalid, { type: 'EDIT_START' }),
+      {
+        type: 'EDIT_COMPLETE',
+        bbox: validBBox,
+      },
+    );
     expect(valid).toMatchObject({ kind: 'SELECTED_VALID', bbox: validBBox });
   });
 
