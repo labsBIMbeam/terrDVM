@@ -9,6 +9,7 @@
 # Node
 node_modules/
 dist/
+apps/napplet/dist/
 .vite/
 playwright-report/
 test-results/
@@ -35,8 +36,22 @@ artifacts/
 !tests/fixtures/**/*.tif
 !tests/fixtures/**/*.tiff
 !tests/fixtures/**/*.glb
+!apps/napplet/tests/fixtures/**/*.png
+!apps/napplet/tests/fixtures/**/*.tif
+!apps/napplet/tests/fixtures/**/*.tiff
+!apps/napplet/tests/fixtures/**/*.glb
+
+# GSD clean-checkout and local scratch
+.terrdvm-worktree*/
+.scratch/
+tmp/
+.scratch/**/*.log
+tmp/**/*.log
 
 # Editors/OS
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo

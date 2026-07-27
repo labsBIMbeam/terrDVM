@@ -1,0 +1,22 @@
+{
+  "name": "terrdvm",
+  "private": true,
+  "packageManager": "pnpm@10.8.0",
+  "engines": {
+    "node": ">=25 <26"
+  },
+  "scripts": {
+    "lint": "eslint --no-error-on-unmatched-pattern apps/napplet/src apps/napplet/tests scripts",
+    "verify:phase-01": "bash scripts/verify-phase-01.sh",
+    "scan:secrets": "bash scripts/scan-secrets.sh",
+    "verify:map-provenance": "node scripts/verify-map-provenance.mjs",
+    "verify:fallback-ledger": "node scripts/validate-fallback-ledger.mjs",
+    "verify:lock-approved": "node scripts/verify-lock-approved.mjs",
+    "test:smoke:paja": "node apps/napplet/tests/smoke/paja-harness.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "eslint": "9.39.2",
+    "typescript-eslint": "8.46.4"
+  }
+}
