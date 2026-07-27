@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "requirement": "MAP-05/MAP-06",
+  "target_region": "Madeira and Porto Santo",
+  "generated_at": "2026-07-27T12:50:27.369Z",
+  "roles": {
+    "basemap": {
+      "role": "basemap",
+      "status": "live-verified",
+      "evidence_candidate_id": "openstreetmap-standard-madeira",
+      "evidence_path": ".planning/evidence/phase-01/source-candidates.json",
+      "failed_fields": [],
+      "contract": {
+        "scheme": "https",
+        "host": "tile.openstreetmap.org",
+        "port": 443,
+        "path_template": "/{z}/{x}/{y}.png",
+        "layer": "OpenStreetMap Standard",
+        "coverage_id": "Global including Madeira",
+        "tile_matrix": "WebMercatorQuad",
+        "crs": "EPSG:3857",
+        "bbox_order": "slippy z/x/y; app bbox remains W,S,E,N EPSG:4326",
+        "format": "image/png",
+        "auth": {
+          "required": false,
+          "credential_reference": null
+        },
+        "cors_shell_behavior": "Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrDVM User-Agent",
+        "attribution": "© OpenStreetMap contributors",
+        "dataset_terms": "OpenStreetMap data licensed under ODbL; visible attribution and license link required",
+        "endpoint_terms": "OSMF Standard tile policy: identifying User-Agent, valid web Referer where applicable, cache headers honored, no bulk download/scraping/prefetch",
+        "rate_limits": {
+          "provider_published": "No numeric public quota; best-effort service with no SLA",
+          "application_limit": "Madeira viewport visible tiles only; no prefetch/scraping; maximum 16 concurrent requests; cache response headers honored"
+        },
+        "max_response_bytes": 1000000,
+        "timeout_ms": 15000,
+        "redirects": {
+          "max": 0,
+          "policy": "fail closed on any redirect"
+        },
+        "coverage_bounds": {
+          "west": -180,
+          "south": -85.05112878,
+          "east": 180,
+          "north": 85.05112878
+        },
+        "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
+        "capture_date": "2026-07-27T12:50:27.369Z",
+        "status": "live-verified"
+      }
+    },
+    "imagery": {
+      "role": "imagery",
+      "status": "blocked",
+      "evidence_candidate_id": "madeira-irig-orthofotomapas-2018",
+      "evidence_path": ".planning/evidence/phase-01/source-candidates.json",
+      "failed_fields": [
+        "attribution",
+        "contract.attribution",
+        "contract.cors_shell_behavior",
+        "contract.layer",
+        "cors_shell_behavior",
+        "coverage_runtime_unverified",
+        "dataset_terms",
+        "endpoint_http_status",
+        "layer",
+        "metadata_http_status",
+        "sample_http_status"
+      ],
+      "contract": {
+        "scheme": "https",
+        "host": "irig-geoportal.madeira.gov.pt",
+        "port": 443,
+        "path_template": "/IRIGWMS_OI_Ortofotomapas2018/Service.svc/get?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS={layer}&STYLES=&SRS=EPSG:4326&BBOX={west},{south},{east},{north}&WIDTH={width}&HEIGHT={height}&FORMAT=image/jpeg",
+        "layer": "UNRESOLVED",
+        "coverage_id": "Madeira and Porto Santo orthophotomaps 2018/2019",
+        "tile_matrix": "WMS continuous bbox; no tile matrix until Capabilities recovers",
+        "crs": "EPSG:4326 observed in catalog extent; service CRS unverified while endpoint returns 500",
+        "bbox_order": "W,S,E,N for WMS 1.1.1 EPSG:4326 request template",
+        "format": "image/jpeg requested; response unverified",
+        "auth": {
+          "required": false,
+          "credential_reference": null
+        },
+        "cors_shell_behavior": "UNRESOLVED",
+        "attribution": "UNRESOLVED",
+        "dataset_terms": "ArcGIS public catalog item has licenseInfo=null and accessInformation=NONE; no approval",
+        "endpoint_terms": "Public ArcGIS catalog entry points at official IRIG service; all GetCapabilities/GetMap probes returned HTTP 500 RPC failure",
+        "rate_limits": {
+          "provider_published": "UNRESOLVED",
+          "application_limit": "selected bbox only; no prefetch/scraping; maximum 16 concurrent requests"
+        },
+        "max_response_bytes": 1000000,
+        "timeout_ms": 15000,
+        "redirects": {
+          "max": 0,
+          "policy": "fail closed on any redirect"
+        },
+        "coverage_bounds": {
+          "west": -20.3194,
+          "south": 29.919,
+          "east": -13.0516,
+          "north": 33.187
+        },
+        "outage_behavior": "remain visibly blocked; never substitute TEST FIXTURE as live",
+        "capture_date": "2026-07-27T12:50:27.369Z",
+        "status": "blocked"
+      }
+    }
+  }
+}

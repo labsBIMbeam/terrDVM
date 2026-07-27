@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "artifact": "TEST FIXTURE",
+  "owner": "terrDVM repository; fully self-generated procedural test data",
+  "license": "self-generated; no third-party imagery or asset code",
+  "generator": {
+    "path": "scripts/generate-ortho-fixture.mjs",
+    "sha256": "cd15100e36262e2e5e768477151ecff634ce871f981fd3b5653b9a3567bae185"
+  },
+  "output": {
+    "path": "apps/napplet/tests/fixtures/ortho-fixture.png",
+    "sha256": "e02001303191f6f49911fabff83ac57f86c39d3b6708980511403454d15c5260",
+    "width": 256,
+    "height": 192
+  },
+  "generation": {
+    "date": "2026-07-27",
+    "seed": 24589,
+    "parameters": {
+      "grid_spacing_px": 32,
+      "label": "TEST FIXTURE",
+      "color_mode": "RGB8",
+      "compression": "zlib-fixed"
+    }
+  },
+  "purpose": "Deterministic bundled test fixture for unit/sandbox tests only.",
+  "never_acceptance": "This artifact is NEVER acceptable as MAP-05/MAP-06 live-source or imagery-correspondence evidence and is NEVER presented as live orthophoto imagery.",
+  "binding_ui_rule": "Any fixture rendering must carry the exact TEST FIXTURE label and fixture copy."
+}
