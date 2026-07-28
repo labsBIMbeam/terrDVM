@@ -4,8 +4,8 @@
   "requirement": "SBOX-02",
   "result": "PASS",
   "timestamps": {
-    "started_at": "2026-07-28T08:37:08.958Z",
-    "completed_at": "2026-07-28T08:37:13.251Z"
+    "started_at": "2026-07-28T10:01:40.673Z",
+    "completed_at": "2026-07-28T10:01:45.094Z"
   },
   "cli_runtime": {
     "kehto_cli": {
@@ -115,7 +115,7 @@
       "http://127.0.0.1:5197/__kehto/browser-host.js",
       "http://127.0.0.1:5197/__kehto/config.json",
       "http://127.0.0.1:5197/__kehto/target.html",
-      "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
+      "blob:null/d69ea90b-358c-4079-b8e5-f45e4c0fde80",
       "https://tile.openstreetmap.org/12/1855/1653.png",
       "https://tile.openstreetmap.org/12/1855/1652.png",
       "https://tile.openstreetmap.org/12/1856/1653.png",
@@ -169,7 +169,7 @@
       },
       {
         "sequence": 5,
-        "url": "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
+        "url": "blob:null/d69ea90b-358c-4079-b8e5-f45e4c0fde80",
         "method": "GET",
         "resource_type": "script",
         "frame_url": "about:srcdoc",
@@ -276,7 +276,7 @@
     "browser_internal_non_network_requests": [
       {
         "sequence": 5,
-        "url": "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
+        "url": "blob:null/d69ea90b-358c-4079-b8e5-f45e4c0fde80",
         "method": "GET",
         "resource_type": "script",
         "frame_url": "about:srcdoc",
