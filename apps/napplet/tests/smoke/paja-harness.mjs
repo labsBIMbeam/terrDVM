@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { constants as fsConstants, existsSync } from 'node:fs';
+import { constants as fsConstants, existsSync, readFileSync } from 'node:fs';
 import { access, readFile, rename, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -13,7 +13,9 @@ const contractPath = join(evidenceRoot, 'kehto-cli-contract.json');
 const provisioningPath = join(evidenceRoot, 'chromium-provisioning.json');
 const distIndexPath = join(repositoryRoot, 'apps', 'napplet', 'dist', 'index.html');
 const verifyDistPath = join(repositoryRoot, 'scripts', 'verify-dist.mjs');
-const supportedCases = new Set(['boot', 'boot-denied']);
+const sourcePolicyPath = join(repositoryRoot, 'apps', 'napplet', 'src', 'config', 'source-policy.json');
+const sourcePolicy = JSON.parse(readFileSync(sourcePolicyPath, 'utf8'));
+const supportedCases = new Set(['boot', 'boot-denied', 'draw', 'edit-clear', 'coords-keyboard']);
 const requiredHostOverride = 'ubuntu24.04-x64';
 const requiredChromiumRevision = 1217;
 const startupTimeoutMs = 45_000;
@@ -27,7 +29,7 @@ function fail(message) {
 
 function parseCase(argv) {
   if (argv.length !== 2 || argv[0] !== '--case' || !supportedCases.has(argv[1])) {
-    fail('usage: node apps/napplet/tests/smoke/paja-harness.mjs --case boot|boot-denied');
+    fail('usage: node apps/napplet/tests/smoke/paja-harness.mjs --case boot|boot-denied|draw|edit-clear|coords-keyboard');
   }
   return argv[1];
 }
@@ -310,9 +312,19 @@ function classifyRequest(rawUrl, allowedOrigins) {
   if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
     return { classification: 'browser-internal-non-network', origin: null, allowed: true };
   }
+  if (rawUrl.startsWith('terrdvm://')) {
+    return { classification: 'browser-internal-custom-protocol', origin: null, allowed: true };
+  }
   try {
     const parsed = new URL(rawUrl);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      if (isApprovedSourceNetwork(parsed)) {
+        return {
+          classification: 'allowlisted-approved-source-network',
+          origin: parsed.origin,
+          allowed: true,
+        };
+      }
       const allowed = allowedOrigins.has(parsed.origin);
       return {
         classification: allowed ? 'allowlisted-loopback-network' : 'external-network',
@@ -324,6 +336,25 @@ function classifyRequest(rawUrl, allowedOrigins) {
     // The fail-closed classification below handles malformed URLs.
   }
   return { classification: 'unsupported-or-external', origin: null, allowed: false };
+}
+
+function isApprovedSourceNetwork(parsed) {
+  return Object.values(sourcePolicy.roles ?? {}).some((role) => {
+    const contract = role?.contract;
+    if (!contract || `${contract.scheme}:` !== parsed.protocol || contract.host !== parsed.hostname) {
+      return false;
+    }
+    const expectedPort = Number(contract.port);
+    const actualPort = parsed.port === ''
+      ? (parsed.protocol === 'https:' ? 443 : 80)
+      : Number(parsed.port);
+    if (actualPort !== expectedPort) return false;
+
+    const pathPattern = String(contract.path_template)
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\{[a-z]+\\\}/gi, '[^/]+');
+    return new RegExp(`^${pathPattern}$`).test(parsed.pathname);
+  });
 }
 
 function attachPageErrorCapture(page, consoleErrors, pageErrors, replacements) {

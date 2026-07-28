@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "case": "boot",
+  "case": "coords-keyboard",
   "requirement": "SBOX-02",
   "result": "PASS",
   "timestamps": {
-    "started_at": "2026-07-28T08:37:08.958Z",
-    "completed_at": "2026-07-28T08:37:13.251Z"
+    "started_at": "2026-07-28T08:37:27.037Z",
+    "completed_at": "2026-07-28T08:37:30.123Z"
   },
   "cli_runtime": {
     "kehto_cli": {
@@ -26,7 +26,7 @@
       "typescript": "6.0.3"
     },
     "executable": "[USER_DENO_BIN]/kehto",
-    "launch_template": "normal"
+    "launch_template": "resource_off"
   },
   "browser": {
     "playwright_version": "1.59.1",
@@ -56,8 +56,8 @@
   },
   "capability": {
     "domain": "resource",
-    "state": "on",
-    "recorded_argv_template": "normal",
+    "state": "off",
+    "recorded_argv_template": "resource_off",
     "result": "PASS"
   },
   "ui_assertions": {
@@ -115,16 +115,7 @@
       "http://127.0.0.1:5197/__kehto/browser-host.js",
       "http://127.0.0.1:5197/__kehto/config.json",
       "http://127.0.0.1:5197/__kehto/target.html",
-      "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
-      "https://tile.openstreetmap.org/12/1855/1653.png",
-      "https://tile.openstreetmap.org/12/1855/1652.png",
-      "https://tile.openstreetmap.org/12/1856/1653.png",
-      "https://tile.openstreetmap.org/12/1856/1652.png",
-      "https://tile.openstreetmap.org/12/1854/1653.png",
-      "https://tile.openstreetmap.org/12/1855/1654.png",
-      "https://tile.openstreetmap.org/12/1854/1652.png",
-      "https://tile.openstreetmap.org/12/1856/1654.png",
-      "https://tile.openstreetmap.org/12/1854/1654.png"
+      "blob:null/31e92e68-5b81-4e5f-8cf1-afbde7cc915e"
     ],
     "requests": [
       {
@@ -169,114 +160,23 @@
       },
       {
         "sequence": 5,
-        "url": "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
+        "url": "blob:null/31e92e68-5b81-4e5f-8cf1-afbde7cc915e",
         "method": "GET",
         "resource_type": "script",
         "frame_url": "about:srcdoc",
         "classification": "browser-internal-non-network",
         "origin": null,
         "allowed": true
-      },
-      {
-        "sequence": 6,
-        "url": "https://tile.openstreetmap.org/12/1855/1653.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 7,
-        "url": "https://tile.openstreetmap.org/12/1855/1652.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 8,
-        "url": "https://tile.openstreetmap.org/12/1856/1653.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 9,
-        "url": "https://tile.openstreetmap.org/12/1856/1652.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 10,
-        "url": "https://tile.openstreetmap.org/12/1854/1653.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 11,
-        "url": "https://tile.openstreetmap.org/12/1855/1654.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 12,
-        "url": "https://tile.openstreetmap.org/12/1854/1652.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 13,
-        "url": "https://tile.openstreetmap.org/12/1856/1654.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
-      },
-      {
-        "sequence": 14,
-        "url": "https://tile.openstreetmap.org/12/1854/1654.png",
-        "method": "GET",
-        "resource_type": "fetch",
-        "frame_url": "http://127.0.0.1:5197/",
-        "classification": "allowlisted-approved-source-network",
-        "origin": "https://tile.openstreetmap.org",
-        "allowed": true
       }
     ],
     "origin_summary": {
       "http://127.0.0.1:5197": 4,
-      "browser-internal-non-network": 1,
-      "https://tile.openstreetmap.org": 9
+      "browser-internal-non-network": 1
     },
     "browser_internal_non_network_requests": [
       {
         "sequence": 5,
-        "url": "blob:null/2969aaf3-35ea-44f0-b358-d5107a9b775a",
+        "url": "blob:null/31e92e68-5b81-4e5f-8cf1-afbde7cc915e",
         "method": "GET",
         "resource_type": "script",
         "frame_url": "about:srcdoc",
@@ -294,12 +194,12 @@
       "paja_target_proxy_matches_verified_dist": "PASS",
       "loopback_only_network": "PASS",
       "no_external_hostname_or_nonloopback_address": "PASS",
-      "no_tile_glyph_or_source_request": "FAIL"
+      "no_tile_glyph_or_source_request": "PASS"
     }
   },
   "process_logs": {
     "capture_complete": true,
-    "stdout": "Kehto Paja\nRuntime URL: http://127.0.0.1:5197/\nTarget URL: http://127.0.0.1:4173/\nMode: managed-command\nHMR: iframe-target-url\nSimulation: identity:anon relay:off storage:disabled upload:off theme:dark off:relay,outbox,storage,notify,media,upload,count\nCommand: pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort\n  ➜  Local:   http://127.0.0.1:4173/\n",
+    "stdout": "Kehto Paja\nRuntime URL: http://127.0.0.1:5197/\nTarget URL: http://127.0.0.1:4173/\nMode: managed-command\nHMR: iframe-target-url\nSimulation: identity:anon relay:off storage:disabled upload:off theme:dark off:relay,outbox,storage,resource,notify,media,upload,count\nCommand: pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort\n  ➜  Local:   http://127.0.0.1:4173/\n",
     "stderr": ""
   },
   "cleanup": {

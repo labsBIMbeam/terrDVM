@@ -44,7 +44,7 @@ export const COPY = {
     skipToRequestPanel: 'Skip to request panel',
     toolbarLabel: 'Toolbar',
     appTitle: 'terrDVM',
-    mapRegionLabel: 'Map region placeholder',
+    mapRegionLabel: 'Map region',
   },
   buttons: {
     drawBoundingBox: 'Draw bounding box',
@@ -54,6 +54,8 @@ export const COPY = {
     clearSelection: 'Clear selection',
     restoreSelection: 'Restore selection',
     retryPreview: 'Retry preview',
+    continueToRequest: 'Continue to request',
+    closeRequestGate: 'Back to selection',
   },
   emptyState: {
     heading: 'No area selected',
@@ -124,6 +126,12 @@ export const COPY = {
     sourceLabel: 'Source',
     sourceRow,
     sourceUnavailable: sourceRow('', 'unavailable'),
+  },
+  requestGate: {
+    title: 'Request ready',
+    body: 'Your terrain selection is valid. Review the fixed request values before creating an invoice.',
+    paymentNote: 'Payment is not connected in this demo. No invoice or terrain artifact is created here.',
+    invoiceButton: 'Create invoice — next step',
   },
 } as const;
 

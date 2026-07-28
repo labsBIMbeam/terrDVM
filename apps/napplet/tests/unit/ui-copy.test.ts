@@ -123,7 +123,7 @@ describe('Phase 1 UI copy contract', () => {
     expect(COPY.boot.skipToRequestPanel).toBe('Skip to request panel');
     expect(COPY.boot.toolbarLabel).toBe('Toolbar');
     expect(COPY.boot.appTitle).toBe('terrDVM');
-    expect(COPY.boot.mapRegionLabel).toBe('Map region placeholder');
+    expect(COPY.boot.mapRegionLabel).toBe('Map region');
     expect(COPY.requestPanel.emptyBbox).toBe('—, —, —, —');
     expect(COPY.requestPanel.crsLabel).toBe('CRS');
     expect(COPY.requestPanel.crsValue).toBe('EPSG:4326');

@@ -116,10 +116,12 @@ if (nonCommentHtml.trim() === '') {
 
 addTagReferenceFindings(html);
 
-for (const match of html.matchAll(/url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/gi)) {
-  const destination = match[2];
-  if (!isEmbeddedReference(destination)) {
-    findings.push(`external CSS asset reference: ${destination}`);
+for (const styleBlock of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+  for (const match of styleBlock[1].matchAll(/url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/gi)) {
+    const destination = match[2];
+    if (!isEmbeddedReference(destination)) {
+      findings.push(`external CSS asset reference: ${destination}`);
+    }
   }
 }
 

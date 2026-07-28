@@ -4,8 +4,8 @@
   "requirement": "SBOX-02",
   "result": "PASS",
   "timestamps": {
-    "started_at": "2026-07-27T10:46:25.400Z",
-    "completed_at": "2026-07-27T10:46:30.398Z"
+    "started_at": "2026-07-28T08:37:30.388Z",
+    "completed_at": "2026-07-28T08:37:33.535Z"
   },
   "cli_runtime": {
     "kehto_cli": {
@@ -38,7 +38,7 @@
   },
   "built_artifact": {
     "path": "apps/napplet/dist/index.html",
-    "sha256": "009aa42da33067fa175063ec7dcd16495c868bf84fbff558926df790e4a97799",
+    "sha256": "3f0a3fe3a42f9712c287d6971b61b84e046851d85d3a226218bd55e210c30b4d",
     "verify_dist": "PASS",
     "verify_dist_output": "verify-dist: PASS (1 file, dist/index.html is self-contained)",
     "raw_preview_navigation_used": false,
@@ -50,7 +50,7 @@
       "sandbox": "allow-scripts",
       "target_url": "http://127.0.0.1:4173/"
     },
-    "paja_target_proxy_response_sha256": "009aa42da33067fa175063ec7dcd16495c868bf84fbff558926df790e4a97799",
+    "paja_target_proxy_response_sha256": "3f0a3fe3a42f9712c287d6971b61b84e046851d85d3a226218bd55e210c30b4d",
     "paja_target_proxy_matches_dist": "PASS",
     "proof": "Paja fetched the strict Vite preview through its loopback target proxy and injected those verified dist bytes into its sandboxed srcdoc napplet frame."
   },
@@ -114,7 +114,8 @@
       "http://127.0.0.1:5197/",
       "http://127.0.0.1:5197/__kehto/browser-host.js",
       "http://127.0.0.1:5197/__kehto/config.json",
-      "http://127.0.0.1:5197/__kehto/target.html"
+      "http://127.0.0.1:5197/__kehto/target.html",
+      "blob:null/903eb493-8652-4f13-9a67-f213c692a0b1"
     ],
     "requests": [
       {
@@ -156,12 +157,34 @@
         "classification": "allowlisted-loopback-network",
         "origin": "http://127.0.0.1:5197",
         "allowed": true
+      },
+      {
+        "sequence": 5,
+        "url": "blob:null/903eb493-8652-4f13-9a67-f213c692a0b1",
+        "method": "GET",
+        "resource_type": "script",
+        "frame_url": "about:srcdoc",
+        "classification": "browser-internal-non-network",
+        "origin": null,
+        "allowed": true
       }
     ],
     "origin_summary": {
-      "http://127.0.0.1:5197": 4
+      "http://127.0.0.1:5197": 4,
+      "browser-internal-non-network": 1
     },
-    "browser_internal_non_network_requests": [],
+    "browser_internal_non_network_requests": [
+      {
+        "sequence": 5,
+        "url": "blob:null/903eb493-8652-4f13-9a67-f213c692a0b1",
+        "method": "GET",
+        "resource_type": "script",
+        "frame_url": "about:srcdoc",
+        "classification": "browser-internal-non-network",
+        "origin": null,
+        "allowed": true
+      }
+    ],
     "external_requests": [],
     "assertions": {
       "complete_request_events": "PASS",
