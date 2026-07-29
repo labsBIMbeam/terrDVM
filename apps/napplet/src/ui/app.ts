@@ -8,9 +8,45 @@ import {
   type SelectionState,
 } from './selection';
 import { createMapView, mapAttribution, type MapView } from '../map/map-view';
+import { OUTPUT_MIME, RES_M } from '../config/defaults';
+import { getRegion, isWithinRegion, type Region } from '../config/regions';
+import {
+  createInitialJobFlowState,
+  jobFlowReducer,
+  type JobFlowState,
+} from '../job/job-flow';
+import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
+import type { TerrainMesh } from '../terrain/mesh';
+import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
+import { fetchFeatures } from '../features/source-osm';
+import { buildRoadMesh, type RoadMesh } from '../features/ribbon';
+import { createTerrainViewer, type TerrainViewer } from './preview3d';
 
 const AXES = ['west', 'south', 'east', 'north'] as const;
 type Axis = (typeof AXES)[number];
+
+/** Human-facing name for the approved imagery role in the source policy. */
+const IMAGERY_SOURCE_NAME = 'Esri World Imagery';
+
+/**
+ * Nearest-vertex lookup into the generated heightfield, so a footprint can be
+ * placed on the terrain surface rather than at datum zero.
+ */
+function sampleTerrain(mesh: TerrainMesh): (x: number, z: number) => number {
+  const { gridN, widthM, depthM } = mesh.stats;
+  const stepX = widthM / (gridN - 1);
+  const stepZ = depthM / (gridN - 1);
+  return (x, z) => {
+    const col = Math.min(gridN - 1, Math.max(0, Math.round((x + widthM / 2) / stepX)));
+    const row = Math.min(gridN - 1, Math.max(0, Math.round((z + depthM / 2) / stepZ)));
+    return mesh.positions[(row * gridN + col) * 3 + 1];
+  };
+}
+
+export type RenderAppOptions = {
+  /** Region id; falls back to the default region when unknown. */
+  region?: string;
+};
 
 
 function stateBBox(state: SelectionState): BBox4326 | null {
@@ -34,23 +70,24 @@ function previousBBox(state: SelectionState): BBox4326 | null {
 }
 
 
-function sourcePreview(): RequestPreviewDTO['source'] {
-  return { name: '', suffix: 'unavailable' };
-}
-
 function coordinateLabels(): Record<Axis, string> {
   return { west: 'West (°)', south: 'South (°)', east: 'East (°)', north: 'North (°)' };
 }
 
-export function renderApp(root: HTMLDivElement): void {
+export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}): void {
+  const region: Region = getRegion(options.region);
   root.innerHTML = `
     <a class="skip-link" href="#request-panel">${COPY.boot.skipToRequestPanel}</a>
     <header class="app-header" aria-label="${COPY.boot.toolbarLabel}">
-      <h1 class="app-title">${COPY.boot.appTitle}</h1>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <h1 class="app-title">${COPY.boot.appTitle}</h1>
+      </div>
       <div class="toolbar" role="toolbar" aria-label="${COPY.boot.toolbarLabel}">
         <button class="button button-primary" id="draw-button" type="button">${COPY.buttons.drawBoundingBox}</button>
         <button class="button" id="stop-drawing-button" type="button" hidden>${COPY.buttons.stopDrawing}</button>
         <button class="button" id="coordinates-button" type="button" aria-expanded="false" aria-controls="coordinates-panel">${COPY.buttons.enterCoordinates}</button>
+        <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
         <button class="button button-danger" id="clear-button" type="button">${COPY.buttons.clearSelection}</button>
       </div>
     </header>
@@ -58,23 +95,23 @@ export function renderApp(root: HTMLDivElement): void {
       <main class="map-region" aria-label="${COPY.boot.mapRegionLabel}">
         <div class="map-shell">
           <div class="map-canvas" id="map-canvas" tabindex="0" role="application" aria-label="${COPY.boot.mapRegionLabel}"></div>
+          <section class="source-status" id="source-status" aria-labelledby="source-status-title">
+            <h2 class="status-title" id="source-status-title">${COPY.sourceUnavailable.heading}</h2>
+            <p>${COPY.sourceUnavailable.body}</p>
+          </section>
+          <section class="empty-state" id="empty-state" aria-labelledby="empty-state-title">
+            <h2 class="empty-state-title" id="empty-state-title">${COPY.emptyState.heading}</h2>
+            <p>${COPY.emptyState.body}</p>
+          </section>
+          <div class="status-alert" id="status-alert" role="alert" hidden></div>
+          <div class="undo-toast" id="undo-toast" role="status" hidden>
+            <span>${COPY.toast.selectionCleared}</span>
+            <button class="button" id="restore-button" type="button">${COPY.buttons.restoreSelection}</button>
+          </div>
           <div class="map-attribution" aria-label="Map attribution">${mapAttribution()}</div>
         </div>
-        <section class="empty-state" id="empty-state" aria-labelledby="empty-state-title">
-          <h2 class="empty-state-title" id="empty-state-title">${COPY.emptyState.heading}</h2>
-          <p>${COPY.emptyState.body}</p>
-        </section>
         <p class="selection-helper" id="selection-helper">${COPY.helpers.drawPointer}</p>
-        <section class="source-status" aria-labelledby="source-status-title">
-          <h2 class="status-title" id="source-status-title">${COPY.sourceUnavailable.heading}</h2>
-          <p>${COPY.sourceUnavailable.body}</p>
-        </section>
-        <div class="status-alert" id="status-alert" role="alert" hidden></div>
         <div class="live-announcement" id="live-announcement" aria-live="polite"></div>
-        <div class="undo-toast" id="undo-toast" role="status" hidden>
-          <span>${COPY.toast.selectionCleared}</span>
-          <button class="button" id="restore-button" type="button">${COPY.buttons.restoreSelection}</button>
-        </div>
       </main>
       <aside class="request-panel" id="request-panel" aria-labelledby="request-panel-title" tabindex="-1">
         <h2 class="panel-title" id="request-panel-title">${COPY.requestPanel.title}</h2>
@@ -113,15 +150,55 @@ export function renderApp(root: HTMLDivElement): void {
           <p class="helper-caption">The selection is valid and ready for request review.</p>
           <button class="button button-primary button-wide" id="continue-request-button" type="button">${COPY.buttons.continueToRequest}</button>
         </section>
-        <section class="request-gate" id="request-gate" aria-labelledby="request-gate-title" hidden tabindex="-1">
-          <h3 class="section-title" id="request-gate-title">${COPY.requestGate.title}</h3>
-          <p>${COPY.requestGate.body}</p>
-          <p class="payment-note">${COPY.requestGate.paymentNote}</p>
-          <button class="button button-wide" id="invoice-button" type="button" disabled>${COPY.requestGate.invoiceButton}</button>
-          <button class="button button-wide" id="close-request-gate" type="button">${COPY.buttons.closeRequestGate}</button>
-        </section>
       </aside>
     </div>
+    <dialog class="job-modal" id="job-modal" aria-label="${COPY.jobFlow.readyTitle}">
+      <section class="job-stage" id="job-stage-ready" hidden>
+        <h2 class="job-title">${COPY.jobFlow.readyTitle}</h2>
+        <p class="job-body">${COPY.jobFlow.readyBody}</p>
+        <dl class="job-facts">
+          <div class="job-fact"><dt>${COPY.jobFlow.regionLabel}</dt><dd>${region.name}</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.areaLabel}</dt><dd id="job-area">—</dd></div>
+          <div class="job-fact"><dt>${COPY.requestPanel.resolutionLabel}</dt><dd>${RES_M} m/px</dd></div>
+          <div class="job-fact"><dt>${COPY.requestPanel.outputLabel}</dt><dd>${OUTPUT_MIME}</dd></div>
+        </dl>
+        <div class="job-actions">
+          <button class="button button-primary button-wide" id="job-start" type="button">${COPY.jobFlow.startButton}</button>
+          <button class="button button-wide" id="job-cancel" type="button">${COPY.jobFlow.cancelButton}</button>
+        </div>
+      </section>
+      <section class="job-stage job-stage-centered" id="job-stage-generating" hidden>
+        <div class="job-spinner" aria-hidden="true"></div>
+        <h2 class="job-title">${COPY.jobFlow.generatingTitle}</h2>
+        <p class="job-body">${COPY.jobFlow.generatingBody}</p>
+        <p class="job-field-label" id="job-progress"></p>
+      </section>
+      <section class="job-stage" id="job-stage-preview" hidden>
+        <h2 class="job-title">${COPY.jobFlow.previewTitle}</h2>
+        <div class="job-viewer">
+          <canvas class="job-canvas" id="job-canvas"></canvas>
+        </div>
+        <p class="job-field-label">${COPY.jobFlow.viewerHint}</p>
+        <dl class="job-facts">
+          <div class="job-fact"><dt>${COPY.jobFlow.elevationLabel}</dt><dd id="job-elevation">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.extentLabel}</dt><dd id="job-extent">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.trianglesLabel}</dt><dd id="job-triangles">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.buildingsLabel}</dt><dd id="job-buildings">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.roadsLabel}</dt><dd id="job-roads">—</dd></div>
+        </dl>
+        <p class="job-body">${COPY.jobFlow.demoNote}</p>
+        <p class="job-field-label">${COPY.jobFlow.demAttribution}</p>
+        <button class="button button-wide" id="job-close" type="button">${COPY.jobFlow.closeButton}</button>
+      </section>
+      <section class="job-stage" id="job-stage-failed" hidden>
+        <h2 class="job-title">${COPY.jobFlow.failedTitle}</h2>
+        <p class="job-warning" id="job-error">—</p>
+        <div class="job-actions">
+          <button class="button button-primary button-wide" id="job-retry" type="button">${COPY.jobFlow.retryButton}</button>
+          <button class="button button-wide" id="job-close-failed" type="button">${COPY.jobFlow.closeButton}</button>
+        </div>
+      </section>
+    </dialog>
   `;
 
   const mapCanvas = root.querySelector<HTMLDivElement>('#map-canvas');
@@ -138,17 +215,41 @@ export function renderApp(root: HTMLDivElement): void {
   const drawButton = root.querySelector<HTMLButtonElement>('#draw-button');
   const stopDrawingButton = root.querySelector<HTMLButtonElement>('#stop-drawing-button');
   const clearButton = root.querySelector<HTMLButtonElement>('#clear-button');
+  const coverageButton = root.querySelector<HTMLButtonElement>('#coverage-button');
   const restoreButton = root.querySelector<HTMLButtonElement>('#restore-button');
   const toast = root.querySelector<HTMLElement>('#undo-toast');
   const requestAction = root.querySelector<HTMLElement>('#request-action');
   const continueRequestButton = root.querySelector<HTMLButtonElement>('#continue-request-button');
-  const requestGate = root.querySelector<HTMLElement>('#request-gate');
-  const closeRequestGate = root.querySelector<HTMLButtonElement>('#close-request-gate');
+  const sourceStatus = root.querySelector<HTMLElement>('#source-status');
+  const jobModal = root.querySelector<HTMLDialogElement>('#job-modal');
+  const jobStages = {
+    READY: root.querySelector<HTMLElement>('#job-stage-ready'),
+    GENERATING: root.querySelector<HTMLElement>('#job-stage-generating'),
+    PREVIEW: root.querySelector<HTMLElement>('#job-stage-preview'),
+    FAILED: root.querySelector<HTMLElement>('#job-stage-failed'),
+  };
+  const jobArea = root.querySelector<HTMLElement>('#job-area');
+  const jobProgress = root.querySelector<HTMLElement>('#job-progress');
+  const jobCanvas = root.querySelector<HTMLCanvasElement>('#job-canvas');
+  const jobElevation = root.querySelector<HTMLElement>('#job-elevation');
+  const jobExtent = root.querySelector<HTMLElement>('#job-extent');
+  const jobTriangles = root.querySelector<HTMLElement>('#job-triangles');
+  const jobBuildings = root.querySelector<HTMLElement>('#job-buildings');
+  const jobRoads = root.querySelector<HTMLElement>('#job-roads');
+  const jobError = root.querySelector<HTMLElement>('#job-error');
+  const jobStart = root.querySelector<HTMLButtonElement>('#job-start');
+  const jobCancel = root.querySelector<HTMLButtonElement>('#job-cancel');
+  const jobClose = root.querySelector<HTMLButtonElement>('#job-close');
+  const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
+  const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
   if (!mapCanvas || !stateAlert || !announcement || !emptyState || !helper || !areaReadout ||
       !dtoBBox || !dtoArea || !coordinatesPanel || !coordinatesButton || !form || !drawButton ||
-      !stopDrawingButton || !clearButton || !restoreButton || !toast || !requestAction ||
-      !continueRequestButton || !requestGate || !closeRequestGate) {
+      !stopDrawingButton || !clearButton || !coverageButton || !restoreButton || !toast || !requestAction ||
+      !continueRequestButton || !sourceStatus || !jobModal ||
+      !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
+      !jobArea || !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
+      !jobBuildings || !jobRoads || !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -181,7 +282,141 @@ export function renderApp(root: HTMLDivElement): void {
     });
   };
 
-  const previewSource = sourcePreview();
+  // Starts unavailable and only flips once a tile has actually arrived, so a
+  // capability-denied shell never sees a "live" claim.
+  let previewSource: RequestPreviewDTO['source'] = { name: '', suffix: 'unavailable' };
+  let jobState: JobFlowState = createInitialJobFlowState();
+  let terrainAbort: AbortController | undefined;
+  let viewer: TerrainViewer | undefined;
+  let buildingCount = 0;
+  let roadCount = 0;
+
+  const destroyViewer = (): void => {
+    viewer?.destroy();
+    viewer = undefined;
+  };
+
+  const renderJobFlow = (): void => {
+    (Object.keys(jobStages) as (keyof typeof jobStages)[]).forEach((stage) => {
+      const section = jobStages[stage];
+      if (section) section.hidden = jobState.kind !== stage;
+    });
+
+    if (jobState.kind === 'CLOSED') {
+      if (jobModal.open) jobModal.close();
+      return;
+    }
+
+    if (jobState.kind === 'READY') {
+      jobArea.textContent = `${jobState.areaKm2.toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })} km²`;
+    }
+
+    if (jobState.kind === 'GENERATING') {
+      jobProgress.textContent = jobState.progress
+        ? COPY.jobFlow.progress(jobState.progress.loaded, jobState.progress.total)
+        : '';
+    }
+
+    if (jobState.kind === 'PREVIEW') {
+      const { stats } = jobState.mesh;
+      jobElevation.textContent = `${Math.round(stats.minElevationM)}–${Math.round(stats.maxElevationM)} m`;
+      jobExtent.textContent = `${(stats.widthM / 1000).toFixed(1)} × ${(stats.depthM / 1000).toFixed(1)} km`;
+      jobTriangles.textContent = stats.triangles.toLocaleString('en-US');
+      jobBuildings.textContent = buildingCount > 0
+        ? buildingCount.toLocaleString('en-US')
+        : COPY.jobFlow.noBuildings;
+      jobRoads.textContent = roadCount > 0 ? roadCount.toLocaleString('en-US') : COPY.jobFlow.noBuildings;
+    }
+
+    if (jobState.kind === 'FAILED') {
+      jobError.textContent = jobState.message;
+    }
+
+    if (!jobModal.open) jobModal.showModal();
+  };
+
+  const dispatchJob = (action: Parameters<typeof jobFlowReducer>[1]): void => {
+    const next = jobFlowReducer(jobState, action);
+    if (next === jobState) return;
+    jobState = next;
+    renderJobFlow();
+  };
+
+  const closeJobFlow = (): void => {
+    terrainAbort?.abort();
+    terrainAbort = undefined;
+    destroyViewer();
+    dispatchJob({ type: 'CLOSE' });
+  };
+
+  const runTerrainJob = (bbox: BBox4326): void => {
+    terrainAbort?.abort();
+    const controller = new AbortController();
+    terrainAbort = controller;
+
+    generateTerrain(bbox, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (!controller.signal.aborted) dispatchJob({ type: 'PROGRESS', progress });
+      },
+    })
+      .then(async (mesh) => {
+        if (controller.signal.aborted) return;
+
+        // Buildings are an enhancement, never a gate: if the footprint source
+        // is slow, blocked or empty, the terrain still ships.
+        let buildings: BuildingMesh | undefined;
+        let roads: RoadMesh | undefined;
+        try {
+          const features = await fetchFeatures(bbox, { signal: controller.signal });
+          const ground = sampleTerrain(mesh);
+          if (features.buildings.length > 0) {
+            // The ground sample comes from the exaggerated terrain, so building
+            // heights must take the same vertical scale or they sit squashed
+            // against the relief.
+            buildings = extrudeFootprints(
+              features.buildings.map((f) => ({
+                ...f,
+                heightM: f.heightM * TERRAIN_EXAGGERATION,
+              })),
+              bbox,
+              ground,
+            );
+          }
+          if (features.roads.length > 0) {
+            roads = buildRoadMesh(features.roads, bbox, ground, TERRAIN_EXAGGERATION);
+          }
+        } catch {
+          buildings = undefined;
+          roads = undefined;
+        }
+        if (controller.signal.aborted) return;
+
+        // Reveal the preview stage first so the canvas has layout, then mount
+        // synchronously — deferring to rAF would never run while the page is
+        // backgrounded or not compositing.
+        dispatchJob({ type: 'TERRAIN_READY', mesh });
+        buildingCount = buildings?.stats.footprints ?? 0;
+        roadCount = roads?.stats.roads ?? 0;
+        renderJobFlow();
+        destroyViewer();
+        try {
+          viewer = createTerrainViewer(jobCanvas, mesh, { buildings, roads });
+        } catch (error) {
+          announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        dispatchJob({
+          type: 'FAIL',
+          message: error instanceof Error ? error.message : 'Terrain generation failed.',
+        });
+      });
+  };
 
   const updateView = (): void => {
     const bbox = stateBBox(state);
@@ -196,7 +431,7 @@ export function renderApp(root: HTMLDivElement): void {
     root.dataset.selectionCount = bbox && !isCleared ? '1' : '0';
     emptyState.hidden = Boolean(bbox && !isCleared);
     requestAction.hidden = state.kind !== 'SELECTED_VALID';
-    if (state.kind !== 'SELECTED_VALID') requestGate.hidden = true;
+    if (state.kind !== 'SELECTED_VALID' && jobState.kind !== 'CLOSED') closeJobFlow();
     stopDrawingButton.hidden = state.kind !== 'DRAWING';
     drawButton.hidden = state.kind === 'DRAWING';
     helper.textContent = state.kind === 'DRAWING'
@@ -208,12 +443,21 @@ export function renderApp(root: HTMLDivElement): void {
       ? '<span class="area-value">—</span> <span>km²</span>'
       : `<span class="area-value">${area.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span> <span>km²</span>`;
 
+    const sourceCell = root.querySelector<HTMLElement>('[data-dto="source"]');
+    if (sourceCell) {
+      sourceCell.textContent = COPY.requestPanel.sourceRow(
+        previewSource.name,
+        previewSource.suffix,
+      );
+    }
+
     if (state.kind === 'SELECTED_VALID') {
-      const preview = buildRequestPreview(state.bbox, state.areaKm2, { kind: 'none', name: previewSource.name });
+      const preview = buildRequestPreview(state.bbox, state.areaKm2, {
+        kind: previewSource.suffix === 'live' ? 'live' : 'none',
+        name: previewSource.name,
+      });
       dtoBBox.textContent = preview.bbox.map((coordinate) => coordinate.display).join(', ');
       dtoArea.textContent = `${preview.areaKm2.display} km²`;
-      const source = root.querySelector<HTMLElement>('[data-dto="source"]');
-      if (source) source.textContent = COPY.requestPanel.sourceUnavailable;
       syncFields(state.bbox);
       announce(`Bounding box set. West ${preview.bbox[0].display}, south ${preview.bbox[1].display}, east ${preview.bbox[2].display}, north ${preview.bbox[3].display}. Area ${preview.areaKm2.display} square kilometers.`);
     } else if (state.kind === 'SELECTED_INVALID') {
@@ -300,10 +544,29 @@ export function renderApp(root: HTMLDivElement): void {
       announce(message);
       return;
     }
+    if (!isWithinRegion(region, result.bbox)) {
+      alert(COPY.coverage.outside(region.name));
+      announce(COPY.coverage.outside(region.name));
+      return;
+    }
     state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: result.bbox });
     mapView.setSelection(result.bbox);
     alert('');
     updateView();
+    openJobFlow();
+  });
+  coverageButton.addEventListener('click', () => {
+    const visible = mapView.toggleCoverage();
+    coverageButton.setAttribute('aria-pressed', String(visible));
+    const summary = mapView.coverageSummary();
+    if (!summary) {
+      announce(COPY.coverageLegend.none);
+    } else if (visible) {
+      announce(
+        `${COPY.coverageLegend.covered(summary.covered)}, ` +
+          `${COPY.coverageLegend.gap(summary.gap)}.`,
+      );
+    }
   });
   clearButton.addEventListener('click', () => {
     const next = selectionReducer(state, { type: 'CLEAR', now: Date.now() });
@@ -328,14 +591,34 @@ export function renderApp(root: HTMLDivElement): void {
       updateView();
     }
   });
-  continueRequestButton.addEventListener('click', () => {
-    requestGate.hidden = false;
-    requestGate.focus();
-    announce(COPY.requestGate.title);
-  });
-  closeRequestGate.addEventListener('click', () => {
-    requestGate.hidden = true;
+  const openJobFlow = (): void => {
+    if (state.kind !== 'SELECTED_VALID') return;
+    dispatchJob({ type: 'OPEN', bbox: state.bbox, areaKm2: state.areaKm2 });
+    announce(COPY.jobFlow.readyTitle);
+  };
+
+  continueRequestButton.addEventListener('click', openJobFlow);
+  jobCancel.addEventListener('click', closeJobFlow);
+  jobClose.addEventListener('click', closeJobFlow);
+  jobCloseFailed.addEventListener('click', closeJobFlow);
+  // Escape (native dialog close) must reset the gate, not leave it mid-flight.
+  jobModal.addEventListener('close', () => {
+    if (jobState.kind !== 'CLOSED') closeJobFlow();
     continueRequestButton.focus();
+  });
+
+  const startTerrainJob = (): void => {
+    if (jobState.kind !== 'READY') return;
+    const { bbox } = jobState;
+    dispatchJob({ type: 'START_GENERATING' });
+    announce(COPY.jobFlow.generatingTitle);
+    runTerrainJob(bbox);
+  };
+
+  jobStart.addEventListener('click', startTerrainJob);
+  jobRetry.addEventListener('click', () => {
+    dispatchJob({ type: 'RETRY' });
+    startTerrainJob();
   });
 
   try {
@@ -344,6 +627,7 @@ export function renderApp(root: HTMLDivElement): void {
         state = selectionReducer(state, { type: 'DRAW_COMPLETE', bbox });
         alert('');
         updateView();
+        openJobFlow();
       },
       onEditStart: () => {
         state = selectionReducer(state, { type: 'EDIT_START' });
@@ -358,9 +642,19 @@ export function renderApp(root: HTMLDivElement): void {
         // remains truthful while the selection and coordinate path stay usable.
         announce(COPY.sourceUnavailable.body);
       },
-    });
+      onSourceActive: (role) => {
+        if (role !== 'imagery') return;
+        previewSource = { name: IMAGERY_SOURCE_NAME, suffix: 'live' };
+        sourceStatus.querySelector('.status-title')!.textContent = COPY.coverage.activeHeading(region.name);
+        sourceStatus.querySelector('p')!.textContent = COPY.coverage.activeBody;
+        sourceStatus.dataset.state = 'live';
+        updateView();
+      },
+    }, region);
   } catch (error) {
     mapView = {
+      toggleCoverage: () => false,
+      coverageSummary: () => null,
       armDrawing: () => undefined,
       stopDrawing: () => undefined,
       setSelection: () => undefined,

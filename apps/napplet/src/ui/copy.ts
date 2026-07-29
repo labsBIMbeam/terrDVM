@@ -52,6 +52,7 @@ export const COPY = {
     enterCoordinates: 'Enter coordinates',
     applyCoordinates: 'Apply coordinates',
     clearSelection: 'Clear selection',
+    showCoverage: 'Imagery coverage',
     restoreSelection: 'Restore selection',
     retryPreview: 'Retry preview',
     continueToRequest: 'Continue to request',
@@ -132,6 +133,44 @@ export const COPY = {
     body: 'Your terrain selection is valid. Review the fixed request values before creating an invoice.',
     paymentNote: 'Payment is not connected in this demo. No invoice or terrain artifact is created here.',
     invoiceButton: 'Create invoice — next step',
+  },
+  coverageLegend: {
+    covered: (n: CopyValue): string => `${n} cells with 0.25 m/px imagery`,
+    gap: (n: CopyValue): string => `${n} land cells with none`,
+    none: 'No coverage survey for this region.',
+  },
+  coverage: {
+    outside: (regionName: CopyValue): string =>
+      `This service currently covers ${regionName}. Draw inside the region or enter coordinates within it.`,
+    activeHeading: (regionName: CopyValue): string => `${regionName} — live imagery`,
+    activeBody: 'Orthophoto imagery is live. The map is locked to the configured region.',
+  },
+  jobFlow: {
+    readyTitle: 'Generate terrain',
+    readyBody:
+      'Review the request below, then start generating. Payment is skipped in this demo build.',
+    startButton: 'Start generating',
+    cancelButton: 'Cancel',
+    generatingTitle: 'Preparing your terrain job…',
+    generatingBody: 'Fetching elevation tiles and building the mesh for the selected area.',
+    previewTitle: 'Terrain preview',
+    demoNote:
+      'Demo build: payment is skipped and no artifact is delivered. The mesh below is generated live from public elevation data.',
+    viewerHint: 'Drag to orbit · scroll to zoom',
+    failedTitle: 'Terrain generation failed',
+    retryButton: 'Try again',
+    closeButton: 'Close',
+    areaLabel: 'Area',
+    regionLabel: 'Region',
+    elevationLabel: 'Elevation',
+    trianglesLabel: 'Triangles',
+    buildingsLabel: 'Buildings',
+    roadsLabel: 'Roads',
+    extentLabel: 'Ground extent',
+    noBuildings: 'none in view',
+    progress: (loaded: CopyValue, total: CopyValue): string =>
+      `Elevation tiles ${loaded} of ${total}`,
+    demAttribution: 'Elevation: Mapzen Terrain Tiles via AWS Open Data',
   },
 } as const;
 
