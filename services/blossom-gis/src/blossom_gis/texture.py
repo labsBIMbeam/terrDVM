@@ -88,15 +88,32 @@ DROTE_MADEIRA = TextureSource(
     ),
 )
 
+BASEMAP_AT = TextureSource(
+    id="basemap-at-ortho",
+    name="basemap.at Orthofoto",
+    kind="xyz",
+    # ArcGIS-style {z}/{y}/{x} order; named placeholders keep format() honest.
+    url="https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/{z}/{y}/{x}.jpeg",
+    license="CC-BY-4.0 (Open Government Data Österreich)",
+    attribution="Grundkarte: basemap.at",
+    max_zoom=19,
+    notes=(
+        "Nationwide Austrian orthophoto, 29 cm general / 15 cm urban. "
+        "Verified live 2026-07-29: z19 over Innsbruck shows genuine "
+        "architectural detail."
+    ),
+)
+
 SOURCES = {
     source.id: source
-    for source in (ESRI_WORLD_IMAGERY, IRIG_SOUTH_TYROL, DROTE_MADEIRA)
+    for source in (ESRI_WORLD_IMAGERY, IRIG_SOUTH_TYROL, DROTE_MADEIRA, BASEMAP_AT)
 }
 
 #: Preferred texture source per region, best-quality first.
 REGION_SOURCES: dict[str, list[str]] = {
     "madeira": ["drote-madeira-ortho", "esri-world-imagery"],
     "south-tyrol": ["irig-south-tyrol-ortho", "esri-world-imagery"],
+    "innsbruck": ["basemap-at-ortho", "esri-world-imagery"],
     "europe": ["esri-world-imagery"],
 }
 

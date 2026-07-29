@@ -81,6 +81,13 @@ const EUROPE_COVERAGE: Bounds = {
   north: 71.5,
 };
 
+const INNSBRUCK_COVERAGE: Bounds = {
+  west: 11.28,
+  south: 47.17,
+  east: 11.52,
+  north: 47.36,
+};
+
 export const REGIONS: Record<string, Region> = {
   europe: {
     id: 'europe',
@@ -103,6 +110,26 @@ export const REGIONS: Record<string, Region> = {
     zoom: 11,
     minZoom: 9,
     services: [],
+  },
+  innsbruck: {
+    id: 'innsbruck',
+    name: 'Innsbruck',
+    country: 'AT',
+    // City floor at ~570 m against the Nordkette at ~2,300 m: the strongest
+    // relief-to-city contrast of any region, which is the demo's whole point.
+    coverage: INNSBRUCK_COVERAGE,
+    viewBounds: pad(INNSBRUCK_COVERAGE, 0.15),
+    center: [11.40, 47.27],
+    zoom: 11,
+    minZoom: 9,
+    services: [
+      {
+        name: 'basemap.at Orthofoto',
+        role: 'imagery',
+        license: 'CC-BY-4.0',
+        attribution: 'Grundkarte: basemap.at',
+      },
+    ],
   },
   'south-tyrol': {
     id: 'south-tyrol',
