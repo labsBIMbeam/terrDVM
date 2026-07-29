@@ -106,6 +106,9 @@ layers and the cheap ones to fetch. Schedule `run` on a timer — see
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the tile format and its
   measured compression, why tiles rather than bounding boxes, how "no coverage"
   is detected, and what imagery actually exists across Europe.
+- **[docs/IMAGERY-SOURCES.md](docs/IMAGERY-SOURCES.md)** — surveyed European
+  orthophoto services: open sources worth adding, commercial fallbacks for the
+  rural gap, and the licence traps that rule services out.
 - **[services/blossom-gis/README.md](services/blossom-gis/README.md)** — Blossom
   endpoints, the crawler, scheduling.
 - **[docs/PROJECT-BRIEF.md](docs/PROJECT-BRIEF.md)** — the original brief.
