@@ -237,6 +237,106 @@ def delete_blob(
     return Response(status_code=204)
 
 
+# --- Upstream request cache --------------------------------------------------
+#
+# Demo speed and upstream courtesy: every DEM tile and Overpass answer is
+# stored on first fetch and served from disk afterwards. Overpass throttles
+# repeated identical queries within minutes — observed live as buildings
+# silently vanishing from reruns — so the cache is correctness, not just speed.
+
+OVERPASS_UPSTREAM = "https://overpass-api.de/api/interpreter"
+TERRARIUM_UPSTREAM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+
+
+def cache_dir() -> Path:
+    return DATA_DIR / "cache"
+
+
+def upstream_fetch():
+    """Upstream HTTP fetch dependency — overridden in tests."""
+
+    def fetch(url: str, timeout_s: float) -> bytes:
+        import urllib.request
+
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "terrDVM-cache/0.1 (+https://github.com/labsBIMbeam/terrDVM)"}
+        )
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            return response.read()
+
+    return fetch
+
+
+def _cache_write(path: Path, payload: bytes) -> None:
+    """Atomic write: a crash must never leave a truncated entry served forever."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(payload)
+    os.replace(temporary, path)
+
+
+@app.get("/osm")
+def osm_cached(
+    data: str,
+    directory: Annotated[Path, Depends(cache_dir)] = None,  # type: ignore[assignment]
+    fetch: Annotated[object, Depends(upstream_fetch)] = None,  # type: ignore[assignment]
+) -> Response:
+    """Caching proxy pinned to the Overpass interpreter — not an open proxy.
+
+    The query travels verbatim so the client and server never need to agree on
+    query-building logic. OSM data is ODbL; the cache stores it unmodified and
+    the client keeps carrying the attribution.
+    """
+    import hashlib
+    import urllib.parse
+
+    if not data.strip() or len(data) > 8_000:
+        raise HTTPException(400, "data must be a non-empty Overpass query under 8000 chars")
+
+    key = hashlib.sha256(data.encode("utf-8")).hexdigest()[:16]
+    path = directory / "osm" / f"{key}.json"
+    if not path.exists():
+        url = f"{OVERPASS_UPSTREAM}?{urllib.parse.urlencode({'data': data})}"
+        try:
+            payload = fetch(url, 30)
+        except Exception as exc:  # noqa: BLE001 — surface as a named upstream failure
+            raise HTTPException(502, f"overpass fetch failed: {exc}") from exc
+        _cache_write(path, payload)
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=86400", "X-Cache-Key": key},
+    )
+
+
+@app.get("/dem/{z}/{x}/{y}.png")
+def dem_cached(
+    z: int,
+    x: int,
+    y: int,
+    directory: Annotated[Path, Depends(cache_dir)] = None,  # type: ignore[assignment]
+    fetch: Annotated[object, Depends(upstream_fetch)] = None,  # type: ignore[assignment]
+) -> Response:
+    """Caching proxy for Mapzen Terrarium DEM tiles (AWS Open Data)."""
+    try:
+        tile_bbox(z, x, y)
+    except ValueError as exc:
+        raise HTTPException(400, f"invalid tile: {exc}") from exc
+
+    path = directory / "dem" / str(z) / str(x) / f"{y}.png"
+    if not path.exists():
+        try:
+            payload = fetch(TERRARIUM_UPSTREAM.format(z=z, x=x, y=y), 30)
+        except Exception as exc:  # noqa: BLE001 — surface as a named upstream failure
+            raise HTTPException(502, f"dem fetch failed: {exc}") from exc
+        _cache_write(path, payload)
+    return Response(
+        content=path.read_bytes(),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 # --- Orthophoto textures -----------------------------------------------------
 #
 # The corpus stays tile-shaped for deduplication; a texture is a per-delivery

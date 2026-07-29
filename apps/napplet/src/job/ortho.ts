@@ -1,4 +1,5 @@
 import { loadApprovedBytes } from '../shell/resource-client';
+import { COLLECTION_SERVICE } from './collection';
 import type { BBox4326 } from '../bbox/validate';
 
 /**
@@ -12,7 +13,7 @@ import type { BBox4326 } from '../bbox/validate';
  */
 export const ORTHO_SERVICE = {
   /** Local collection server; a deployment points this at its own instance. */
-  baseUrl: 'http://127.0.0.1:8787',
+  baseUrl: COLLECTION_SERVICE.baseUrl,
   // Generous: a cold Esri mosaic is a few hundred sequential upstream tile
   // fetches server-side. WMS-backed regions answer in one request.
   timeoutMs: 120_000,

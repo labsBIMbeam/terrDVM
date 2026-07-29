@@ -1,0 +1,73 @@
+import { loadApprovedBytes, type LoadApprovedBytesOptions } from '../shell/resource-client';
+
+/**
+ * The local collection server: per-extent orthophoto bakes plus a request
+ * cache for DEM tiles and Overpass answers.
+ *
+ * Cache-first, upstream-fallback: the demo gets disk-speed reruns and stops
+ * hammering rate-limited endpoints — Overpass throttling was observed live as
+ * buildings silently vanishing — while a missing server degrades to exactly
+ * the direct-fetch behaviour the app had before.
+ */
+export const COLLECTION_SERVICE = {
+  baseUrl: 'http://127.0.0.1:8787',
+} as const;
+
+export function collectionOrigin(): string {
+  return new URL(COLLECTION_SERVICE.baseUrl).origin;
+}
+
+/** Cached DEM tile on the collection server. */
+export function cachedDemTileUrl(z: number, x: number, y: number): string {
+  return `${COLLECTION_SERVICE.baseUrl}/dem/${z}/${x}/${y}.png`;
+}
+
+export function isApprovedCachedDemUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin !== collectionOrigin()) return false;
+  if (url.search || url.hash || url.username || url.password) return false;
+  return /^\/dem\/[0-9]+\/[0-9]+\/[0-9]+\.png$/.test(url.pathname);
+}
+
+/** Cached Overpass answer on the collection server; the query travels verbatim. */
+export function cachedOsmUrl(query: string): string {
+  const url = new URL(`${COLLECTION_SERVICE.baseUrl}/osm`);
+  url.searchParams.set('data', query);
+  return url.toString();
+}
+
+export function isApprovedCachedOsmUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin !== collectionOrigin()) return false;
+  if (url.pathname !== '/osm') return false;
+  if (url.hash || url.username || url.password) return false;
+  return [...url.searchParams.keys()].every((key) => key === 'data');
+}
+
+/**
+ * Try the collection server's cache, fall back to the direct upstream fetch.
+ * Both attempts go through `loadApprovedBytes` with their own allowlists, so
+ * neither path widens what the shell may be asked for.
+ */
+export async function loadBytesCacheFirst(
+  cacheUrl: string,
+  isCacheAllowed: (url: string) => boolean,
+  directUrl: string,
+  options: LoadApprovedBytesOptions,
+): Promise<Blob> {
+  try {
+    return await loadApprovedBytes(cacheUrl, { ...options, isAllowed: isCacheAllowed });
+  } catch {
+    return loadApprovedBytes(directUrl, options);
+  }
+}

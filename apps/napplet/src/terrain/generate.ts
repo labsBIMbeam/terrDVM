@@ -1,4 +1,9 @@
 import { loadApprovedBytes } from '../shell/resource-client';
+import {
+  cachedDemTileUrl,
+  isApprovedCachedDemUrl,
+  loadBytesCacheFirst,
+} from '../job/collection';
 import { DEM_SOURCE, chooseDemZoom, demTileUrl, demTilesForBBox, isApprovedDemUrl } from './dem';
 import { sampleHeightfield, type DemTileRaster } from './heightfield';
 import { buildTerrainMesh, type TerrainMesh } from './mesh';
@@ -76,12 +81,18 @@ export async function generateTerrain(
 
   const rasters: DemTileRaster[] = await Promise.all(
     tiles.map(async (tile) => {
-      const url = demTileUrl(tile.z, tile.x, tile.y);
-      const blob = await loadApprovedBytes(url, {
-        deadlineMs: DEM_SOURCE.timeoutMs,
-        isAllowed: isApprovedDemUrl,
-        signal,
-      });
+      // Collection-server cache first, the AWS upstream as fallback — reruns
+      // come from disk and a missing server changes nothing.
+      const blob = await loadBytesCacheFirst(
+        cachedDemTileUrl(tile.z, tile.x, tile.y),
+        isApprovedCachedDemUrl,
+        demTileUrl(tile.z, tile.x, tile.y),
+        {
+          deadlineMs: DEM_SOURCE.timeoutMs,
+          isAllowed: isApprovedDemUrl,
+          signal,
+        },
+      );
       if (blob.size > DEM_SOURCE.maxResponseBytes) {
         throw new Error('DEM tile exceeded the approved response-size bound.');
       }

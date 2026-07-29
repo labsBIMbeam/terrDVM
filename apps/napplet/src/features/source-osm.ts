@@ -1,4 +1,8 @@
-import { loadApprovedBytes } from '../shell/resource-client';
+import {
+  cachedOsmUrl,
+  isApprovedCachedOsmUrl,
+  loadBytesCacheFirst,
+} from '../job/collection';
 import {
   ROAD_CLASSES,
   type BuildingFeature,
@@ -165,12 +169,19 @@ export async function fetchFeatures(
   bbox: BBox4326,
   { signal, limit = 3000 }: FetchFeaturesOptions = {},
 ): Promise<OsmFeatures> {
-  const url = featuresUrl(bbox, limit);
-  const blob = await loadApprovedBytes(url, {
-    deadlineMs: OSM_BUILDINGS_SOURCE.timeoutMs,
-    isAllowed: isApprovedBuildingsUrl,
-    signal,
-  });
+  // Collection-server cache first: Overpass throttles repeated identical
+  // queries, which a demo rerun is by definition. Direct Overpass remains the
+  // fallback so the app works without a server.
+  const blob = await loadBytesCacheFirst(
+    cachedOsmUrl(featuresQuery(bbox, limit)),
+    isApprovedCachedOsmUrl,
+    featuresUrl(bbox, limit),
+    {
+      deadlineMs: OSM_BUILDINGS_SOURCE.timeoutMs,
+      isAllowed: isApprovedBuildingsUrl,
+      signal,
+    },
+  );
   if (blob.size > OSM_BUILDINGS_SOURCE.maxResponseBytes) {
     throw new Error('Feature response exceeded the approved size bound.');
   }
