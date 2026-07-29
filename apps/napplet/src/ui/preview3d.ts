@@ -204,6 +204,8 @@ export type TerrainViewer = {
   setProjection: (mode: ViewerProjection) => void;
   /** Chunky pixels and a coarse palette — the retro game-map aesthetic. */
   setPixelLook: (on: boolean) => void;
+  /** First-person walk: WASD moves, click locks the pointer, mouse looks. */
+  setWalkMode: (on: boolean) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -409,6 +411,63 @@ export function createTerrainViewer(
   const PIXEL_SCALE = 3;
   const POSTERIZE_LEVELS = 7;
 
+  // --- First-person walk ----------------------------------------------------
+  // Eye height carries the vertical exaggeration so the walker matches the
+  // buildings; horizontal speed is true metres at a brisk demo pace.
+  const WALK_EYE_UNITS = 1.7 * 1.5 * scale;
+  const WALK_SPEED = 12 * scale;
+  const WALK_RUN_SPEED = 36 * scale;
+  let walkMode = false;
+  let walkYaw = 0;
+  let walkPitch = -0.05;
+  let walkX = 0;
+  let walkZ = 0;
+  let lastFrameTime = 0;
+  const keysDown = new Set<string>();
+
+  /** Bilinear terrain height at a point in scaled model space. */
+  const groundAt = (x: number, z: number): number => {
+    const gridN = mesh.stats.gridN;
+    const width = Math.max(1e-6, mesh.stats.widthM * scale);
+    const depth = Math.max(1e-6, mesh.stats.depthM * scale);
+    const col = Math.min(gridN - 1, Math.max(0, (x / width + 0.5) * (gridN - 1)));
+    const row = Math.min(gridN - 1, Math.max(0, (z / depth + 0.5) * (gridN - 1)));
+    const c0 = Math.floor(col);
+    const r0 = Math.floor(row);
+    const c1 = Math.min(gridN - 1, c0 + 1);
+    const r1 = Math.min(gridN - 1, r0 + 1);
+    const fc = col - c0;
+    const fr = row - r0;
+    const heightAt = (r: number, c: number): number => scaled[(r * gridN + c) * 3 + 1];
+    return (
+      heightAt(r0, c0) * (1 - fc) * (1 - fr) +
+      heightAt(r0, c1) * fc * (1 - fr) +
+      heightAt(r1, c0) * (1 - fc) * fr +
+      heightAt(r1, c1) * fc * fr
+    );
+  };
+
+  const onWalkKeyDown = (event: KeyboardEvent): void => {
+    if (!walkMode) return;
+    keysDown.add(event.code);
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) event.preventDefault();
+  };
+  const onWalkKeyUp = (event: KeyboardEvent): void => {
+    keysDown.delete(event.code);
+  };
+  const onWalkMouseMove = (event: MouseEvent): void => {
+    if (!walkMode || document.pointerLockElement !== canvas) return;
+    walkYaw += event.movementX * 0.0025;
+    walkPitch = Math.min(1.35, Math.max(-1.35, walkPitch - event.movementY * 0.0022));
+  };
+  const onWalkClick = (): void => {
+    if (walkMode && document.pointerLockElement !== canvas) canvas.requestPointerLock();
+  };
+  window.addEventListener('keydown', onWalkKeyDown);
+  window.addEventListener('keyup', onWalkKeyUp);
+  document.addEventListener('mousemove', onWalkMouseMove);
+  canvas.addEventListener('click', onWalkClick);
+
   const reduceMotion =
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let autoRotate = (options.autoRotate ?? true) && !reduceMotion;
@@ -513,7 +572,37 @@ export function createTerrainViewer(
   };
 
   const renderScene = (): void => {
+    const frameNow = performance.now();
+    const dt = lastFrameTime === 0 ? 0.016 : Math.min(0.1, (frameNow - lastFrameTime) / 1000);
+    lastFrameTime = frameNow;
+
     if (autoRotate) yaw += 0.0022;
+
+    let walkView: Mat4 | null = null;
+    if (walkMode) {
+      const forward =
+        (keysDown.has('KeyW') ? 1 : 0) - (keysDown.has('KeyS') ? 1 : 0);
+      const strafe = (keysDown.has('KeyD') ? 1 : 0) - (keysDown.has('KeyA') ? 1 : 0);
+      const speed =
+        keysDown.has('ShiftLeft') || keysDown.has('ShiftRight') ? WALK_RUN_SPEED : WALK_SPEED;
+      walkX += (Math.sin(walkYaw) * forward + Math.cos(walkYaw) * strafe) * speed * dt;
+      walkZ += (-Math.cos(walkYaw) * forward + Math.sin(walkYaw) * strafe) * speed * dt;
+      // Stay on the terrain: the walker cannot leave the selection.
+      const limitX = mesh.stats.widthM * scale * 0.49;
+      const limitZ = mesh.stats.depthM * scale * 0.49;
+      walkX = Math.min(limitX, Math.max(-limitX, walkX));
+      walkZ = Math.min(limitZ, Math.max(-limitZ, walkZ));
+
+      const eyeY = groundAt(walkX, walkZ) + WALK_EYE_UNITS;
+      const lookX = Math.sin(walkYaw) * Math.cos(walkPitch);
+      const lookY = Math.sin(walkPitch);
+      const lookZ = -Math.cos(walkYaw) * Math.cos(walkPitch);
+      walkView = lookAt(
+        [walkX, eyeY, walkZ],
+        [walkX + lookX, eyeY + lookY, walkZ + lookZ],
+        [0, 1, 0],
+      );
+    }
 
     let flightView: Mat4 | null = null;
     if (intro) {
@@ -571,14 +660,19 @@ export function createTerrainViewer(
     gl.enable(gl.DEPTH_TEST);
 
     gl.useProgram(program);
+    // Walking is always perspective — an orthographic first person is nausea.
     gl.uniformMatrix4fv(
       uProjection,
       false,
-      projectionMode === 'isometric'
+      projectionMode === 'isometric' && !walkMode
         ? orthographic(distance * 0.5, aspect, -10, 100)
         : perspective(Math.PI / 4, aspect, 0.01, 100),
     );
-    gl.uniformMatrix4fv(uModelView, false, flightView ?? lookAt(eye, [0, 0, 0], [0, 1, 0]));
+    gl.uniformMatrix4fv(
+      uModelView,
+      false,
+      walkView ?? flightView ?? lookAt(eye, [0, 0, 0], [0, 1, 0]),
+    );
     gl.uniform3f(uLightDir, 0.5, 0.82, 0.28);
     gl.uniform1f(uInvMaxHeight, 1 / maxHeightScaled);
     gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
@@ -654,6 +748,7 @@ export function createTerrainViewer(
   };
 
   const onPointerDown = (event: PointerEvent): void => {
+    if (walkMode) return; // the canvas click locks the pointer instead
     dragging = true;
     autoRotate = false;
     cancelIntro();
@@ -681,6 +776,7 @@ export function createTerrainViewer(
 
   const onWheel = (event: WheelEvent): void => {
     event.preventDefault();
+    if (walkMode) return;
     autoRotate = false;
     cancelIntro();
     distance = Math.min(9, Math.max(1.2, distance + Math.sign(event.deltaY) * 0.2));
@@ -712,6 +808,23 @@ export function createTerrainViewer(
     setPixelLook: (on: boolean) => {
       pixelLook = on;
       canvas.style.imageRendering = on ? 'pixelated' : '';
+    },
+    setWalkMode: (on: boolean) => {
+      walkMode = on;
+      if (on) {
+        cancelIntro();
+        autoRotate = false;
+        walkX = 0;
+        walkZ = 0;
+        // Face the way the orbit camera was looking, so entering walk mode
+        // does not spin the world.
+        walkYaw = -yaw;
+        walkPitch = -0.05;
+        keysDown.clear();
+      } else {
+        keysDown.clear();
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
+      }
     },
     exportImage: async (): Promise<Blob | null> => {
       if (destroyed) return null;
@@ -778,6 +891,11 @@ export function createTerrainViewer(
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onWalkKeyDown);
+      window.removeEventListener('keyup', onWalkKeyUp);
+      document.removeEventListener('mousemove', onWalkMouseMove);
+      canvas.removeEventListener('click', onWalkClick);
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
       for (const drawable of [
         terrain,
         structures,

@@ -181,6 +181,7 @@ export const COPY = {
     viewerCloseButton: 'Close viewer',
     isometricLabel: 'Isometric view',
     pixelLookLabel: 'Pixel look',
+    walkLabel: 'Walk (WASD · click to look)',
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     landcoverLabel: 'Land cover',

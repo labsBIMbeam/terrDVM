@@ -229,6 +229,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <label><input type="checkbox" id="viewer-layer-waterways" checked /><span id="viewer-layer-waterways-label">${COPY.jobFlow.waterwaysLabel}</span></label>
         <label><input type="checkbox" id="viewer-isometric" /><span>${COPY.jobFlow.isometricLabel}</span></label>
         <label><input type="checkbox" id="viewer-pixel" /><span>${COPY.jobFlow.pixelLookLabel}</span></label>
+        <label><input type="checkbox" id="viewer-walk" /><span>${COPY.jobFlow.walkLabel}</span></label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
@@ -297,6 +298,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerLayerWaterwaysLabel = root.querySelector<HTMLElement>('#viewer-layer-waterways-label');
   const viewerIsometric = root.querySelector<HTMLInputElement>('#viewer-isometric');
   const viewerPixel = root.querySelector<HTMLInputElement>('#viewer-pixel');
+  const viewerWalk = root.querySelector<HTMLInputElement>('#viewer-walk');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
@@ -315,7 +317,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
-      !viewerIsometric || !viewerPixel || !viewerExport) {
+      !viewerIsometric || !viewerPixel || !viewerWalk || !viewerExport) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -834,6 +836,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     syncViewerLayerControls();
     viewerIsometric.checked = false;
     viewerPixel.checked = false;
+    viewerWalk.checked = false;
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -875,6 +878,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   });
   viewerPixel.addEventListener('change', () => {
     fullViewer?.setPixelLook(viewerPixel.checked);
+  });
+  viewerWalk.addEventListener('change', () => {
+    fullViewer?.setWalkMode(viewerWalk.checked);
   });
   viewerExport.addEventListener('click', () => {
     void fullViewer?.exportImage().then((blob) => {
