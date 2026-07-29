@@ -63,6 +63,7 @@ export const COPY = {
     body: 'Draw a rectangle on the map or enter coordinates to define the terrain area for this request.',
   },
   helpers: {
+    idle: 'Choose “Draw bounding box” or “Enter coordinates” to select an area. Drag pans the map.',
     drawPointer:
       'Click and drag on the map to draw the rectangle. Press Escape or choose Stop drawing to exit.',
     drawTouch: 'Touch and drag on the map to draw the rectangle.',

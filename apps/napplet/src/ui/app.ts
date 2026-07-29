@@ -110,7 +110,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           </div>
           <div class="map-attribution" aria-label="Map attribution">${mapAttribution()}</div>
         </div>
-        <p class="selection-helper" id="selection-helper">${COPY.helpers.drawPointer}</p>
+        <p class="selection-helper" id="selection-helper">${COPY.helpers.idle}</p>
         <div class="live-announcement" id="live-announcement" aria-live="polite"></div>
       </main>
       <aside class="request-panel" id="request-panel" aria-labelledby="request-panel-title" tabindex="-1">
@@ -438,7 +438,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       ? COPY.helpers.drawPointer
       : bbox && !isCleared
         ? COPY.helpers.editSelection
-        : COPY.helpers.drawPointer;
+        : COPY.helpers.idle;
     areaReadout.innerHTML = area === null
       ? '<span class="area-value">—</span> <span>km²</span>'
       : `<span class="area-value">${area.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span> <span>km²</span>`;

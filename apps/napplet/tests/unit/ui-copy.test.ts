@@ -43,6 +43,9 @@ describe('Phase 1 UI copy contract', () => {
     expect(COPY.emptyState.body).toBe(
       'Draw a rectangle on the map or enter coordinates to define the terrain area for this request.',
     );
+    expect(COPY.helpers.idle).toBe(
+      'Choose “Draw bounding box” or “Enter coordinates” to select an area. Drag pans the map.',
+    );
     expect(COPY.helpers.drawPointer).toBe(
       'Click and drag on the map to draw the rectangle. Press Escape or choose Stop drawing to exit.',
     );
