@@ -73,6 +73,26 @@ void main() {
 
 type Mat4 = Float32Array;
 
+/**
+ * Orthographic projection for the isometric game-map view: no perspective
+ * convergence, so parallel streets stay parallel — the SimCity look, and the
+ * projection every isometric-tile pipeline expects as input.
+ */
+export function orthographic(
+  halfHeight: number,
+  aspect: number,
+  near: number,
+  far: number,
+): Float32Array {
+  const halfWidth = halfHeight * aspect;
+  return new Float32Array([
+    1 / halfWidth, 0, 0, 0,
+    0, 1 / halfHeight, 0, 0,
+    0, 0, -2 / (far - near), 0,
+    0, 0, -(far + near) / (far - near), 1,
+  ]);
+}
+
 function perspective(fovYRadians: number, aspect: number, near: number, far: number): Mat4 {
   const f = 1 / Math.tan(fovYRadians / 2);
   const rangeInv = 1 / (near - far);
@@ -129,8 +149,13 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 
 export type ViewerLayer = 'ortho' | 'buildings' | 'roads';
 
+export type ViewerProjection = 'perspective' | 'isometric';
+
 export type TerrainViewer = {
   setLayerVisible: (layer: ViewerLayer, visible: boolean) => void;
+  setProjection: (mode: ViewerProjection) => void;
+  /** Render one frame and hand back the pixels as a PNG blob. */
+  exportImage: () => Promise<Blob | null>;
   destroy: () => void;
 };
 
@@ -286,11 +311,16 @@ export function createTerrainViewer(
   let lastY = 0;
   let destroyed = false;
   let frame = 0;
+  let projectionMode: ViewerProjection = 'perspective';
   const layerVisible: Record<ViewerLayer, boolean> = {
     ortho: true,
     buildings: true,
     roads: true,
   };
+
+  // Classic dimetric game angle: atan(1/2) pitch, camera on a diagonal.
+  const ISO_PITCH = Math.atan(0.5);
+  const ISO_YAW = Math.PI / 4;
 
   const reduceMotion =
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -456,7 +486,13 @@ export function createTerrainViewer(
     gl.enable(gl.DEPTH_TEST);
 
     gl.useProgram(program);
-    gl.uniformMatrix4fv(uProjection, false, perspective(Math.PI / 4, aspect, 0.01, 100));
+    gl.uniformMatrix4fv(
+      uProjection,
+      false,
+      projectionMode === 'isometric'
+        ? orthographic(distance * 0.5, aspect, -10, 100)
+        : perspective(Math.PI / 4, aspect, 0.01, 100),
+    );
     gl.uniformMatrix4fv(uModelView, false, flightView ?? lookAt(eye, [0, 0, 0], [0, 1, 0]));
     gl.uniform3f(uLightDir, 0.5, 0.82, 0.28);
     gl.uniform1f(uInvMaxHeight, 1 / maxHeightScaled);
@@ -514,7 +550,11 @@ export function createTerrainViewer(
   const onPointerMove = (event: PointerEvent): void => {
     if (!dragging) return;
     yaw -= (event.clientX - lastX) * 0.008;
-    pitch = Math.min(1.45, Math.max(0.08, pitch + (event.clientY - lastY) * 0.006));
+    // The dimetric angle is the whole point of the isometric mode, so only
+    // yaw responds to drag there.
+    if (projectionMode !== 'isometric') {
+      pitch = Math.min(1.45, Math.max(0.08, pitch + (event.clientY - lastY) * 0.006));
+    }
     lastX = event.clientX;
     lastY = event.clientY;
   };
@@ -543,6 +583,45 @@ export function createTerrainViewer(
   return {
     setLayerVisible: (layer: ViewerLayer, visible: boolean) => {
       layerVisible[layer] = visible;
+    },
+    setProjection: (mode: ViewerProjection) => {
+      projectionMode = mode;
+      if (mode === 'isometric') {
+        cancelIntro();
+        autoRotate = false;
+        pitch = ISO_PITCH;
+        // Snap to the nearest diagonal so facades read at the classic angle.
+        yaw = Math.round((yaw - ISO_YAW) / (Math.PI / 2)) * (Math.PI / 2) + ISO_YAW;
+      }
+    },
+    exportImage: async (): Promise<Blob | null> => {
+      if (destroyed) return null;
+      // One synchronous frame, read back before anything else can touch the
+      // buffer — no preserveDrawingBuffer needed. The rAF loop is cancelled
+      // first so the manual draw does not fork a second loop.
+      cancelAnimationFrame(frame);
+      draw();
+      const { width, height } = canvas;
+      const raw = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+
+      // GL rows are bottom-up; canvases are top-down.
+      const flipped = new Uint8ClampedArray(raw.length);
+      const rowBytes = width * 4;
+      for (let row = 0; row < height; row += 1) {
+        flipped.set(
+          raw.subarray(row * rowBytes, (row + 1) * rowBytes),
+          (height - 1 - row) * rowBytes,
+        );
+      }
+
+      const surface = document.createElement('canvas');
+      surface.width = width;
+      surface.height = height;
+      const context = surface.getContext('2d');
+      if (!context) return null;
+      context.putImageData(new ImageData(flipped, width, height), 0, 0);
+      return new Promise((resolve) => surface.toBlob(resolve, 'image/png'));
     },
     destroy: () => {
       if (destroyed) return;

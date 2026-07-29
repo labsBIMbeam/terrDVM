@@ -220,6 +220,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <label><input type="checkbox" id="viewer-layer-ortho" checked /><span id="viewer-layer-ortho-label">${COPY.jobFlow.orthoLabel}</span></label>
         <label><input type="checkbox" id="viewer-layer-buildings" checked /><span id="viewer-layer-buildings-label">${COPY.jobFlow.buildingsLabel}</span></label>
         <label><input type="checkbox" id="viewer-layer-roads" checked /><span id="viewer-layer-roads-label">${COPY.jobFlow.roadsLabel}</span></label>
+        <label><input type="checkbox" id="viewer-isometric" /><span>${COPY.jobFlow.isometricLabel}</span></label>
+        <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
@@ -280,6 +282,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerLayerOrthoLabel = root.querySelector<HTMLElement>('#viewer-layer-ortho-label');
   const viewerLayerBuildingsLabel = root.querySelector<HTMLElement>('#viewer-layer-buildings-label');
   const viewerLayerRoadsLabel = root.querySelector<HTMLElement>('#viewer-layer-roads-label');
+  const viewerIsometric = root.querySelector<HTMLInputElement>('#viewer-isometric');
+  const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
@@ -294,7 +298,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
       !viewerLayerOrtho || !viewerLayerBuildings || !viewerLayerRoads ||
-      !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel) {
+      !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
+      !viewerIsometric || !viewerExport) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -755,6 +760,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     if (!lastScene || viewerModal.open) return;
     viewerModal.showModal();
     syncViewerLayerControls();
+    viewerIsometric.checked = false;
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -776,6 +782,20 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   });
   viewerLayerRoads.addEventListener('change', () => {
     fullViewer?.setLayerVisible('roads', viewerLayerRoads.checked);
+  });
+  viewerIsometric.addEventListener('change', () => {
+    fullViewer?.setProjection(viewerIsometric.checked ? 'isometric' : 'perspective');
+  });
+  viewerExport.addEventListener('click', () => {
+    void fullViewer?.exportImage().then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'terrdvm-map.png';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
   });
   viewerClose.addEventListener('click', () => viewerModal.close());
   // Covers Escape as well: the native close event is the single teardown path.

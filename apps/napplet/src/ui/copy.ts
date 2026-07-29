@@ -176,6 +176,8 @@ export const COPY = {
     orthoUnavailable: 'unavailable — elevation shading',
     viewerButton: 'Open viewer',
     viewerCloseButton: 'Close viewer',
+    isometricLabel: 'Isometric view',
+    exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     layerMissing: (label: string): string => `${label} — none in view`,
     layerFailed: (label: string): string => `${label} — source did not answer`,
