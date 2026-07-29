@@ -104,3 +104,9 @@ class TestDashboard:
         assert "CC-BY-4.0" in page
         assert "ODbL" in page
         assert "vienna" in page
+        # The full qualified pool with operator classification.
+        assert "swisstopo SWISSIMAGE" in page
+        assert "qualified — not wired yet" in page
+        assert "state — IGN France" in page
+        assert "commercial — Esri Inc." in page
+        assert "Europe coverage" in page

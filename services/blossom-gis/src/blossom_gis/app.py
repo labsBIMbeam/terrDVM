@@ -31,6 +31,7 @@ from .cli import REGIONS as SURVEY_REGIONS
 from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox, tile_bbox, tile_for_point
 from .nostr import authorize, parse_auth_header
+from .source_check import CANDIDATES
 from .store import BlobStore, is_valid_sha256
 
 DEFAULT_MAX_UPLOAD_BYTES = 64 * 1024 * 1024
@@ -358,6 +359,60 @@ def _format_bytes(size: int) -> str:
     return f"{value:,.1f} GB"
 
 
+#: Who runs each source — a state mapping agency, a company, or a community.
+#: Display metadata only; licences remain the binding facts.
+SOURCE_OPERATORS: dict[str, str] = {
+    "esri-world-imagery": "commercial — Esri Inc.",
+    "irig-south-tyrol": "state — Autonome Provinz Bozen / Südtirol",
+    "irig-south-tyrol-ortho": "state — Autonome Provinz Bozen / Südtirol",
+    "swisstopo-swissimage": "state — swisstopo (Swiss federal office)",
+    "nrw-dop": "state — Geobasis NRW (German Land)",
+    "pdok-luchtfoto": "state — PDOK / Kadaster (Netherlands)",
+    "ign-fr-ortho": "state — IGN France",
+    "ign-es-pnoa": "state — IGN Spain",
+    "dgt-pt-ortosat": "state — DGT Portugal",
+    "lu-ortho": "state — ACT Luxembourg",
+    "drote-madeira-ortho": "state — DROTe, Região Autónoma da Madeira",
+    "basemap-at-ortho": "state — basemap.at (Austrian Länder cooperative)",
+}
+
+
+def _operator(source_id: str) -> str:
+    return SOURCE_OPERATORS.get(source_id, "—")
+
+
+def _coverage_svg(survey: dict) -> str:
+    """The continental sweep as a schematic map — where imagery exists.
+
+    Equirectangular on purpose: this is a status chart on a lon/lat grid,
+    not a navigation map, and the survey cells are axis-aligned in exactly
+    this projection.
+    """
+    cells: list[str] = []
+    for feature in survey.get("features", []):
+        try:
+            ring = feature["geometry"]["coordinates"][0]
+        except (KeyError, IndexError, TypeError):
+            continue
+        xs = [point[0] for point in ring]
+        ys = [point[1] for point in ring]
+        west, east, south, north = min(xs), max(xs), min(ys), max(ys)
+        status = feature.get("properties", {}).get("status", "unknown")
+        fill = {"covered": "#F7931A", "gap": "#33230e", "sea": "#141920"}.get(status, "#2a2a2a")
+        stroke = ' stroke="#F7931A" stroke-width="0.5"' if status == "gap" else ""
+        cells.append(
+            f'<rect x="{(west + 25.0) * 10:.1f}" y="{(71.5 - north) * 10:.1f}" '
+            f'width="{(east - west) * 10:.1f}" height="{(north - south) * 10:.1f}" '
+            f'fill="{fill}"{stroke}/>'
+        )
+    return (
+        '<svg viewBox="0 0 570 375" role="img" '
+        'style="max-width:640px;width:100%;background:#0d1013;border:1px solid #3a342c">'
+        + "".join(cells)
+        + "</svg>"
+    )
+
+
 @app.get("/dashboard")
 def dashboard() -> HTMLResponse:
     """Where every byte comes from, and what already lives on this disk.
@@ -379,8 +434,52 @@ def dashboard() -> HTMLResponse:
                 f"<td>{html.escape(source.name)}{badge}</td>"
                 f"<td>{html.escape(source.kind.upper())}</td>"
                 f"<td>{html.escape(host)}</td>"
+                f"<td>{html.escape(_operator(source_id))}</td>"
                 f"<td>{html.escape(source.license)}</td></tr>"
             )
+
+    # The full qualified pool: every service that passed its one-request
+    # probe, whether a region chain uses it yet or not.
+    pool_rows: list[str] = []
+    for candidate in CANDIDATES:
+        host = candidate.url.split("/")[2]
+        wired = sorted(
+            r
+            for r, ids in texture_module.REGION_SOURCES.items()
+            if any(texture_module.SOURCES[i].url.split("/")[2] == host for i in ids)
+        )
+        wired_label = ", ".join(wired) if wired else "qualified — not wired yet"
+        pool_rows.append(
+            f"<tr><td>{html.escape(candidate.name)}</td>"
+            f"<td>{html.escape(candidate.country)}</td>"
+            f"<td>{html.escape(candidate.kind.upper())}</td>"
+            f"<td>{html.escape(_operator(candidate.id))}</td>"
+            f"<td>{html.escape(candidate.license)}</td>"
+            f"<td>{html.escape(wired_label)}</td></tr>"
+        )
+
+    # Coverage surveys: stats for every survey on disk, the continental map
+    # for europe.
+    coverage_rows: list[str] = []
+    europe_svg = ""
+    coverage_dir = DATA_DIR / "coverage"
+    if coverage_dir.is_dir():
+        for survey_path in sorted(coverage_dir.glob("*.geojson")):
+            try:
+                survey = json.loads(survey_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            props = survey.get("properties", {})
+            land = (props.get("covered") or 0) + (props.get("gaps") or 0)
+            share = f"{100 * (props.get('covered') or 0) / land:.1f}%" if land else "—"
+            coverage_rows.append(
+                f"<tr><td>{html.escape(str(props.get('region', '?')))}</td>"
+                f"<td>z{props.get('zoom', '?')}</td><td>{props.get('cells', '?')}</td>"
+                f"<td>{props.get('covered', '?')}</td><td>{props.get('gaps', '?')}</td>"
+                f"<td>{props.get('sea', '?')}</td><td>{share}</td></tr>"
+            )
+            if props.get("region") == "europe":
+                europe_svg = _coverage_svg(survey)
 
     dem_count, dem_bytes = _directory_stats(DATA_DIR / "cache" / "dem")
     osm_count, osm_bytes = _directory_stats(DATA_DIR / "cache" / "osm")
@@ -427,18 +526,39 @@ def dashboard() -> HTMLResponse:
 <p>Every external byte, its source and its licence. Refreshes every 15&nbsp;s.</p>
 
 <h2>Imagery sources by region</h2>
-<table><tr><th>Region</th><th>Source</th><th>Kind</th><th>Endpoint</th><th>Licence</th></tr>
+<table><tr><th>Region</th><th>Source</th><th>Kind</th><th>Endpoint</th><th>Operator</th>
+<th>Licence</th></tr>
 {''.join(rows)}</table>
 
+<h2>Qualified source pool</h2>
+<p>Every service that passed its one-request qualification probe
+(detail score + payload density, see ARCHITECTURE.md) — wired into a region
+chain or waiting.</p>
+<table><tr><th>Source</th><th>Country</th><th>Kind</th><th>Operator</th><th>Licence</th>
+<th>Wired into</th></tr>
+{''.join(pool_rows)}</table>
+
 <h2>Fixed upstreams</h2>
-<table><tr><th>Layer</th><th>Endpoint</th><th>Licence</th></tr>
-<tr><td>Elevation (DEM)</td><td>s3.amazonaws.com — Mapzen Terrarium via AWS Open Data</td>
-<td>SRTM/GMTED/NED public data, attribution</td></tr>
-<tr><td>Buildings, roads, land use</td><td>overpass-api.de — OpenStreetMap</td>
+<table><tr><th>Layer</th><th>Endpoint</th><th>Operator</th><th>Licence</th></tr>
+<tr><td>Elevation (DEM)</td><td>s3.amazonaws.com — Mapzen Terrarium</td>
+<td>open data — AWS Open Data, from state DEMs (NASA SRTM, USGS GMTED/NED)</td>
+<td>public data, attribution</td></tr>
+<tr><td>Buildings, roads, land use</td><td>overpass-api.de</td>
+<td>community — OpenStreetMap contributors</td>
 <td>ODbL-1.0 — share-alike is infectious for derived geometry</td></tr>
 <tr><td>Basemap (map view)</td><td>tile.openstreetmap.org</td>
+<td>community — OpenStreetMap Foundation</td>
 <td>ODbL, visible attribution</td></tr>
 </table>
+
+<h2>Europe coverage — z7 sweep</h2>
+{europe_svg or '<p>no continental survey on this data root — run the coverage command</p>'}
+<p>Solid orange: architectural resolution verified at the cell centre.
+Outlined: land with no qualified imagery — the gap the map warns about.
+Dark: sea. Schematic lon/lat grid, one probe per ~200 km cell.</p>
+<table><tr><th>Survey</th><th>Grid</th><th>Cells</th><th>Covered</th><th>Gaps</th>
+<th>Sea</th><th>Land covered</th></tr>
+{''.join(coverage_rows) or '<tr><td colspan=7>no surveys on this data root</td></tr>'}</table>
 
 <h2>Local holdings</h2>
 <p>
