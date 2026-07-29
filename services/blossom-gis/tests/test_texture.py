@@ -199,8 +199,22 @@ class TestBackendOptionRouting:
         assert used == ["irig"]
 
     def test_wms_only_option_does_not_break_a_tile_backed_region(self) -> None:
+        # Europe is the one region left without a regional WMS: its only
+        # texture source is the Esri tile fallback.
         texture = fetch_texture(
-            FUNCHAL, "madeira", 1.0, max_side_px=1024,
+            FUNCHAL, "europe", 1.0, max_side_px=1024,
             fetcher=lambda url, timeout: jpeg_bytes(),
         )
         assert texture.source.id == ESRI_WORLD_IMAGERY.id
+
+    def test_madeira_prefers_drote_over_the_global_fallback(self) -> None:
+        used: list[str] = []
+
+        def fake(url: str, timeout: float) -> bytes:
+            used.append("drote" if "madeira.gov.pt" in url else "esri")
+            return jpeg_bytes((600, 400))
+
+        texture = fetch_texture(FUNCHAL, "madeira", 0.25, fetcher=fake)
+
+        assert texture.source.id == "drote-madeira-ortho"
+        assert used == ["drote"]

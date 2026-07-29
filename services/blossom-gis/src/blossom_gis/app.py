@@ -26,6 +26,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import texture as texture_module
 from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox, tile_bbox, tile_for_point
 from .nostr import authorize, parse_auth_header
@@ -234,6 +235,133 @@ def delete_blob(
     blobs.delete(sha256)
     db.delete(sha256)
     return Response(status_code=204)
+
+
+# --- Orthophoto textures -----------------------------------------------------
+#
+# The corpus stays tile-shaped for deduplication; a texture is a per-delivery
+# bake over the requested extent, like GLB. Regional services answer an exact
+# bbox in one WMS request, which is why the API takes borders, not tiles.
+
+#: Slightly above the client's 100 km² selection cap, so a valid client
+#: request never fails here on rounding.
+TEXTURE_MAX_AREA_KM2 = 120.0
+
+
+def texture_dir() -> Path:
+    return DATA_DIR / "textures"
+
+
+def texture_fetch():
+    """Fetch function dependency — overridden in tests with a stub."""
+    return texture_module.fetch_texture
+
+
+def _texture_area_km2(box: BBox) -> float:
+    import math
+
+    mid = math.radians((box.south + box.north) / 2)
+    return (
+        (box.east - box.west) * 111.32 * math.cos(mid) * (box.north - box.south) * 110.57
+    )
+
+
+def _parse_texture_request(region: str, bbox: str, target: float) -> BBox:
+    if region not in texture_module.REGION_SOURCES:
+        raise HTTPException(404, f"no texture sources configured for region: {region}")
+    parts = bbox.split(",")
+    if len(parts) != 4:
+        raise HTTPException(400, "bbox must be 'west,south,east,north'")
+    try:
+        west, south, east, north = (float(p) for p in parts)
+        box = BBox(west=west, south=south, east=east, north=north)
+    except ValueError as exc:
+        raise HTTPException(400, f"invalid bbox: {exc}") from exc
+    if not 0.05 <= target <= 10.0:
+        raise HTTPException(400, "target must be between 0.05 and 10 m/px")
+    area = _texture_area_km2(box)
+    if area > TEXTURE_MAX_AREA_KM2:
+        raise HTTPException(
+            413, f"bbox is {area:.0f} km2, above the {TEXTURE_MAX_AREA_KM2:.0f} km2 cap"
+        )
+    return box
+
+
+def _ensure_texture(
+    region: str, box: BBox, target: float, directory: Path, fetch
+) -> tuple[Path, dict]:
+    """Return the cached texture for this extent, fetching and storing on miss."""
+    import hashlib
+    import json
+
+    key = (
+        f"{region}|{box.west:.6f},{box.south:.6f},{box.east:.6f},{box.north:.6f}"
+        f"|{target:.3f}"
+    )
+    stem = f"{region}-{hashlib.sha256(key.encode()).hexdigest()[:16]}"
+    image_path = directory / f"{stem}.jpg"
+    meta_path = directory / f"{stem}.json"
+    if image_path.exists() and meta_path.exists():
+        return image_path, json.loads(meta_path.read_text(encoding="utf-8"))
+
+    try:
+        fetched = fetch(box, region, target)
+    except Exception as exc:  # noqa: BLE001 — surface as a named upstream failure
+        raise HTTPException(502, f"texture fetch failed: {exc}") from exc
+
+    texture_module.write_texture(fetched, directory, stem)
+    meta = {
+        "region": region,
+        "bbox": [box.west, box.south, box.east, box.north],
+        "target_m_per_px": target,
+        "m_per_px": round(fetched.metres_per_pixel, 3),
+        "width_px": fetched.size[0],
+        "height_px": fetched.size[1],
+        "source": {
+            "id": fetched.source.id,
+            "name": fetched.source.name,
+            "license": fetched.source.license,
+            "attribution": fetched.source.attribution,
+        },
+        "requests": fetched.requests,
+        "warnings": fetched.warnings,
+    }
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    return image_path, meta
+
+
+@app.get("/texture/meta")
+def texture_meta(
+    region: str,
+    bbox: str,
+    target: float = 0.25,
+    directory: Annotated[Path, Depends(texture_dir)] = None,  # type: ignore[assignment]
+    fetch: Annotated[object, Depends(texture_fetch)] = None,  # type: ignore[assignment]
+) -> JSONResponse:
+    box = _parse_texture_request(region, bbox, target)
+    _, meta = _ensure_texture(region, box, target, directory, fetch)
+    return JSONResponse(meta)
+
+
+@app.get("/texture")
+def texture_image(
+    region: str,
+    bbox: str,
+    target: float = 0.25,
+    directory: Annotated[Path, Depends(texture_dir)] = None,  # type: ignore[assignment]
+    fetch: Annotated[object, Depends(texture_fetch)] = None,  # type: ignore[assignment]
+) -> Response:
+    box = _parse_texture_request(region, bbox, target)
+    image_path, meta = _ensure_texture(region, box, target, directory, fetch)
+    return Response(
+        content=image_path.read_bytes(),
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "X-Texture-Source": meta["source"]["id"],
+            "X-Texture-M-Per-Px": str(meta["m_per_px"]),
+        },
+    )
 
 
 def _blob_response(

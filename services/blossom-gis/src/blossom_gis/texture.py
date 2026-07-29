@@ -72,12 +72,32 @@ IRIG_SOUTH_TYROL = TextureSource(
     notes="Regional aerial survey, INSPIRE-conformant. Public-domain, no attribution burden.",
 )
 
-SOURCES = {source.id: source for source in (ESRI_WORLD_IMAGERY, IRIG_SOUTH_TYROL)}
+DROTE_MADEIRA = TextureSource(
+    id="drote-madeira-ortho",
+    name="DROTe Ortofotocartografia RAM 2023",
+    kind="wms",
+    url="https://geoportal-irig.madeira.gov.pt/mapproxy/base/service",
+    layer="drote_ortos2023_ortos_2023",
+    license="Free use with attribution (non-CC; redistribution terms unconfirmed)",
+    attribution="© DROTe — Região Autónoma da Madeira",
+    notes=(
+        "10 cm regional survey covering Madeira, Porto Santo, Desertas and "
+        "Selvagens — the only qualified source with architectural resolution "
+        "over Porto Santo. Verified live 2026-07-29: Funchal and Porto Santo "
+        "GetMap samples both return genuine detail at 0.25 m/px."
+    ),
+)
+
+SOURCES = {
+    source.id: source
+    for source in (ESRI_WORLD_IMAGERY, IRIG_SOUTH_TYROL, DROTE_MADEIRA)
+}
 
 #: Preferred texture source per region, best-quality first.
 REGION_SOURCES: dict[str, list[str]] = {
-    "madeira": ["esri-world-imagery"],
+    "madeira": ["drote-madeira-ortho", "esri-world-imagery"],
     "south-tyrol": ["irig-south-tyrol-ortho", "esri-world-imagery"],
+    "europe": ["esri-world-imagery"],
 }
 
 
