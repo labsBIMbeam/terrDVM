@@ -11,6 +11,7 @@ node_modules/
 dist/
 apps/napplet/dist/
 .vite/
+coverage/
 playwright-report/
 test-results/
 

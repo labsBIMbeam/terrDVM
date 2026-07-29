@@ -9,4 +9,8 @@ if (!(app instanceof HTMLDivElement)) {
   throw new Error('Missing #app root');
 }
 
-renderApp(app);
+// In a shell the region arrives through the `config` NAP. The query parameter
+// is a development affordance for exercising regions without a shell.
+const region = new URLSearchParams(location.search).get('region') ?? undefined;
+
+renderApp(app, { region });
