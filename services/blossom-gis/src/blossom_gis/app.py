@@ -305,7 +305,9 @@ def _ensure_texture(
         return image_path, json.loads(meta_path.read_text(encoding="utf-8"))
 
     try:
-        fetched = fetch(box, region, target)
+        # 256 tiles keeps a cold XYZ mosaic inside the client's deadline; the
+        # WMS backends ignore the option and answer in a single request.
+        fetched = fetch(box, region, target, max_tiles=256)
     except Exception as exc:  # noqa: BLE001 — surface as a named upstream failure
         raise HTTPException(502, f"texture fetch failed: {exc}") from exc
 

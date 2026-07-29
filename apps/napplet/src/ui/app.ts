@@ -15,6 +15,7 @@ import {
   jobFlowReducer,
   type JobFlowState,
 } from '../job/job-flow';
+import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '../job/ortho';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
@@ -185,9 +186,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           <div class="job-fact"><dt>${COPY.jobFlow.trianglesLabel}</dt><dd id="job-triangles">—</dd></div>
           <div class="job-fact"><dt>${COPY.jobFlow.buildingsLabel}</dt><dd id="job-buildings">—</dd></div>
           <div class="job-fact"><dt>${COPY.jobFlow.roadsLabel}</dt><dd id="job-roads">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.orthoLabel}</dt><dd id="job-ortho">—</dd></div>
         </dl>
         <p class="job-body">${COPY.jobFlow.demoNote}</p>
         <p class="job-field-label">${COPY.jobFlow.demAttribution}</p>
+        <p class="job-field-label" id="job-imagery-attribution" hidden></p>
         <button class="button button-wide" id="job-close" type="button">${COPY.jobFlow.closeButton}</button>
       </section>
       <section class="job-stage" id="job-stage-failed" hidden>
@@ -236,6 +239,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const jobTriangles = root.querySelector<HTMLElement>('#job-triangles');
   const jobBuildings = root.querySelector<HTMLElement>('#job-buildings');
   const jobRoads = root.querySelector<HTMLElement>('#job-roads');
+  const jobOrtho = root.querySelector<HTMLElement>('#job-ortho');
+  const jobImageryAttribution = root.querySelector<HTMLElement>('#job-imagery-attribution');
   const jobError = root.querySelector<HTMLElement>('#job-error');
   const jobStart = root.querySelector<HTMLButtonElement>('#job-start');
   const jobCancel = root.querySelector<HTMLButtonElement>('#job-cancel');
@@ -249,7 +254,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !continueRequestButton || !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
       !jobArea || !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
-      !jobBuildings || !jobRoads || !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry) {
+      !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
+      !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -290,6 +296,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let viewer: TerrainViewer | undefined;
   let buildingCount = 0;
   let roadCount = 0;
+  let orthoMeta: OrthoMeta | null = null;
 
   const destroyViewer = (): void => {
     viewer?.destroy();
@@ -329,6 +336,15 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         ? buildingCount.toLocaleString('en-US')
         : COPY.jobFlow.noBuildings;
       jobRoads.textContent = roadCount > 0 ? roadCount.toLocaleString('en-US') : COPY.jobFlow.noBuildings;
+      jobOrtho.textContent = orthoMeta
+        ? COPY.jobFlow.orthoLine(orthoMeta.source.name, orthoMeta.mPerPx)
+        : COPY.jobFlow.orthoUnavailable;
+      // Attribution is a licence obligation wherever imagery is shown, so the
+      // line appears exactly when a texture is draped.
+      jobImageryAttribution.hidden = orthoMeta === null;
+      jobImageryAttribution.textContent = orthoMeta
+        ? COPY.jobFlow.imageryAttribution(orthoMeta.source.attribution)
+        : '';
     }
 
     if (jobState.kind === 'FAILED') {
@@ -356,6 +372,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     terrainAbort?.abort();
     const controller = new AbortController();
     terrainAbort = controller;
+
+    // The orthophoto bake runs beside the terrain fetch. Like buildings it is
+    // an enhancement, never a gate: without a collection server the preview
+    // ships with the elevation ramp and says so.
+    const orthoPromise: Promise<OrthoTexture | null> = fetchOrthoTexture(region.id, bbox, {
+      signal: controller.signal,
+    }).catch(() => null);
 
     generateTerrain(bbox, {
       signal: controller.signal,
@@ -393,6 +416,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           buildings = undefined;
           roads = undefined;
         }
+        const ortho = await orthoPromise;
         if (controller.signal.aborted) return;
 
         // Reveal the preview stage first so the canvas has layout, then mount
@@ -401,10 +425,15 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         dispatchJob({ type: 'TERRAIN_READY', mesh });
         buildingCount = buildings?.stats.footprints ?? 0;
         roadCount = roads?.stats.roads ?? 0;
+        orthoMeta = ortho?.meta ?? null;
         renderJobFlow();
         destroyViewer();
         try {
-          viewer = createTerrainViewer(jobCanvas, mesh, { buildings, roads });
+          viewer = createTerrainViewer(jobCanvas, mesh, {
+            buildings,
+            roads,
+            ortho: ortho?.bitmap,
+          });
         } catch (error) {
           announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
         }

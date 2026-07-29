@@ -16,11 +16,16 @@ in vec3 aNormal;
 uniform mat4 uModelView;
 uniform mat4 uProjection;
 uniform float uInvMaxHeight;
+uniform vec2 uGroundSize;
 out vec3 vNormal;
 out float vHeight;
+out vec2 vUV;
 void main() {
   vNormal = aNormal;
   vHeight = aPosition.y * uInvMaxHeight;
+  // The terrain grid is centred on the origin with north at -Z, and the
+  // orthophoto's first row is north — so no flip is needed on either axis.
+  vUV = aPosition.xz / uGroundSize + 0.5;
   gl_Position = uProjection * uModelView * vec4(aPosition, 1.0);
 }`;
 
@@ -28,9 +33,12 @@ const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec3 vNormal;
 in float vHeight;
+in vec2 vUV;
 uniform vec3 uLightDir;
 uniform vec3 uOverrideColor;
 uniform float uUseOverride;
+uniform sampler2D uOrtho;
+uniform float uUseOrtho;
 out vec4 outColor;
 
 vec3 ramp(float t) {
@@ -49,7 +57,12 @@ void main() {
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, normalize(uLightDir)), 0.0);
   float light = 0.35 + 0.65 * diffuse;
-  vec3 base = mix(ramp(clamp(vHeight, 0.0, 1.0)), uOverrideColor, uUseOverride);
+  vec3 ground = mix(
+    ramp(clamp(vHeight, 0.0, 1.0)),
+    texture(uOrtho, vUV).rgb,
+    uUseOrtho
+  );
+  vec3 base = mix(ground, uOverrideColor, uUseOverride);
   outColor = vec4(base * light, 1.0);
 }`;
 
@@ -122,7 +135,13 @@ const ROAD_COLOR: readonly [number, number, number] = [0.13, 0.13, 0.14];
 export function createTerrainViewer(
   canvas: HTMLCanvasElement,
   mesh: TerrainMesh,
-  options: { autoRotate?: boolean; buildings?: BuildingMesh; roads?: RoadMesh } = {},
+  options: {
+    autoRotate?: boolean;
+    buildings?: BuildingMesh;
+    roads?: RoadMesh;
+    /** Orthophoto to drape over the terrain; heightfield ramp when absent. */
+    ortho?: TexImageSource;
+  } = {},
 ): TerrainViewer {
   const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
   if (!gl) throw new Error('WebGL2 is unavailable in this browser.');
@@ -222,6 +241,24 @@ export function createTerrainViewer(
   const uInvMaxHeight = gl.getUniformLocation(program, 'uInvMaxHeight');
   const uOverrideColor = gl.getUniformLocation(program, 'uOverrideColor');
   const uUseOverride = gl.getUniformLocation(program, 'uUseOverride');
+  const uGroundSize = gl.getUniformLocation(program, 'uGroundSize');
+  const uOrtho = gl.getUniformLocation(program, 'uOrtho');
+  const uUseOrtho = gl.getUniformLocation(program, 'uUseOrtho');
+
+  // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
+  // as-is and still gets mipmaps for the oblique viewing angles.
+  let orthoTexture: WebGLTexture | null = null;
+  if (options.ortho) {
+    orthoTexture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, orthoTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, options.ortho);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
 
   let yaw = Math.PI * 0.25;
   let pitch = 0.62;
@@ -271,6 +308,17 @@ export function createTerrainViewer(
     gl.uniform3f(uLightDir, 0.5, 0.82, 0.28);
     gl.uniform1f(uInvMaxHeight, 1 / maxHeightScaled);
     gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+    gl.uniform2f(
+      uGroundSize,
+      Math.max(1e-6, mesh.stats.widthM * scale),
+      Math.max(1e-6, mesh.stats.depthM * scale),
+    );
+    gl.uniform1i(uOrtho, 0);
+    gl.uniform1f(uUseOrtho, orthoTexture ? 1 : 0);
+    if (orthoTexture) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, orthoTexture);
+    }
 
     gl.uniform1f(uUseOverride, 0);
     gl.bindVertexArray(terrain.vao);
@@ -347,6 +395,7 @@ export function createTerrainViewer(
         for (const buffer of drawable.buffers) gl.deleteBuffer(buffer);
         gl.deleteVertexArray(drawable.vao);
       }
+      if (orthoTexture) gl.deleteTexture(orthoTexture);
       gl.deleteProgram(program);
     },
   };

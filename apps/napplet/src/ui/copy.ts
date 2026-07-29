@@ -172,6 +172,10 @@ export const COPY = {
     progress: (loaded: CopyValue, total: CopyValue): string =>
       `Elevation tiles ${loaded} of ${total}`,
     demAttribution: 'Elevation: Mapzen Terrain Tiles via AWS Open Data',
+    orthoLabel: 'Orthophoto',
+    orthoUnavailable: 'unavailable — elevation shading',
+    orthoLine: (name: string, mPerPx: number): string => `${name} · ${mPerPx} m/px`,
+    imageryAttribution: (attribution: string): string => `Imagery: ${attribution}`,
   },
 } as const;
 
