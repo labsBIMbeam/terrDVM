@@ -84,7 +84,7 @@ SQLite, so it is fully resumable.
 python -m blossom_gis.cli seed     --region madeira --zoom 12
 python -m blossom_gis.cli run      --region madeira --max-tiles 5
 python -m blossom_gis.cli status   --region madeira
-python -m blossom_gis.cli coverage --region europe  --zoom 5
+python -m blossom_gis.cli coverage --region europe  --zoom 7
 ```
 
 Terrain and imagery drain before vector features: they are the demo-critical

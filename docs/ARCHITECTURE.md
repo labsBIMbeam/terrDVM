@@ -113,8 +113,9 @@ z20 returns worldwide.
 - **Esri stops at z19** (~0.25 m/px). z20 is a placeholder everywhere.
 - **Porto Santo has no architectural imagery** from any qualified source.
 - **DGT covers mainland Portugal only** — not Madeira.
-- **Esri z19 is city-centric.** A continental sweep found only 3 of 18 European
-  land cells qualifying; rural Europe does not get 0.25 m/px from Esri.
+- **Esri z19 is city-centric.** A continental z7 sweep (525 cells, ~200 km
+  grid) found 43 of 218 land cells qualifying (19.7 %); rural Europe does not
+  get 0.25 m/px from Esri.
 
 ### Resolution has a price
 

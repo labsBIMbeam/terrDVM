@@ -163,8 +163,22 @@ describe('shipped surveys', () => {
     expect(coverageFor('atlantis')).toBeNull();
   });
 
+  it('europe ships only the gaps it draws, with counts from the survey header', () => {
+    const survey = coverageFor('europe')!;
+    // Baked by scripts/bake-coverage.mjs: covered and sea cells are dead
+    // weight in a single-file artifact, so only gap features ship.
+    expect(survey.features.every((f) => f.properties?.status === 'gap')).toBe(true);
+
+    // Measured z7 sweep, 2026-07-29: Esri z19 is city-centric, so most of
+    // rural Europe has no architectural-resolution imagery.
+    const summary = summarise(survey);
+    expect(summary.covered).toBe(43);
+    expect(summary.gap).toBe(175);
+    expect(summary.land).toBe(218);
+  });
+
   it('every feature carries a status and a closed ring', () => {
-    for (const id of ['madeira', 'south-tyrol']) {
+    for (const id of ['madeira', 'south-tyrol', 'europe']) {
       for (const feature of coverageFor(id)!.features) {
         expect(['covered', 'gap', 'sea', 'unknown']).toContain(feature.properties?.status);
         const ring = (feature.geometry as GeoJSON.Polygon).coordinates[0];

@@ -65,6 +65,24 @@ export function createHatchImage(size = 8): ImageData | null {
 }
 
 export function summarise(collection: GeoJSON.FeatureCollection): CoverageSummary {
+  // Baked surveys may ship only the gap features the overlay draws; the full
+  // counts then live in the survey's top-level properties (see
+  // scripts/bake-coverage.mjs). Counting features is the fallback for
+  // collections assembled in code.
+  const props = (collection as { properties?: Record<string, unknown> }).properties;
+  if (
+    typeof props?.covered === 'number' &&
+    typeof props?.gaps === 'number' &&
+    typeof props?.sea === 'number'
+  ) {
+    return {
+      covered: props.covered,
+      gap: props.gaps,
+      sea: props.sea,
+      land: props.covered + props.gaps,
+    };
+  }
+
   const summary: CoverageSummary = { covered: 0, gap: 0, sea: 0, land: 0 };
   for (const feature of collection.features) {
     const status = (feature.properties?.status ?? 'unknown') as CoverageStatus;

@@ -12,6 +12,8 @@ dist/
 apps/napplet/dist/
 .vite/
 coverage/
+# The test-coverage rule above must not swallow shipped survey data
+!apps/napplet/src/config/coverage/
 playwright-report/
 test-results/
 
