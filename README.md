@@ -54,6 +54,16 @@ ribbons, width by class.
 single-file artifact, so a general-purpose engine would dominate the bundle for
 one orbiting mesh.
 
+**Orthophoto drape.** The collection server bakes one image per requested
+extent — borders, not tiles, because regional services answer an exact bbox in
+a single WMS request — stores it with a provenance sidecar, and the preview
+drapes it over the terrain. South Tyrol comes from IRIG (CC0, 0.2 m), Madeira
+including Porto Santo from DROTe (10 cm, verified live), everywhere else falls
+back to an Esri mosaic. Without a server the preview keeps its elevation ramp
+and says so. An **Open viewer** button expands the scene to the full window,
+opening with a flight from a frontal view 21 m above the terrain up to a
+straight-down ortho view.
+
 **Imagery coverage.** The map marks, in orange hatching, where architectural-
 resolution imagery does **not** exist. Only gaps are drawn — marking what works
 adds nothing, since a user assumes coverage.

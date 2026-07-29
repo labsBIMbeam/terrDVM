@@ -53,6 +53,16 @@ delete — an `x` tag matching the blob hash. Every check fails closed.
 |---|---|---|
 | `GET` | `/geo?bbox=w,s,e,n` | Exact overlap query against indexed footprints. |
 | `GET` | `/tile/<z>/<x>/<y>` | Blobs bound to a slippy tile. |
+| `GET` | `/texture?region=<id>&bbox=w,s,e,n&target=0.25` | Orthophoto bake for an exact extent (JPEG). |
+| `GET` | `/texture/meta?…` | Provenance for the same bake: source, licence, attribution, m/px. |
+
+The texture endpoints are the one deliberate exception to "store tiles, derive
+bounding boxes": a texture is a **per-delivery bake** like GLB, not corpus. A
+regional WMS answers an exact extent in a single request (South Tyrol: IRIG
+CC0 at 0.2 m; Madeira incl. Porto Santo: DROTe 2023 at 10 cm), with the Esri
+tile mosaic as the global fallback. Every bake lands in
+`$BLOSSOM_GIS_DATA/textures/` beside a provenance sidecar, and is served from
+disk on every later request for the same extent.
 
 Geo metadata is attached at upload time:
 

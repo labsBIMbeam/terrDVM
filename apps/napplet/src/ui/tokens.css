@@ -602,6 +602,41 @@ body {
   overflow: hidden;
 }
 
+/* ---- fullscreen viewer -------------------------------------------------- */
+
+.viewer-modal {
+  background: var(--color-bg);
+  block-size: 100dvh;
+  border: none;
+  inline-size: 100vw;
+  margin: 0;
+  max-block-size: none;
+  max-inline-size: none;
+  padding: 0;
+}
+
+.viewer-modal::backdrop {
+  background: rgb(10 12 16 / 90%);
+}
+
+.viewer-canvas {
+  block-size: 100%;
+  cursor: grab;
+  display: block;
+  inline-size: 100%;
+  touch-action: none;
+}
+
+.viewer-canvas:active {
+  cursor: grabbing;
+}
+
+.viewer-modal-close {
+  inset-block-start: var(--space-md);
+  inset-inline-end: var(--space-md);
+  position: absolute;
+}
+
 .job-canvas {
   aspect-ratio: 4 / 3;
   cursor: grab;

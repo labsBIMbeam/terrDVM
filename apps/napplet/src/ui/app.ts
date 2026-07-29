@@ -191,7 +191,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <p class="job-body">${COPY.jobFlow.demoNote}</p>
         <p class="job-field-label">${COPY.jobFlow.demAttribution}</p>
         <p class="job-field-label" id="job-imagery-attribution" hidden></p>
-        <button class="button button-wide" id="job-close" type="button">${COPY.jobFlow.closeButton}</button>
+        <div class="job-actions">
+          <button class="button button-primary button-wide" id="job-open-viewer" type="button">${COPY.jobFlow.viewerButton}</button>
+          <button class="button button-wide" id="job-close" type="button">${COPY.jobFlow.closeButton}</button>
+        </div>
       </section>
       <section class="job-stage" id="job-stage-failed" hidden>
         <h2 class="job-title">${COPY.jobFlow.failedTitle}</h2>
@@ -201,6 +204,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           <button class="button button-wide" id="job-close-failed" type="button">${COPY.jobFlow.closeButton}</button>
         </div>
       </section>
+    </dialog>
+    <dialog class="viewer-modal" id="viewer-modal" aria-label="${COPY.jobFlow.previewTitle}">
+      <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+      <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
   `;
 
@@ -245,6 +252,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const jobStart = root.querySelector<HTMLButtonElement>('#job-start');
   const jobCancel = root.querySelector<HTMLButtonElement>('#job-cancel');
   const jobClose = root.querySelector<HTMLButtonElement>('#job-close');
+  const jobOpenViewer = root.querySelector<HTMLButtonElement>('#job-open-viewer');
+  const viewerModal = root.querySelector<HTMLDialogElement>('#viewer-modal');
+  const viewerCanvas = root.querySelector<HTMLCanvasElement>('#viewer-canvas');
+  const viewerClose = root.querySelector<HTMLButtonElement>('#viewer-close');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
@@ -255,7 +266,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
       !jobArea || !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
-      !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry) {
+      !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
+      !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -297,10 +309,24 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let buildingCount = 0;
   let roadCount = 0;
   let orthoMeta: OrthoMeta | null = null;
+  // The generated scene, kept for the fullscreen viewer to remount.
+  let lastScene: {
+    mesh: TerrainMesh;
+    buildings?: BuildingMesh;
+    roads?: RoadMesh;
+    ortho?: TexImageSource;
+  } | null = null;
+  let fullViewer: TerrainViewer | undefined;
 
   const destroyViewer = (): void => {
     viewer?.destroy();
     viewer = undefined;
+  };
+
+  const closeFullViewer = (): void => {
+    fullViewer?.destroy();
+    fullViewer = undefined;
+    if (viewerModal.open) viewerModal.close();
   };
 
   const renderJobFlow = (): void => {
@@ -364,6 +390,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const closeJobFlow = (): void => {
     terrainAbort?.abort();
     terrainAbort = undefined;
+    closeFullViewer();
     destroyViewer();
     dispatchJob({ type: 'CLOSE' });
   };
@@ -426,6 +453,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         buildingCount = buildings?.stats.footprints ?? 0;
         roadCount = roads?.stats.roads ?? 0;
         orthoMeta = ortho?.meta ?? null;
+        lastScene = { mesh, buildings, roads, ortho: ortho?.bitmap };
         renderJobFlow();
         destroyViewer();
         try {
@@ -630,6 +658,29 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   jobCancel.addEventListener('click', closeJobFlow);
   jobClose.addEventListener('click', closeJobFlow);
   jobCloseFailed.addEventListener('click', closeJobFlow);
+
+  jobOpenViewer.addEventListener('click', () => {
+    if (!lastScene || viewerModal.open) return;
+    viewerModal.showModal();
+    try {
+      fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
+        buildings: lastScene.buildings,
+        roads: lastScene.roads,
+        ortho: lastScene.ortho,
+        autoRotate: false,
+        intro: true,
+      });
+    } catch (error) {
+      closeFullViewer();
+      announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
+    }
+  });
+  viewerClose.addEventListener('click', () => viewerModal.close());
+  // Covers Escape as well: the native close event is the single teardown path.
+  viewerModal.addEventListener('close', () => {
+    fullViewer?.destroy();
+    fullViewer = undefined;
+  });
   // Escape (native dialog close) must reset the gate, not leave it mid-flight.
   jobModal.addEventListener('close', () => {
     if (jobState.kind !== 'CLOSED') closeJobFlow();

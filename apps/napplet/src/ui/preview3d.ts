@@ -141,6 +141,12 @@ export function createTerrainViewer(
     roads?: RoadMesh;
     /** Orthophoto to drape over the terrain; heightfield ramp when absent. */
     ortho?: TexImageSource;
+    /**
+     * Opening flight: a frontal view 21 m above the terrain centre rising to
+     * a straight-down ortho view. Any input hands the camera to the user;
+     * reduced motion jumps straight to the end state.
+     */
+    intro?: boolean;
   } = {},
 ): TerrainViewer {
   const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
@@ -275,6 +281,31 @@ export function createTerrainViewer(
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let autoRotate = (options.autoRotate ?? true) && !reduceMotion;
 
+  const INTRO_EYE_HEIGHT_M = 21;
+  const INTRO_DURATION_MS = 3200;
+  const ORTHO_PITCH = 1.45; // the viewer's own pitch clamp — near-vertical
+  const ORTHO_DISTANCE = 2.5;
+  let intro: { start: number; last: number; fromPitch: number; fromDistance: number } | null =
+    null;
+  if (options.intro) {
+    if (reduceMotion) {
+      yaw = 0;
+      pitch = ORTHO_PITCH;
+      distance = ORTHO_DISTANCE;
+    } else {
+      // Eye 21 m above the terrain centre, looking north across the scene.
+      const centreVertex =
+        Math.floor(mesh.stats.gridN / 2) * mesh.stats.gridN + Math.floor(mesh.stats.gridN / 2);
+      const centreHeight = scaled[centreVertex * 3 + 1] ?? 0;
+      yaw = 0;
+      pitch = 0.08;
+      const eyeHeight = centreHeight + INTRO_EYE_HEIGHT_M * scale;
+      distance = Math.min(ORTHO_DISTANCE, Math.max(0.05, eyeHeight / Math.sin(pitch)));
+      intro = { start: 0, last: 0, fromPitch: pitch, fromDistance: distance };
+    }
+    autoRotate = false;
+  }
+
   const resize = (): void => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
@@ -289,6 +320,20 @@ export function createTerrainViewer(
     if (destroyed) return;
     resize();
     if (autoRotate) yaw += 0.0022;
+
+    if (intro) {
+      const now = performance.now();
+      if (intro.start === 0) intro.start = now;
+      // rAF stalls while the page is hidden or not compositing; resume the
+      // flight where it left off instead of skipping to the end.
+      if (intro.last !== 0 && now - intro.last > 400) intro.start += now - intro.last;
+      intro.last = now;
+      const t = Math.min(1, (now - intro.start) / INTRO_DURATION_MS);
+      const eased = t * t * (3 - 2 * t);
+      pitch = intro.fromPitch + (ORTHO_PITCH - intro.fromPitch) * eased;
+      distance = intro.fromDistance + (ORTHO_DISTANCE - intro.fromDistance) * eased;
+      if (t >= 1) intro = null;
+    }
 
     const aspect = canvas.width / Math.max(1, canvas.height);
     const eye = [
@@ -347,6 +392,7 @@ export function createTerrainViewer(
   const onPointerDown = (event: PointerEvent): void => {
     dragging = true;
     autoRotate = false;
+    intro = null;
     lastX = event.clientX;
     lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
@@ -368,6 +414,7 @@ export function createTerrainViewer(
   const onWheel = (event: WheelEvent): void => {
     event.preventDefault();
     autoRotate = false;
+    intro = null;
     distance = Math.min(9, Math.max(1.2, distance + Math.sign(event.deltaY) * 0.2));
   };
 
