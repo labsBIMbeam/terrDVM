@@ -16,6 +16,7 @@ import {
   type JobFlowState,
 } from '../job/job-flow';
 import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '../job/ortho';
+import { demResolution, runPreflight } from '../job/preflight';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
@@ -163,6 +164,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           <div class="job-fact"><dt>${COPY.requestPanel.resolutionLabel}</dt><dd>${RES_M} m/px</dd></div>
           <div class="job-fact"><dt>${COPY.requestPanel.outputLabel}</dt><dd>${OUTPUT_MIME}</dd></div>
         </dl>
+        <h3 class="job-field-label">${COPY.jobFlow.availabilityTitle}</h3>
+        <dl class="job-facts">
+          <div class="job-fact"><dt>Terrain</dt><dd id="job-avail-terrain">—</dd></div>
+          <div class="job-fact"><dt>${COPY.jobFlow.orthoLabel}</dt><dd id="job-avail-ortho">—</dd></div>
+          <div class="job-fact"><dt>Streets</dt><dd id="job-avail-streets">—</dd></div>
+          <div class="job-fact"><dt>Waterways</dt><dd id="job-avail-water">—</dd></div>
+        </dl>
         <div class="job-actions">
           <button class="button button-primary button-wide" id="job-start" type="button">${COPY.jobFlow.startButton}</button>
           <button class="button button-wide" id="job-cancel" type="button">${COPY.jobFlow.cancelButton}</button>
@@ -245,6 +253,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     FAILED: root.querySelector<HTMLElement>('#job-stage-failed'),
   };
   const jobArea = root.querySelector<HTMLElement>('#job-area');
+  const jobAvailTerrain = root.querySelector<HTMLElement>('#job-avail-terrain');
+  const jobAvailOrtho = root.querySelector<HTMLElement>('#job-avail-ortho');
+  const jobAvailStreets = root.querySelector<HTMLElement>('#job-avail-streets');
+  const jobAvailWater = root.querySelector<HTMLElement>('#job-avail-water');
   const jobProgress = root.querySelector<HTMLElement>('#job-progress');
   const jobCanvas = root.querySelector<HTMLCanvasElement>('#job-canvas');
   const jobElevation = root.querySelector<HTMLElement>('#job-elevation');
@@ -276,7 +288,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !stopDrawingButton || !clearButton || !coverageButton || !restoreButton || !toast || !requestAction ||
       !continueRequestButton || !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
-      !jobArea || !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
+      !jobArea || !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
+      !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
       !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
@@ -409,6 +422,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const closeJobFlow = (): void => {
     terrainAbort?.abort();
     terrainAbort = undefined;
+    preflightAbort?.abort();
+    preflightAbort = undefined;
     closeFullViewer();
     destroyViewer();
     dispatchJob({ type: 'CLOSE' });
@@ -670,9 +685,44 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       updateView();
     }
   });
+  let preflightAbort: AbortController | undefined;
+
+  // Answer "what data exists here?" before the user commits to generating.
+  // Every row fails closed to a named state rather than an optimistic guess.
+  const showPreflight = (bbox: BBox4326): void => {
+    preflightAbort?.abort();
+    const controller = new AbortController();
+    preflightAbort = controller;
+
+    const { zoom, mPerPx } = demResolution(bbox);
+    jobAvailTerrain.textContent = COPY.jobFlow.availTerrain(zoom, mPerPx);
+    jobAvailOrtho.textContent = COPY.jobFlow.availChecking;
+    jobAvailStreets.textContent = COPY.jobFlow.availChecking;
+    jobAvailWater.textContent = COPY.jobFlow.availChecking;
+
+    runPreflight(region.id, bbox, { signal: controller.signal }).then((report) => {
+      if (controller.signal.aborted) return;
+      jobAvailOrtho.textContent = report.ortho
+        ? COPY.jobFlow.availOrtho(report.ortho.sourceName, report.ortho.mPerPx)
+        : COPY.jobFlow.availOffline;
+      jobAvailOrtho.title = report.ortho?.notes.join('; ') ?? '';
+      jobAvailStreets.textContent = report.streets === null
+        ? COPY.jobFlow.availOffline
+        : report.streets === 0
+          ? COPY.jobFlow.availNone
+          : COPY.jobFlow.availWays(report.streets);
+      jobAvailWater.textContent = report.waterways === null
+        ? COPY.jobFlow.availOffline
+        : report.waterways === 0
+          ? COPY.jobFlow.availNone
+          : COPY.jobFlow.availWays(report.waterways);
+    });
+  };
+
   const openJobFlow = (): void => {
     if (state.kind !== 'SELECTED_VALID') return;
     dispatchJob({ type: 'OPEN', bbox: state.bbox, areaKm2: state.areaKm2 });
+    showPreflight(state.bbox);
     announce(COPY.jobFlow.readyTitle);
   };
 

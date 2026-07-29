@@ -71,7 +71,9 @@ export function isApprovedOrthoUrl(url: string): boolean {
   }
   return (
     parsed.origin === new URL(ORTHO_SERVICE.baseUrl).origin &&
-    (parsed.pathname === '/texture' || parsed.pathname === '/texture/meta')
+    (parsed.pathname === '/texture' ||
+      parsed.pathname === '/texture/meta' ||
+      parsed.pathname === '/texture/plan')
   );
 }
 
