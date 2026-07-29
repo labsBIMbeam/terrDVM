@@ -91,3 +91,16 @@ class TestDemCache:
     def test_invalid_tile_is_400(self, cache_client) -> None:
         client, _ = cache_client
         assert client.get("/dem/11/999999/826.png").status_code == 400
+
+
+class TestDashboard:
+    def test_serves_sources_licences_and_holdings(self, cache_client) -> None:
+        client, _ = cache_client
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+        page = response.text
+        assert "basemap.at Orthofoto" in page
+        assert "DROTe" in page
+        assert "CC-BY-4.0" in page
+        assert "ODbL" in page
+        assert "vienna" in page

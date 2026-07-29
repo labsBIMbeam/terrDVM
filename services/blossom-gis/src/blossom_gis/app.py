@@ -24,7 +24,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import texture as texture_module
 from .db import BlobIndex, BlobRecord, geo_fields
@@ -335,6 +335,127 @@ def dem_cached(
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
+
+
+# --- Dashboard ---------------------------------------------------------------
+
+
+def _directory_stats(path: Path, pattern: str = "**/*") -> tuple[int, int]:
+    """(file count, total bytes) under a directory; zeros when absent."""
+    if not path.is_dir():
+        return 0, 0
+    files = [p for p in path.glob(pattern) if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def _format_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "kB", "MB", "GB"):
+        if value < 1000 or unit == "GB":
+            return f"{value:,.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1000
+    return f"{value:,.1f} GB"
+
+
+@app.get("/dashboard")
+def dashboard() -> HTMLResponse:
+    """Where every byte comes from, and what already lives on this disk.
+
+    Server-rendered on purpose: the page states what the collection server
+    knows at request time, with no client fetches to go stale or fail.
+    """
+    import html
+    import json
+
+    rows: list[str] = []
+    for region, source_ids in sorted(texture_module.REGION_SOURCES.items()):
+        for rank, source_id in enumerate(source_ids):
+            source = texture_module.SOURCES[source_id]
+            host = source.url.split("/")[2]
+            badge = " <span class=badge>fallback</span>" if rank else ""
+            rows.append(
+                f"<tr><td>{html.escape(region) if rank == 0 else ''}</td>"
+                f"<td>{html.escape(source.name)}{badge}</td>"
+                f"<td>{html.escape(source.kind.upper())}</td>"
+                f"<td>{html.escape(host)}</td>"
+                f"<td>{html.escape(source.license)}</td></tr>"
+            )
+
+    dem_count, dem_bytes = _directory_stats(DATA_DIR / "cache" / "dem")
+    osm_count, osm_bytes = _directory_stats(DATA_DIR / "cache" / "osm")
+    blob_count, blob_bytes = _directory_stats(DATA_DIR / "blobs")
+
+    bakes: list[str] = []
+    texture_root = DATA_DIR / "textures"
+    if texture_root.is_dir():
+        for meta_path in sorted(texture_root.glob("*.json")):
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            image = meta_path.with_suffix(".jpg")
+            size = image.stat().st_size if image.exists() else 0
+            bbox = ",".join(f"{v:.3f}" for v in meta.get("bbox", []))
+            bakes.append(
+                f"<tr><td>{html.escape(str(meta.get('region', '?')))}</td>"
+                f"<td>{html.escape(str(meta.get('source', {}).get('name', '?')))}</td>"
+                f"<td>{bbox}</td>"
+                f"<td>{meta.get('m_per_px', '?')} m/px</td>"
+                f"<td>{_format_bytes(size)}</td></tr>"
+            )
+
+    page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="15">
+<title>terrDVM — data flows</title>
+<style>
+  body {{ background: #111; color: #e8e2d6; font: 14px/1.5 system-ui, sans-serif;
+         margin: 0; padding: 2rem; }}
+  h1, h2 {{ color: #F7931A; font-weight: 600; letter-spacing: .04em; }}
+  h1 {{ border-block-end: 2px solid #F7931A; padding-block-end: .5rem; }}
+  table {{ border-collapse: collapse; margin-block: 1rem 2rem; width: 100%; }}
+  th, td {{ border-block-end: 1px solid #3a342c; padding: .4rem .8rem;
+            text-align: left; vertical-align: top; }}
+  th {{ color: #9a927f; font-size: .8rem; text-transform: uppercase; }}
+  .badge {{ background: #2a2419; border: 1px solid #F7931A; border-radius: 4px;
+            color: #F7931A; font-size: .7rem; padding: 0 .4rem; }}
+  .stat {{ display: inline-block; margin-inline-end: 2.5rem; }}
+  .stat b {{ color: #F7931A; display: block; font-size: 1.6rem; }}
+  footer {{ color: #9a927f; font-size: .8rem; }}
+</style></head><body>
+<h1>terrDVM — data flows</h1>
+<p>Every external byte, its source and its licence. Refreshes every 15&nbsp;s.</p>
+
+<h2>Imagery sources by region</h2>
+<table><tr><th>Region</th><th>Source</th><th>Kind</th><th>Endpoint</th><th>Licence</th></tr>
+{''.join(rows)}</table>
+
+<h2>Fixed upstreams</h2>
+<table><tr><th>Layer</th><th>Endpoint</th><th>Licence</th></tr>
+<tr><td>Elevation (DEM)</td><td>s3.amazonaws.com — Mapzen Terrarium via AWS Open Data</td>
+<td>SRTM/GMTED/NED public data, attribution</td></tr>
+<tr><td>Buildings, roads, land use</td><td>overpass-api.de — OpenStreetMap</td>
+<td>ODbL-1.0 — share-alike is infectious for derived geometry</td></tr>
+<tr><td>Basemap (map view)</td><td>tile.openstreetmap.org</td>
+<td>ODbL, visible attribution</td></tr>
+</table>
+
+<h2>Local holdings</h2>
+<p>
+<span class="stat"><b>{dem_count}</b>DEM tiles · {_format_bytes(dem_bytes)}</span>
+<span class="stat"><b>{osm_count}</b>Overpass answers · {_format_bytes(osm_bytes)}</span>
+<span class="stat"><b>{len(bakes)}</b>texture bakes</span>
+<span class="stat"><b>{blob_count}</b>blobs · {_format_bytes(blob_bytes)}</span>
+</p>
+
+<h2>Texture bakes on disk</h2>
+<table><tr><th>Region</th><th>Source</th><th>BBox (W,S,E,N)</th><th>Resolution</th>
+<th>Size</th></tr>
+{''.join(bakes) or '<tr><td colspan=5>none yet — generate a selection</td></tr>'}</table>
+
+<footer>Data root: {html.escape(str(DATA_DIR.resolve()))} · attribution travels with
+every bake as a sidecar file.</footer>
+</body></html>"""
+    return HTMLResponse(page)
 
 
 # --- Orthophoto textures -----------------------------------------------------
