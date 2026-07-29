@@ -145,8 +145,9 @@ export function createTerrainViewer(
     /** Orthophoto to drape over the terrain; heightfield ramp when absent. */
     ortho?: TexImageSource;
     /**
-     * Opening flight: a frontal view 21 m above the terrain centre rising to
-     * a straight-down ortho view. Any input hands the camera to the user;
+     * Opening flight along the terrain's own alignment line: from 21 m above
+     * the lowest vertex straight to the highest, then settling into the
+     * straight-down ortho view. Any input hands the camera to the user;
      * reduced motion jumps straight to the end state.
      */
     intro?: boolean;
@@ -290,44 +291,93 @@ export function createTerrainViewer(
   let autoRotate = (options.autoRotate ?? true) && !reduceMotion;
 
   const INTRO_EYE_HEIGHT_M = 21;
-  const INTRO_DURATION_MS = 3200;
+  const INTRO_DURATION_MS = 4000;
   const ORTHO_PITCH = 1.45; // the viewer's own pitch clamp — near-vertical
   const ORTHO_DISTANCE = 2.5;
-  let intro: { start: number; last: number; fromPitch: number; fromDistance: number } | null =
-    null;
+  /** Fraction of the intro spent tracing the low→high line; the rest settles into the ortho view. */
+  const INTRO_LINE_FRACTION = 0.7;
+
+  type Vec3 = [number, number, number];
+  let intro: {
+    start: number;
+    last: number;
+    lowEye: Vec3;
+    highEye: Vec3;
+    peak: Vec3;
+    endEye: Vec3;
+    endYaw: number;
+    eye: Vec3;
+  } | null = null;
+
   if (options.intro) {
     if (reduceMotion) {
       yaw = 0;
       pitch = ORTHO_PITCH;
       distance = ORTHO_DISTANCE;
     } else {
-      // Eye 21 m above the terrain centre, looking north across the scene.
-      const gridN = mesh.stats.gridN;
-      const centreCol = Math.floor(gridN / 2);
-      const centreHeight = scaled[(centreCol * gridN + centreCol) * 3 + 1] ?? 0;
-      yaw = 0;
-      pitch = 0.08;
-      let eyeHeight = centreHeight + INTRO_EYE_HEIGHT_M * scale;
-      distance = Math.min(ORTHO_DISTANCE, Math.max(0.05, eyeHeight / Math.sin(pitch)));
-
-      // The eye sits south of the centre. On a hillside selection the ground
-      // there can be higher than at the centre, which would start the flight
-      // underground — lift the start to 21 m above the ground under the eye.
-      const depthScaled = Math.max(1e-6, mesh.stats.depthM * scale);
-      const eyeRow = Math.min(
-        gridN - 1,
-        Math.max(0, Math.round(((Math.cos(pitch) * distance) / depthScaled + 0.5) * (gridN - 1))),
-      );
-      const groundAtEye = scaled[(eyeRow * gridN + centreCol) * 3 + 1] ?? 0;
-      if (groundAtEye + INTRO_EYE_HEIGHT_M * scale > eyeHeight) {
-        eyeHeight = groundAtEye + INTRO_EYE_HEIGHT_M * scale;
-        distance = Math.min(ORTHO_DISTANCE, Math.max(0.05, eyeHeight / Math.sin(pitch)));
+      // The flight traces the terrain's own extremes: 21 m above the lowest
+      // vertex, straight along the line to the highest, then settling into
+      // the straight-down ortho view. The low→high line is the alignment.
+      const vertexTotal = scaled.length / 3;
+      let lowIndex = 0;
+      let highIndex = 0;
+      for (let i = 1; i < vertexTotal; i += 1) {
+        const y = scaled[i * 3 + 1];
+        if (y < scaled[lowIndex * 3 + 1]) lowIndex = i;
+        if (y > scaled[highIndex * 3 + 1]) highIndex = i;
       }
+      const at = (index: number): Vec3 => [
+        scaled[index * 3],
+        scaled[index * 3 + 1],
+        scaled[index * 3 + 2],
+      ];
+      const peak = at(highIndex);
+      let low = at(lowIndex);
+      // A flat selection has no meaningful line — approach from the south.
+      if (peak[1] - low[1] < 1e-4) low = [peak[0], peak[1], Math.min(1, peak[2] + 0.8)];
 
-      intro = { start: 0, last: 0, fromPitch: pitch, fromDistance: distance };
+      const lift = INTRO_EYE_HEIGHT_M * scale;
+      const horizontal = Math.hypot(peak[0] - low[0], peak[2] - low[2]);
+      const direction: Vec3 =
+        horizontal > 1e-6
+          ? [(peak[0] - low[0]) / horizontal, 0, (peak[2] - low[2]) / horizontal]
+          : [0, 0, -1];
+      // The ending orbit eye sits opposite the flight direction, so the
+      // settle keeps looking the way the flight was going.
+      const endYaw = Math.atan2(-direction[0], -direction[2]);
+      const endEye: Vec3 = [
+        Math.cos(ORTHO_PITCH) * Math.sin(endYaw) * ORTHO_DISTANCE,
+        Math.sin(ORTHO_PITCH) * ORTHO_DISTANCE,
+        Math.cos(ORTHO_PITCH) * Math.cos(endYaw) * ORTHO_DISTANCE,
+      ];
+      intro = {
+        start: 0,
+        last: 0,
+        lowEye: [low[0], low[1] + lift, low[2]],
+        // Hold short of the peak so the look-down never turns exactly
+        // vertical, which would degenerate the view basis.
+        highEye: [peak[0] - direction[0] * lift, peak[1] + lift, peak[2] - direction[2] * lift],
+        peak,
+        endEye,
+        endYaw,
+        eye: [0, 0, 0],
+      };
     }
     autoRotate = false;
   }
+
+  /** Hand the camera to the user where the flight currently is, then stop it. */
+  const cancelIntro = (): void => {
+    if (!intro) return;
+    const [ex, ey, ez] = intro.eye;
+    const magnitude = Math.hypot(ex, ey, ez);
+    if (magnitude > 1e-3) {
+      distance = Math.min(9, Math.max(0.05, magnitude));
+      pitch = Math.min(1.45, Math.max(0.08, Math.asin(Math.min(1, Math.max(-1, ey / magnitude)))));
+      yaw = Math.atan2(ex, ez);
+    }
+    intro = null;
+  };
 
   const resize = (): void => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -344,6 +394,7 @@ export function createTerrainViewer(
     resize();
     if (autoRotate) yaw += 0.0022;
 
+    let flightView: Mat4 | null = null;
     if (intro) {
       const now = performance.now();
       if (intro.start === 0) intro.start = now;
@@ -352,10 +403,38 @@ export function createTerrainViewer(
       if (intro.last !== 0 && now - intro.last > 400) intro.start += now - intro.last;
       intro.last = now;
       const t = Math.min(1, (now - intro.start) / INTRO_DURATION_MS);
-      const eased = t * t * (3 - 2 * t);
-      pitch = intro.fromPitch + (ORTHO_PITCH - intro.fromPitch) * eased;
-      distance = intro.fromDistance + (ORTHO_DISTANCE - intro.fromDistance) * eased;
-      if (t >= 1) intro = null;
+      const smooth = (k: number): number => k * k * (3 - 2 * k);
+      const lerp3 = (a: Vec3, b: Vec3, k: number): Vec3 => [
+        a[0] + (b[0] - a[0]) * k,
+        a[1] + (b[1] - a[1]) * k,
+        a[2] + (b[2] - a[2]) * k,
+      ];
+
+      let flightEye: Vec3;
+      let flightTarget: Vec3;
+      if (t < INTRO_LINE_FRACTION) {
+        // Trace the low→high line, eyes on the peak.
+        const k = smooth(t / INTRO_LINE_FRACTION);
+        flightEye = lerp3(intro.lowEye, intro.highEye, k);
+        flightTarget = intro.peak;
+      } else {
+        // Settle from above the peak into the straight-down ortho view.
+        const k = smooth((t - INTRO_LINE_FRACTION) / (1 - INTRO_LINE_FRACTION));
+        flightEye = lerp3(intro.highEye, intro.endEye, k);
+        flightTarget = lerp3(intro.peak, [0, 0, 0], k);
+      }
+      intro.eye = flightEye;
+      flightView = lookAt(flightEye, flightTarget, [0, 1, 0]);
+
+      if (t >= 1) {
+        // The final flight frame equals this orbit pose, so the handover is
+        // seamless.
+        yaw = intro.endYaw;
+        pitch = ORTHO_PITCH;
+        distance = ORTHO_DISTANCE;
+        intro = null;
+        flightView = null;
+      }
     }
 
     const aspect = canvas.width / Math.max(1, canvas.height);
@@ -372,7 +451,7 @@ export function createTerrainViewer(
 
     gl.useProgram(program);
     gl.uniformMatrix4fv(uProjection, false, perspective(Math.PI / 4, aspect, 0.01, 100));
-    gl.uniformMatrix4fv(uModelView, false, lookAt(eye, [0, 0, 0], [0, 1, 0]));
+    gl.uniformMatrix4fv(uModelView, false, flightView ?? lookAt(eye, [0, 0, 0], [0, 1, 0]));
     gl.uniform3f(uLightDir, 0.5, 0.82, 0.28);
     gl.uniform1f(uInvMaxHeight, 1 / maxHeightScaled);
     gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
@@ -415,7 +494,7 @@ export function createTerrainViewer(
   const onPointerDown = (event: PointerEvent): void => {
     dragging = true;
     autoRotate = false;
-    intro = null;
+    cancelIntro();
     lastX = event.clientX;
     lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
@@ -437,7 +516,7 @@ export function createTerrainViewer(
   const onWheel = (event: WheelEvent): void => {
     event.preventDefault();
     autoRotate = false;
-    intro = null;
+    cancelIntro();
     distance = Math.min(9, Math.max(1.2, distance + Math.sign(event.deltaY) * 0.2));
   };
 
