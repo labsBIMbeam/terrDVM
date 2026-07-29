@@ -40,6 +40,7 @@ uniform float uUseOverride;
 uniform sampler2D uOrtho;
 uniform float uUseOrtho;
 uniform float uTexturedStructure;
+uniform float uPosterize;
 out vec4 outColor;
 
 vec3 ramp(float t) {
@@ -68,7 +69,13 @@ void main() {
     structureColor = normal.y > 0.6 ? aerial : aerial * 0.72;
   }
   vec3 base = mix(ground, structureColor, uUseOverride);
-  outColor = vec4(base * light, 1.0);
+  vec3 lit = base * light;
+  // Pixel look: a coarse palette reads as deliberate game art, not as a
+  // degraded photo. Zero disables the quantisation entirely.
+  if (uPosterize > 0.5) {
+    lit = floor(lit * uPosterize + 0.5) / uPosterize;
+  }
+  outColor = vec4(lit, 1.0);
 }`;
 
 type Mat4 = Float32Array;
@@ -154,7 +161,9 @@ export type ViewerProjection = 'perspective' | 'isometric';
 export type TerrainViewer = {
   setLayerVisible: (layer: ViewerLayer, visible: boolean) => void;
   setProjection: (mode: ViewerProjection) => void;
-  /** Render one frame and hand back the pixels as a PNG blob. */
+  /** Chunky pixels and a coarse palette — the retro game-map aesthetic. */
+  setPixelLook: (on: boolean) => void;
+  /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
 };
@@ -285,6 +294,7 @@ export function createTerrainViewer(
   const uOrtho = gl.getUniformLocation(program, 'uOrtho');
   const uUseOrtho = gl.getUniformLocation(program, 'uUseOrtho');
   const uTexturedStructure = gl.getUniformLocation(program, 'uTexturedStructure');
+  const uPosterize = gl.getUniformLocation(program, 'uPosterize');
 
   // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
   // as-is and still gets mipmaps for the oblique viewing angles.
@@ -312,6 +322,7 @@ export function createTerrainViewer(
   let destroyed = false;
   let frame = 0;
   let projectionMode: ViewerProjection = 'perspective';
+  let pixelLook = false;
   const layerVisible: Record<ViewerLayer, boolean> = {
     ortho: true,
     buildings: true,
@@ -321,6 +332,9 @@ export function createTerrainViewer(
   // Classic dimetric game angle: atan(1/2) pitch, camera on a diagonal.
   const ISO_PITCH = Math.atan(0.5);
   const ISO_YAW = Math.PI / 4;
+  /** Render at a third of the pixels and upscale nearest — chunky, not blurry. */
+  const PIXEL_SCALE = 3;
+  const POSTERIZE_LEVELS = 7;
 
   const reduceMotion =
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -416,7 +430,7 @@ export function createTerrainViewer(
   };
 
   const resize = (): void => {
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2) / (pixelLook ? PIXEL_SCALE : 1);
     const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
     if (canvas.width !== width || canvas.height !== height) {
@@ -425,9 +439,7 @@ export function createTerrainViewer(
     }
   };
 
-  const draw = (): void => {
-    if (destroyed) return;
-    resize();
+  const renderScene = (): void => {
     if (autoRotate) yaw += 0.0022;
 
     let flightView: Mat4 | null = null;
@@ -502,6 +514,7 @@ export function createTerrainViewer(
       Math.max(1e-6, mesh.stats.widthM * scale),
       Math.max(1e-6, mesh.stats.depthM * scale),
     );
+    gl.uniform1f(uPosterize, pixelLook ? POSTERIZE_LEVELS : 0);
     gl.uniform1i(uOrtho, 0);
     gl.uniform1f(uUseOrtho, orthoTexture && layerVisible.ortho ? 1 : 0);
     if (orthoTexture) {
@@ -534,7 +547,12 @@ export function createTerrainViewer(
       gl.uniform1f(uTexturedStructure, 0);
     }
     gl.bindVertexArray(null);
+  };
 
+  const draw = (): void => {
+    if (destroyed) return;
+    resize();
+    renderScene();
     frame = requestAnimationFrame(draw);
   };
 
@@ -594,16 +612,39 @@ export function createTerrainViewer(
         yaw = Math.round((yaw - ISO_YAW) / (Math.PI / 2)) * (Math.PI / 2) + ISO_YAW;
       }
     },
+    setPixelLook: (on: boolean) => {
+      pixelLook = on;
+      canvas.style.imageRendering = on ? 'pixelated' : '';
+    },
     exportImage: async (): Promise<Blob | null> => {
       if (destroyed) return null;
-      // One synchronous frame, read back before anything else can touch the
-      // buffer — no preserveDrawingBuffer needed. The rAF loop is cancelled
-      // first so the manual draw does not fork a second loop.
+      // One synchronous high-resolution frame, read back before anything else
+      // can touch the buffer — no preserveDrawingBuffer needed. The rAF loop
+      // is cancelled around the manual render so it cannot fork.
       cancelAnimationFrame(frame);
-      draw();
-      const { width, height } = canvas;
+      const EXPORT_LONG_SIDE = 2560;
+      const aspect = Math.max(
+        0.2,
+        Math.min(5, canvas.clientWidth / Math.max(1, canvas.clientHeight)),
+      );
+      let width = aspect >= 1 ? EXPORT_LONG_SIDE : Math.round(EXPORT_LONG_SIDE * aspect);
+      let height = Math.round(width / aspect);
+      // Pixel look renders coarse and upscales nearest — big crisp pixels,
+      // not interpolated mush.
+      const upscale = pixelLook ? PIXEL_SCALE : 1;
+      width = Math.max(1, Math.round(width / upscale));
+      height = Math.max(1, Math.round(height / upscale));
+
+      const previousWidth = canvas.width;
+      const previousHeight = canvas.height;
+      canvas.width = width;
+      canvas.height = height;
+      renderScene();
       const raw = new Uint8Array(width * height * 4);
       gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+      canvas.width = previousWidth;
+      canvas.height = previousHeight;
+      frame = requestAnimationFrame(draw);
 
       // GL rows are bottom-up; canvases are top-down.
       const flipped = new Uint8ClampedArray(raw.length);
@@ -615,12 +656,20 @@ export function createTerrainViewer(
         );
       }
 
+      const source = document.createElement('canvas');
+      source.width = width;
+      source.height = height;
+      const sourceContext = source.getContext('2d');
+      if (!sourceContext) return null;
+      sourceContext.putImageData(new ImageData(flipped, width, height), 0, 0);
+
       const surface = document.createElement('canvas');
-      surface.width = width;
-      surface.height = height;
+      surface.width = width * upscale;
+      surface.height = height * upscale;
       const context = surface.getContext('2d');
       if (!context) return null;
-      context.putImageData(new ImageData(flipped, width, height), 0, 0);
+      context.imageSmoothingEnabled = false;
+      context.drawImage(source, 0, 0, surface.width, surface.height);
       return new Promise((resolve) => surface.toBlob(resolve, 'image/png'));
     },
     destroy: () => {

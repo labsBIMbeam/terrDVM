@@ -221,6 +221,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <label><input type="checkbox" id="viewer-layer-buildings" checked /><span id="viewer-layer-buildings-label">${COPY.jobFlow.buildingsLabel}</span></label>
         <label><input type="checkbox" id="viewer-layer-roads" checked /><span id="viewer-layer-roads-label">${COPY.jobFlow.roadsLabel}</span></label>
         <label><input type="checkbox" id="viewer-isometric" /><span>${COPY.jobFlow.isometricLabel}</span></label>
+        <label><input type="checkbox" id="viewer-pixel" /><span>${COPY.jobFlow.pixelLookLabel}</span></label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
@@ -283,6 +284,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerLayerBuildingsLabel = root.querySelector<HTMLElement>('#viewer-layer-buildings-label');
   const viewerLayerRoadsLabel = root.querySelector<HTMLElement>('#viewer-layer-roads-label');
   const viewerIsometric = root.querySelector<HTMLInputElement>('#viewer-isometric');
+  const viewerPixel = root.querySelector<HTMLInputElement>('#viewer-pixel');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
@@ -299,7 +301,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
       !viewerLayerOrtho || !viewerLayerBuildings || !viewerLayerRoads ||
       !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
-      !viewerIsometric || !viewerExport) {
+      !viewerIsometric || !viewerPixel || !viewerExport) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -761,6 +763,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     viewerModal.showModal();
     syncViewerLayerControls();
     viewerIsometric.checked = false;
+    viewerPixel.checked = false;
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -785,6 +788,15 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   });
   viewerIsometric.addEventListener('change', () => {
     fullViewer?.setProjection(viewerIsometric.checked ? 'isometric' : 'perspective');
+    // The game look is the point of the isometric mode, so it comes along by
+    // default — and stays a separate switch for anyone who wants clean lines.
+    if (viewerIsometric.checked && !viewerPixel.checked) {
+      viewerPixel.checked = true;
+      fullViewer?.setPixelLook(true);
+    }
+  });
+  viewerPixel.addEventListener('change', () => {
+    fullViewer?.setPixelLook(viewerPixel.checked);
   });
   viewerExport.addEventListener('click', () => {
     void fullViewer?.exportImage().then((blob) => {

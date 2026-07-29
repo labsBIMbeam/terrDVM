@@ -177,6 +177,7 @@ export const COPY = {
     viewerButton: 'Open viewer',
     viewerCloseButton: 'Close viewer',
     isometricLabel: 'Isometric view',
+    pixelLookLabel: 'Pixel look',
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     layerMissing: (label: string): string => `${label} — none in view`,

@@ -61,8 +61,12 @@ drapes it over the terrain. South Tyrol comes from IRIG (CC0, 0.2 m), Madeira
 including Porto Santo from DROTe (10 cm, verified live), everywhere else falls
 back to an Esri mosaic. Without a server the preview keeps its elevation ramp
 and says so. An **Open viewer** button expands the scene to the full window,
-opening with a flight from a frontal view 21 m above the terrain up to a
-straight-down ortho view.
+opening with a flight along the terrain's low-to-high line into a
+straight-down ortho view. Layers toggle individually, an **isometric
+game-map mode** (dimetric angle, chunky pixels, coarse palette) turns the
+scene into the classic city-builder view, and **Export map** writes a
+2560 px PNG — exactly the whitebox-plus-imagery render an isometric-tile
+stylisation pipeline takes as input.
 
 **Imagery coverage.** The map marks, in orange hatching, where architectural-
 resolution imagery does **not** exist. Only gaps are drawn — marking what works
