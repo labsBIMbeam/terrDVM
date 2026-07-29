@@ -607,7 +607,8 @@ body {
 .viewer-modal {
   background: var(--color-bg);
   block-size: 100dvh;
-  border: none;
+  /* The canonical 600B framing: orange on stone, same as every outer frame. */
+  border: 2px solid var(--color-border);
   inline-size: 100vw;
   margin: 0;
   max-block-size: none;
@@ -635,6 +636,39 @@ body {
   inset-block-start: var(--space-md);
   inset-inline-end: var(--space-md);
   position: absolute;
+}
+
+.viewer-layers {
+  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: var(--space-xs);
+  inset-block-start: var(--space-md);
+  inset-inline-start: var(--space-md);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  position: absolute;
+}
+
+.viewer-layers legend {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  padding: 0;
+  text-transform: uppercase;
+}
+
+.viewer-layers label {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-caption);
+  gap: var(--space-sm);
+}
+
+.viewer-layers input:disabled + span {
+  color: var(--color-text-muted);
 }
 
 .job-canvas {

@@ -122,7 +122,10 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   return shader;
 }
 
+export type ViewerLayer = 'ortho' | 'buildings' | 'roads';
+
 export type TerrainViewer = {
+  setLayerVisible: (layer: ViewerLayer, visible: boolean) => void;
   destroy: () => void;
 };
 
@@ -276,6 +279,11 @@ export function createTerrainViewer(
   let lastY = 0;
   let destroyed = false;
   let frame = 0;
+  const layerVisible: Record<ViewerLayer, boolean> = {
+    ortho: true,
+    buildings: true,
+    roads: true,
+  };
 
   const reduceMotion =
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -294,13 +302,28 @@ export function createTerrainViewer(
       distance = ORTHO_DISTANCE;
     } else {
       // Eye 21 m above the terrain centre, looking north across the scene.
-      const centreVertex =
-        Math.floor(mesh.stats.gridN / 2) * mesh.stats.gridN + Math.floor(mesh.stats.gridN / 2);
-      const centreHeight = scaled[centreVertex * 3 + 1] ?? 0;
+      const gridN = mesh.stats.gridN;
+      const centreCol = Math.floor(gridN / 2);
+      const centreHeight = scaled[(centreCol * gridN + centreCol) * 3 + 1] ?? 0;
       yaw = 0;
       pitch = 0.08;
-      const eyeHeight = centreHeight + INTRO_EYE_HEIGHT_M * scale;
+      let eyeHeight = centreHeight + INTRO_EYE_HEIGHT_M * scale;
       distance = Math.min(ORTHO_DISTANCE, Math.max(0.05, eyeHeight / Math.sin(pitch)));
+
+      // The eye sits south of the centre. On a hillside selection the ground
+      // there can be higher than at the centre, which would start the flight
+      // underground — lift the start to 21 m above the ground under the eye.
+      const depthScaled = Math.max(1e-6, mesh.stats.depthM * scale);
+      const eyeRow = Math.min(
+        gridN - 1,
+        Math.max(0, Math.round(((Math.cos(pitch) * distance) / depthScaled + 0.5) * (gridN - 1))),
+      );
+      const groundAtEye = scaled[(eyeRow * gridN + centreCol) * 3 + 1] ?? 0;
+      if (groundAtEye + INTRO_EYE_HEIGHT_M * scale > eyeHeight) {
+        eyeHeight = groundAtEye + INTRO_EYE_HEIGHT_M * scale;
+        distance = Math.min(ORTHO_DISTANCE, Math.max(0.05, eyeHeight / Math.sin(pitch)));
+      }
+
       intro = { start: 0, last: 0, fromPitch: pitch, fromDistance: distance };
     }
     autoRotate = false;
@@ -359,7 +382,7 @@ export function createTerrainViewer(
       Math.max(1e-6, mesh.stats.depthM * scale),
     );
     gl.uniform1i(uOrtho, 0);
-    gl.uniform1f(uUseOrtho, orthoTexture ? 1 : 0);
+    gl.uniform1f(uUseOrtho, orthoTexture && layerVisible.ortho ? 1 : 0);
     if (orthoTexture) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, orthoTexture);
@@ -371,7 +394,7 @@ export function createTerrainViewer(
 
     // Roads before buildings: they are ground-hugging, so any overlap should
     // resolve in favour of the structure standing on them.
-    if (roadways) {
+    if (roadways && layerVisible.roads) {
       gl.uniform1f(uUseOverride, 1);
       gl.uniform3f(uOverrideColor, ...ROAD_COLOR);
       gl.bindVertexArray(roadways.vao);
@@ -379,7 +402,7 @@ export function createTerrainViewer(
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
     }
 
-    if (structures) {
+    if (structures && layerVisible.buildings) {
       gl.uniform1f(uUseOverride, 1);
       gl.bindVertexArray(structures.vao);
       gl.drawElements(gl.TRIANGLES, structures.count, gl.UNSIGNED_INT, 0);
@@ -428,6 +451,9 @@ export function createTerrainViewer(
   draw();
 
   return {
+    setLayerVisible: (layer: ViewerLayer, visible: boolean) => {
+      layerVisible[layer] = visible;
+    },
     destroy: () => {
       if (destroyed) return;
       destroyed = true;

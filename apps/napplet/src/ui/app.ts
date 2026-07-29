@@ -207,6 +207,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     </dialog>
     <dialog class="viewer-modal" id="viewer-modal" aria-label="${COPY.jobFlow.previewTitle}">
       <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+      <fieldset class="viewer-layers" id="viewer-layers">
+        <legend>${COPY.jobFlow.layersLabel}</legend>
+        <label><input type="checkbox" id="viewer-layer-ortho" checked /><span id="viewer-layer-ortho-label">${COPY.jobFlow.orthoLabel}</span></label>
+        <label><input type="checkbox" id="viewer-layer-buildings" checked /><span id="viewer-layer-buildings-label">${COPY.jobFlow.buildingsLabel}</span></label>
+        <label><input type="checkbox" id="viewer-layer-roads" checked /><span id="viewer-layer-roads-label">${COPY.jobFlow.roadsLabel}</span></label>
+      </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
   `;
@@ -256,6 +262,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerModal = root.querySelector<HTMLDialogElement>('#viewer-modal');
   const viewerCanvas = root.querySelector<HTMLCanvasElement>('#viewer-canvas');
   const viewerClose = root.querySelector<HTMLButtonElement>('#viewer-close');
+  const viewerLayerOrtho = root.querySelector<HTMLInputElement>('#viewer-layer-ortho');
+  const viewerLayerBuildings = root.querySelector<HTMLInputElement>('#viewer-layer-buildings');
+  const viewerLayerRoads = root.querySelector<HTMLInputElement>('#viewer-layer-roads');
+  const viewerLayerOrthoLabel = root.querySelector<HTMLElement>('#viewer-layer-ortho-label');
+  const viewerLayerBuildingsLabel = root.querySelector<HTMLElement>('#viewer-layer-buildings-label');
+  const viewerLayerRoadsLabel = root.querySelector<HTMLElement>('#viewer-layer-roads-label');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
@@ -267,7 +279,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobArea || !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
       !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
-      !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose) {
+      !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
+      !viewerLayerOrtho || !viewerLayerBuildings || !viewerLayerRoads ||
+      !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -308,6 +322,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let viewer: TerrainViewer | undefined;
   let buildingCount = 0;
   let roadCount = 0;
+  let featuresFailed = false;
   let orthoMeta: OrthoMeta | null = null;
   // The generated scene, kept for the fullscreen viewer to remount.
   let lastScene: {
@@ -315,6 +330,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     buildings?: BuildingMesh;
     roads?: RoadMesh;
     ortho?: TexImageSource;
+    featuresFailed: boolean;
   } | null = null;
   let fullViewer: TerrainViewer | undefined;
 
@@ -358,10 +374,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       jobElevation.textContent = `${Math.round(stats.minElevationM)}–${Math.round(stats.maxElevationM)} m`;
       jobExtent.textContent = `${(stats.widthM / 1000).toFixed(1)} × ${(stats.depthM / 1000).toFixed(1)} km`;
       jobTriangles.textContent = stats.triangles.toLocaleString('en-US');
+      // "Zero features" and "the source did not answer" are different facts;
+      // conflating them turns an outage into a claim about the area.
+      const absentLabel = featuresFailed ? COPY.jobFlow.sourceFailed : COPY.jobFlow.noBuildings;
       jobBuildings.textContent = buildingCount > 0
         ? buildingCount.toLocaleString('en-US')
-        : COPY.jobFlow.noBuildings;
-      jobRoads.textContent = roadCount > 0 ? roadCount.toLocaleString('en-US') : COPY.jobFlow.noBuildings;
+        : absentLabel;
+      jobRoads.textContent = roadCount > 0 ? roadCount.toLocaleString('en-US') : absentLabel;
       jobOrtho.textContent = orthoMeta
         ? COPY.jobFlow.orthoLine(orthoMeta.source.name, orthoMeta.mPerPx)
         : COPY.jobFlow.orthoUnavailable;
@@ -420,6 +439,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         // is slow, blocked or empty, the terrain still ships.
         let buildings: BuildingMesh | undefined;
         let roads: RoadMesh | undefined;
+        let featuresOk = true;
         try {
           const features = await fetchFeatures(bbox, { signal: controller.signal });
           const ground = sampleTerrain(mesh);
@@ -442,6 +462,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         } catch {
           buildings = undefined;
           roads = undefined;
+          featuresOk = false;
         }
         const ortho = await orthoPromise;
         if (controller.signal.aborted) return;
@@ -452,8 +473,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         dispatchJob({ type: 'TERRAIN_READY', mesh });
         buildingCount = buildings?.stats.footprints ?? 0;
         roadCount = roads?.stats.roads ?? 0;
+        featuresFailed = !featuresOk;
         orthoMeta = ortho?.meta ?? null;
-        lastScene = { mesh, buildings, roads, ortho: ortho?.bitmap };
+        lastScene = { mesh, buildings, roads, ortho: ortho?.bitmap, featuresFailed: !featuresOk };
         renderJobFlow();
         destroyViewer();
         try {
@@ -659,9 +681,30 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   jobClose.addEventListener('click', closeJobFlow);
   jobCloseFailed.addEventListener('click', closeJobFlow);
 
+  // A missing layer stays listed but disabled: "no buildings arrived" is
+  // information the user should see, not an absence to guess about.
+  const syncViewerLayerControls = (): void => {
+    const layers = [
+      [viewerLayerOrtho, viewerLayerOrthoLabel, COPY.jobFlow.orthoLabel, Boolean(lastScene?.ortho)],
+      [
+        viewerLayerBuildings,
+        viewerLayerBuildingsLabel,
+        COPY.jobFlow.buildingsLabel,
+        Boolean(lastScene?.buildings),
+      ],
+      [viewerLayerRoads, viewerLayerRoadsLabel, COPY.jobFlow.roadsLabel, Boolean(lastScene?.roads)],
+    ] as const;
+    for (const [input, label, name, available] of layers) {
+      input.disabled = !available;
+      input.checked = available;
+      label.textContent = available ? name : COPY.jobFlow.layerMissing(name);
+    }
+  };
+
   jobOpenViewer.addEventListener('click', () => {
     if (!lastScene || viewerModal.open) return;
     viewerModal.showModal();
+    syncViewerLayerControls();
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -674,6 +717,15 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       closeFullViewer();
       announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
     }
+  });
+  viewerLayerOrtho.addEventListener('change', () => {
+    fullViewer?.setLayerVisible('ortho', viewerLayerOrtho.checked);
+  });
+  viewerLayerBuildings.addEventListener('change', () => {
+    fullViewer?.setLayerVisible('buildings', viewerLayerBuildings.checked);
+  });
+  viewerLayerRoads.addEventListener('change', () => {
+    fullViewer?.setLayerVisible('roads', viewerLayerRoads.checked);
   });
   viewerClose.addEventListener('click', () => viewerModal.close());
   // Covers Escape as well: the native close event is the single teardown path.
