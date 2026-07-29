@@ -278,6 +278,14 @@ export function createMapView(
     try {
       const bbox = bboxFromFeature(feature);
       if (context.mode === 'rectangle' && context.action === 'draw') {
+        // A fresh rectangle replaces the previous selection: two boxes on the
+        // map would leave ambiguous which one the request describes.
+        const stale = (draw.getSnapshot() as PolygonFeature[])
+          .map((other) => other.id)
+          .filter((otherId): otherId is string | number =>
+            otherId !== undefined && otherId !== id,
+          );
+        if (stale.length > 0) draw.removeFeatures(stale);
         draw.setMode('select');
         draw.selectFeature(id);
         editingNotified = false;
