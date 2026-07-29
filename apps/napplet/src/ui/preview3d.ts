@@ -1,4 +1,5 @@
 import type { BuildingMesh } from '../buildings/extrude';
+import type { LandcoverMesh } from '../features/landcover';
 import type { RoadMesh } from '../features/ribbon';
 import type { TerrainMesh } from '../terrain/mesh';
 
@@ -20,12 +21,14 @@ uniform vec2 uGroundSize;
 out vec3 vNormal;
 out float vHeight;
 out vec2 vUV;
+out vec3 vWorld;
 void main() {
   vNormal = aNormal;
   vHeight = aPosition.y * uInvMaxHeight;
   // The terrain grid is centred on the origin with north at -Z, and the
   // orthophoto's first row is north — so no flip is needed on either axis.
   vUV = aPosition.xz / uGroundSize + 0.5;
+  vWorld = aPosition;
   gl_Position = uProjection * uModelView * vec4(aPosition, 1.0);
 }`;
 
@@ -34,6 +37,7 @@ precision highp float;
 in vec3 vNormal;
 in float vHeight;
 in vec2 vUV;
+in vec3 vWorld;
 uniform vec3 uLightDir;
 uniform vec3 uOverrideColor;
 uniform float uUseOverride;
@@ -41,7 +45,18 @@ uniform sampler2D uOrtho;
 uniform float uUseOrtho;
 uniform float uTexturedStructure;
 uniform float uPosterize;
+uniform float uWindowCol;
+uniform float uFloorRow;
 out vec4 outColor;
+
+// 4x4 ordered dither: gradients become pixel patterns, the way game art
+// actually handled limited palettes.
+float bayer4(vec2 position) {
+  const int matrix[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+  int x = int(mod(position.x, 4.0));
+  int y = int(mod(position.y, 4.0));
+  return float(matrix[y * 4 + x]) / 16.0;
+}
 
 vec3 ramp(float t) {
   vec3 shore = vec3(0.15, 0.30, 0.30);
@@ -66,13 +81,27 @@ void main() {
   // Without imagery the override colour stands as before.
   vec3 structureColor = uOverrideColor;
   if (uUseOrtho > 0.5 && uTexturedStructure > 0.5) {
-    structureColor = normal.y > 0.6 ? aerial : aerial * 0.72;
+    if (normal.y > 0.6) {
+      // The aerial image IS the roofscape.
+      structureColor = aerial;
+    } else {
+      // Procedural facade: a plaster tone tinted by the roof pixel, with a
+      // storey-and-window grid carved in — buildings read as buildings, not
+      // as extruded colour blocks.
+      vec3 plaster = mix(aerial, vec3(0.82, 0.78, 0.72), 0.55) * 0.92;
+      float along = abs(normal.x) > abs(normal.z) ? vWorld.z : vWorld.x;
+      float column = fract(along / uWindowCol);
+      float row = fract(vWorld.y / uFloorRow);
+      bool window = column > 0.26 && column < 0.74 && row > 0.22 && row < 0.62;
+      structureColor = window ? vec3(0.15, 0.21, 0.29) : plaster;
+    }
   }
   vec3 base = mix(ground, structureColor, uUseOverride);
   vec3 lit = base * light;
-  // Pixel look: a coarse palette reads as deliberate game art, not as a
-  // degraded photo. Zero disables the quantisation entirely.
+  // Pixel look: ordered dither plus a coarse palette reads as deliberate
+  // game art, not as a degraded photo. Zero disables both entirely.
   if (uPosterize > 0.5) {
+    lit += (bayer4(gl_FragCoord.xy) - 0.5) / uPosterize;
     lit = floor(lit * uPosterize + 0.5) / uPosterize;
   }
   outColor = vec4(lit, 1.0);
@@ -154,7 +183,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   return shader;
 }
 
-export type ViewerLayer = 'ortho' | 'buildings' | 'roads';
+export type ViewerLayer = 'ortho' | 'buildings' | 'roads' | 'landcover';
 
 export type ViewerProjection = 'perspective' | 'isometric';
 
@@ -183,6 +212,8 @@ export function createTerrainViewer(
     roads?: RoadMesh;
     /** Orthophoto to drape over the terrain; heightfield ramp when absent. */
     ortho?: TexImageSource;
+    /** Land-cover patches (forest, meadow, water …) draped on the terrain. */
+    landcover?: LandcoverMesh;
     /**
      * Opening flight along the terrain's own alignment line: from 21 m above
      * the lowest vertex straight to the highest, then settling into the
@@ -284,6 +315,17 @@ export function createTerrainViewer(
     roadways = upload(scaledRoads, roads.normals, roads.indices);
   }
 
+  // One drawable per land-cover class, each with its own override colour.
+  const landcover: { drawable: Drawable; color: readonly [number, number, number] }[] = [];
+  for (const patch of options.landcover?.classes ?? []) {
+    if (patch.indices.length === 0) continue;
+    const scaledPatch = new Float32Array(patch.positions.length);
+    for (let i = 0; i < patch.positions.length; i += 1) {
+      scaledPatch[i] = patch.positions[i] * scale;
+    }
+    landcover.push({ drawable: upload(scaledPatch, patch.normals, patch.indices), color: patch.color });
+  }
+
   const uModelView = gl.getUniformLocation(program, 'uModelView');
   const uProjection = gl.getUniformLocation(program, 'uProjection');
   const uLightDir = gl.getUniformLocation(program, 'uLightDir');
@@ -295,6 +337,8 @@ export function createTerrainViewer(
   const uUseOrtho = gl.getUniformLocation(program, 'uUseOrtho');
   const uTexturedStructure = gl.getUniformLocation(program, 'uTexturedStructure');
   const uPosterize = gl.getUniformLocation(program, 'uPosterize');
+  const uWindowCol = gl.getUniformLocation(program, 'uWindowCol');
+  const uFloorRow = gl.getUniformLocation(program, 'uFloorRow');
 
   // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
   // as-is and still gets mipmaps for the oblique viewing angles.
@@ -327,6 +371,7 @@ export function createTerrainViewer(
     ortho: true,
     buildings: true,
     roads: true,
+    landcover: true,
   };
 
   // Classic dimetric game angle: atan(1/2) pitch, camera on a diagonal.
@@ -515,6 +560,10 @@ export function createTerrainViewer(
       Math.max(1e-6, mesh.stats.depthM * scale),
     );
     gl.uniform1f(uPosterize, pixelLook ? POSTERIZE_LEVELS : 0);
+    // Facade grid periods in model units: ~3 m window columns (true metres)
+    // and ~4.5 m storeys (heights carry the vertical exaggeration).
+    gl.uniform1f(uWindowCol, Math.max(1e-6, 3.0 * scale));
+    gl.uniform1f(uFloorRow, Math.max(1e-6, 4.5 * scale));
     gl.uniform1i(uOrtho, 0);
     gl.uniform1f(uUseOrtho, orthoTexture && layerVisible.ortho ? 1 : 0);
     if (orthoTexture) {
@@ -526,6 +575,17 @@ export function createTerrainViewer(
     gl.uniform1f(uTexturedStructure, 0);
     gl.bindVertexArray(terrain.vao);
     gl.drawElements(gl.TRIANGLES, terrain.count, gl.UNSIGNED_INT, 0);
+
+    // Land cover under the roads: a path through the park stays visible.
+    if (landcover.length > 0 && layerVisible.landcover) {
+      gl.uniform1f(uUseOverride, 1);
+      for (const patch of landcover) {
+        gl.uniform3f(uOverrideColor, ...patch.color);
+        gl.bindVertexArray(patch.drawable.vao);
+        gl.drawElements(gl.TRIANGLES, patch.drawable.count, gl.UNSIGNED_INT, 0);
+      }
+      gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+    }
 
     // Roads before buildings: they are ground-hugging, so any overlap should
     // resolve in favour of the structure standing on them.
@@ -681,7 +741,7 @@ export function createTerrainViewer(
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
-      for (const drawable of [terrain, structures, roadways]) {
+      for (const drawable of [terrain, structures, roadways, ...landcover.map((p) => p.drawable)]) {
         if (!drawable) continue;
         for (const buffer of drawable.buffers) gl.deleteBuffer(buffer);
         gl.deleteVertexArray(drawable.vao);
