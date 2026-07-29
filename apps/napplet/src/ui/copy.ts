@@ -184,6 +184,7 @@ export const COPY = {
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     landcoverLabel: 'Land cover',
+    waterwaysLabel: 'Waterways',
     layerMissing: (label: string): string => `${label} — none in view`,
     layerFailed: (label: string): string => `${label} — source did not answer`,
     sourceFailed: 'source did not answer',

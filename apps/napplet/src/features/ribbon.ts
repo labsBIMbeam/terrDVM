@@ -27,13 +27,20 @@ const EMPTY: RoadMesh = {
 /** Lift above the surface so ribbons never z-fight with the terrain. */
 export const ROAD_DRAPE_OFFSET_M = 1.5;
 
-export function buildRoadMesh(
-  roads: readonly RoadFeature[],
+/** A centre line with its rendered width — the shape both roads and waterways reduce to. */
+export type RibbonLine = {
+  line: readonly (readonly [number, number])[];
+  widthM: number;
+};
+
+export function buildRibbonMesh(
+  lines: readonly RibbonLine[],
   bbox: BBox4326,
   sampleGround: (x: number, z: number) => number,
   verticalScale = 1,
+  liftM = ROAD_DRAPE_OFFSET_M,
 ): RoadMesh {
-  if (roads.length === 0) return EMPTY;
+  if (lines.length === 0) return EMPTY;
 
   const project = projector(bbox);
   const positions: number[] = [];
@@ -41,15 +48,15 @@ export function buildRoadMesh(
   const indices: number[] = [];
   let usedRoads = 0;
   let segments = 0;
-  const lift = ROAD_DRAPE_OFFSET_M * verticalScale;
+  const lift = liftM * verticalScale;
 
-  for (const road of roads) {
-    const points = road.line
+  for (const ribbon of lines) {
+    const points = ribbon.line
       .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
       .map(([lon, lat]) => project(lon, lat));
     if (points.length < 2) continue;
 
-    const halfWidth = (ROAD_WIDTH_M[road.roadClass] ?? 4) / 2;
+    const halfWidth = ribbon.widthM / 2;
     let emitted = false;
 
     for (let i = 0; i < points.length - 1; i += 1) {
@@ -92,4 +99,18 @@ export function buildRoadMesh(
     indices: new Uint32Array(indices),
     stats: { roads: usedRoads, segments, triangles: indices.length / 3 },
   };
+}
+
+export function buildRoadMesh(
+  roads: readonly RoadFeature[],
+  bbox: BBox4326,
+  sampleGround: (x: number, z: number) => number,
+  verticalScale = 1,
+): RoadMesh {
+  return buildRibbonMesh(
+    roads.map((road) => ({ line: road.line, widthM: ROAD_WIDTH_M[road.roadClass] ?? 4 })),
+    bbox,
+    sampleGround,
+    verticalScale,
+  );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ROAD_DRAPE_OFFSET_M, buildRoadMesh } from '../../src/features/ribbon';
-import { ROAD_WIDTH_M, type RoadFeature } from '../../src/features/types';
+import { ROAD_DRAPE_OFFSET_M, buildRibbonMesh, buildRoadMesh } from '../../src/features/ribbon';
+import { ROAD_WIDTH_M, WATERWAY_WIDTH_M, type RoadFeature } from '../../src/features/types';
 import { featuresQuery, parseFeatures, roadClassFor } from '../../src/features/source-osm';
 import type { BBox4326 } from '../../src/bbox/validate';
 
@@ -140,7 +140,49 @@ describe('OSM feature source', () => {
   });
 
   it('returns empty layers for a malformed payload', () => {
-    expect(parseFeatures(null)).toEqual({ buildings: [], roads: [], landuse: [] });
-    expect(parseFeatures({ elements: 'nope' })).toEqual({ buildings: [], roads: [], landuse: [] });
+    const empty = { buildings: [], roads: [], landuse: [], waterways: [] };
+    expect(parseFeatures(null)).toEqual(empty);
+    expect(parseFeatures({ elements: 'nope' })).toEqual(empty);
+  });
+});
+
+describe('waterway ribbons', () => {
+  it('parses waterway ways into their own layer', () => {
+    const payload = {
+      elements: [
+        {
+          type: 'way',
+          tags: { waterway: 'river' },
+          geometry: [
+            { lat: 48.19, lon: 16.36 },
+            { lat: 48.2, lon: 16.37 },
+          ],
+        },
+        { type: 'way', tags: { waterway: 'dam' }, geometry: [] },
+      ],
+    };
+    const features = parseFeatures(payload);
+    expect(features.waterways).toHaveLength(1);
+    expect(features.waterways[0].waterwayClass).toBe('river');
+    expect(features.roads).toHaveLength(0);
+  });
+
+  it('asks Overpass for waterways alongside the other layers', () => {
+    expect(featuresQuery(BBOX, 100)).toContain('way["waterway"]');
+  });
+
+  it('builds ribbons at the waterway width, below the road lift', () => {
+    const mesh = buildRibbonMesh(
+      [{ line: [[-16.925, 32.645], [-16.915, 32.645]], widthM: WATERWAY_WIDTH_M.river }],
+      BBOX,
+      () => 0,
+      1,
+      0.8,
+    );
+    const zs: number[] = [];
+    for (let i = 2; i < mesh.positions.length; i += 3) zs.push(mesh.positions[i]);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(WATERWAY_WIDTH_M.river, 0);
+    expect(mesh.positions[1]).toBeCloseTo(0.8, 5);
+    expect(0.8).toBeLessThan(ROAD_DRAPE_OFFSET_M);
   });
 });

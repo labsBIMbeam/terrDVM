@@ -5,11 +5,14 @@ import {
 } from '../job/collection';
 import {
   ROAD_CLASSES,
+  WATERWAY_CLASSES,
   type BuildingFeature,
   type LanduseClass,
   type LanduseFeature,
   type RoadClass,
   type RoadFeature,
+  type WaterwayClass,
+  type WaterwayFeature,
 } from './types';
 import { heightFromTags, isApprovedBuildingsUrl, OSM_BUILDINGS_SOURCE } from '../buildings/source-osm';
 import type { BBox4326 } from '../bbox/validate';
@@ -32,6 +35,7 @@ export type OsmFeatures = {
   buildings: BuildingFeature[];
   roads: RoadFeature[];
   landuse: LanduseFeature[];
+  waterways: WaterwayFeature[];
 };
 
 /**
@@ -83,6 +87,7 @@ export function featuresQuery(bbox: BBox4326, limit: number): string {
     '[out:json][timeout:25];(' +
     `way["building"](${area});` +
     `way["highway"](${area});` +
+    `way["waterway"](${area});` +
     `way["landuse"](${area});` +
     `way["natural"](${area});` +
     `);out geom ${limit};`
@@ -108,6 +113,16 @@ export function roadClassFor(highway: string | undefined): RoadClass | null {
   return null;
 }
 
+const WATERWAY_CLASS_SET = new Set<string>(WATERWAY_CLASSES);
+
+/** Map an OSM `waterway` value onto a rendered class, or null to drop it. */
+export function waterwayClassFor(waterway: string | undefined): WaterwayClass | null {
+  if (!waterway) return null;
+  if (WATERWAY_CLASS_SET.has(waterway)) return waterway as WaterwayClass;
+  // Riverbanks are polygons and dams are structures; neither is a centre line.
+  return null;
+}
+
 type OverpassElement = {
   type?: string;
   tags?: Record<string, string>;
@@ -126,7 +141,7 @@ function ringOf(element: OverpassElement): [number, number][] {
 
 export function parseFeatures(payload: unknown): OsmFeatures {
   const elements = (payload as { elements?: OverpassElement[] })?.elements;
-  const result: OsmFeatures = { buildings: [], roads: [], landuse: [] };
+  const result: OsmFeatures = { buildings: [], roads: [], landuse: [], waterways: [] };
   if (!Array.isArray(elements)) return result;
 
   for (const element of elements) {
@@ -146,6 +161,15 @@ export function parseFeatures(payload: unknown): OsmFeatures {
       if (roadClass) {
         const line = ringOf(element);
         if (line.length >= 2) result.roads.push({ line, roadClass });
+      }
+      continue;
+    }
+
+    if (tags.waterway) {
+      const waterwayClass = waterwayClassFor(tags.waterway);
+      if (waterwayClass) {
+        const line = ringOf(element);
+        if (line.length >= 2) result.waterways.push({ line, waterwayClass });
       }
       continue;
     }

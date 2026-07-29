@@ -34,6 +34,25 @@ export const ROAD_WIDTH_M: Record<RoadClass, number> = {
   path: 1.5,
 };
 
+export const WATERWAY_CLASSES = ['river', 'canal', 'stream', 'drain', 'ditch'] as const;
+
+export type WaterwayClass = (typeof WATERWAY_CLASSES)[number];
+
+/** Rendered width in metres per waterway class. */
+export const WATERWAY_WIDTH_M: Record<WaterwayClass, number> = {
+  river: 14,
+  canal: 8,
+  stream: 3,
+  drain: 1.5,
+  ditch: 1.5,
+};
+
+export type WaterwayFeature = {
+  /** Centre line in lon/lat degrees. */
+  line: readonly (readonly [number, number])[];
+  waterwayClass: WaterwayClass;
+};
+
 /**
  * Land cover / land use classes.
  *

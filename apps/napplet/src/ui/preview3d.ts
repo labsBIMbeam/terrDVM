@@ -183,7 +183,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   return shader;
 }
 
-export type ViewerLayer = 'ortho' | 'buildings' | 'roads' | 'landcover';
+export type ViewerLayer = 'ortho' | 'buildings' | 'roads' | 'landcover' | 'waterways';
 
 export type ViewerProjection = 'perspective' | 'isometric';
 
@@ -203,6 +203,9 @@ const BUILDING_COLOR: readonly [number, number, number] = [0.969, 0.576, 0.102];
 /** Asphalt: dark and desaturated so roads read as ground, not as objects. */
 const ROAD_COLOR: readonly [number, number, number] = [0.13, 0.13, 0.14];
 
+/** Waterways: a shade brighter than still-water patches so currents read. */
+const WATERWAY_COLOR: readonly [number, number, number] = [0.14, 0.34, 0.48];
+
 export function createTerrainViewer(
   canvas: HTMLCanvasElement,
   mesh: TerrainMesh,
@@ -214,6 +217,8 @@ export function createTerrainViewer(
     ortho?: TexImageSource;
     /** Land-cover patches (forest, meadow, water …) draped on the terrain. */
     landcover?: LandcoverMesh;
+    /** Waterway ribbons (rivers, streams, canals) draped on the terrain. */
+    waterways?: RoadMesh;
     /**
      * Opening flight along the terrain's own alignment line: from 21 m above
      * the lowest vertex straight to the highest, then settling into the
@@ -315,6 +320,16 @@ export function createTerrainViewer(
     roadways = upload(scaledRoads, roads.normals, roads.indices);
   }
 
+  let waterways: Drawable | null = null;
+  const waterwayMesh = options.waterways;
+  if (waterwayMesh && waterwayMesh.indices.length > 0) {
+    const scaledWater = new Float32Array(waterwayMesh.positions.length);
+    for (let i = 0; i < waterwayMesh.positions.length; i += 1) {
+      scaledWater[i] = waterwayMesh.positions[i] * scale;
+    }
+    waterways = upload(scaledWater, waterwayMesh.normals, waterwayMesh.indices);
+  }
+
   // One drawable per land-cover class, each with its own override colour.
   const landcover: { drawable: Drawable; color: readonly [number, number, number] }[] = [];
   for (const patch of options.landcover?.classes ?? []) {
@@ -372,6 +387,7 @@ export function createTerrainViewer(
     buildings: true,
     roads: true,
     landcover: true,
+    waterways: true,
   };
 
   // Classic dimetric game angle: atan(1/2) pitch, camera on a diagonal.
@@ -587,6 +603,15 @@ export function createTerrainViewer(
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
     }
 
+    // Waterways above the land cover, below the roads: bridges win.
+    if (waterways && layerVisible.waterways) {
+      gl.uniform1f(uUseOverride, 1);
+      gl.uniform3f(uOverrideColor, ...WATERWAY_COLOR);
+      gl.bindVertexArray(waterways.vao);
+      gl.drawElements(gl.TRIANGLES, waterways.count, gl.UNSIGNED_INT, 0);
+      gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+    }
+
     // Roads before buildings: they are ground-hugging, so any overlap should
     // resolve in favour of the structure standing on them.
     if (roadways && layerVisible.roads) {
@@ -741,7 +766,13 @@ export function createTerrainViewer(
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
-      for (const drawable of [terrain, structures, roadways, ...landcover.map((p) => p.drawable)]) {
+      for (const drawable of [
+        terrain,
+        structures,
+        roadways,
+        waterways,
+        ...landcover.map((p) => p.drawable),
+      ]) {
         if (!drawable) continue;
         for (const buffer of drawable.buffers) gl.deleteBuffer(buffer);
         gl.deleteVertexArray(drawable.vao);
