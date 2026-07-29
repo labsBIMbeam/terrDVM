@@ -39,6 +39,7 @@ uniform vec3 uOverrideColor;
 uniform float uUseOverride;
 uniform sampler2D uOrtho;
 uniform float uUseOrtho;
+uniform float uTexturedStructure;
 out vec4 outColor;
 
 vec3 ramp(float t) {
@@ -57,12 +58,16 @@ void main() {
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, normalize(uLightDir)), 0.0);
   float light = 0.35 + 0.65 * diffuse;
-  vec3 ground = mix(
-    ramp(clamp(vHeight, 0.0, 1.0)),
-    texture(uOrtho, vUV).rgb,
-    uUseOrtho
-  );
-  vec3 base = mix(ground, uOverrideColor, uUseOverride);
+  vec3 aerial = texture(uOrtho, vUV).rgb;
+  vec3 ground = mix(ramp(clamp(vHeight, 0.0, 1.0)), aerial, uUseOrtho);
+  // Textured structures: the roof takes its own aerial pixel — the ortho IS
+  // the roofscape — and walls a darkened version so massing stays readable.
+  // Without imagery the override colour stands as before.
+  vec3 structureColor = uOverrideColor;
+  if (uUseOrtho > 0.5 && uTexturedStructure > 0.5) {
+    structureColor = normal.y > 0.6 ? aerial : aerial * 0.72;
+  }
+  vec3 base = mix(ground, structureColor, uUseOverride);
   outColor = vec4(base * light, 1.0);
 }`;
 
@@ -254,6 +259,7 @@ export function createTerrainViewer(
   const uGroundSize = gl.getUniformLocation(program, 'uGroundSize');
   const uOrtho = gl.getUniformLocation(program, 'uOrtho');
   const uUseOrtho = gl.getUniformLocation(program, 'uUseOrtho');
+  const uTexturedStructure = gl.getUniformLocation(program, 'uTexturedStructure');
 
   // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
   // as-is and still gets mipmaps for the oblique viewing angles.
@@ -468,6 +474,7 @@ export function createTerrainViewer(
     }
 
     gl.uniform1f(uUseOverride, 0);
+    gl.uniform1f(uTexturedStructure, 0);
     gl.bindVertexArray(terrain.vao);
     gl.drawElements(gl.TRIANGLES, terrain.count, gl.UNSIGNED_INT, 0);
 
@@ -483,8 +490,12 @@ export function createTerrainViewer(
 
     if (structures && layerVisible.buildings) {
       gl.uniform1f(uUseOverride, 1);
+      // Buildings take their roof pixels from the drape when it is on;
+      // toggling the ortho layer off reverts them to the flat 600B orange.
+      gl.uniform1f(uTexturedStructure, 1);
       gl.bindVertexArray(structures.vao);
       gl.drawElements(gl.TRIANGLES, structures.count, gl.UNSIGNED_INT, 0);
+      gl.uniform1f(uTexturedStructure, 0);
     }
     gl.bindVertexArray(null);
 

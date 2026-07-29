@@ -167,7 +167,9 @@ export type FetchFeaturesOptions = {
 
 export async function fetchFeatures(
   bbox: BBox4326,
-  { signal, limit = 3000 }: FetchFeaturesOptions = {},
+  // 6000 covers a dense European first district; Vienna's Ring at 3000 lost
+  // whole blocks to truncation.
+  { signal, limit = 6000 }: FetchFeaturesOptions = {},
 ): Promise<OsmFeatures> {
   // Collection-server cache first: Overpass throttles repeated identical
   // queries, which a demo rerun is by definition. Direct Overpass remains the
