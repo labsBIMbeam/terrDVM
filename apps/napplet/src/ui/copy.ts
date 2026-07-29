@@ -171,6 +171,9 @@ export const COPY = {
     noBuildings: 'none in view',
     progress: (loaded: CopyValue, total: CopyValue): string =>
       `Elevation tiles ${loaded} of ${total}`,
+    progressFeatures: 'Fetching buildings, roads and land cover…',
+    progressOrtho: 'Baking the orthophoto — the first run for an area takes a while…',
+    progressMount: 'Building the 3D scene…',
     demAttribution: 'Elevation: Mapzen Terrain Tiles via AWS Open Data',
     orthoLabel: 'Orthophoto',
     orthoUnavailable: 'unavailable — elevation shading',

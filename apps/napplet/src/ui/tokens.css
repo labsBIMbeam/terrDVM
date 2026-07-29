@@ -602,6 +602,22 @@ body {
   overflow: hidden;
 }
 
+.job-progress-track {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  block-size: 10px;
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.job-progress-fill {
+  background: var(--color-accent);
+  block-size: 100%;
+  inline-size: 0%;
+  transition: width 0.3s ease;
+}
+
 /* ---- fullscreen viewer -------------------------------------------------- */
 
 .viewer-modal {

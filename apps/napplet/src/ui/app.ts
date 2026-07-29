@@ -181,6 +181,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <div class="job-spinner" aria-hidden="true"></div>
         <h2 class="job-title">${COPY.jobFlow.generatingTitle}</h2>
         <p class="job-body">${COPY.jobFlow.generatingBody}</p>
+        <div class="job-progress-track" role="progressbar" aria-labelledby="job-progress">
+          <div class="job-progress-fill" id="job-progress-fill"></div>
+        </div>
         <p class="job-field-label" id="job-progress"></p>
       </section>
       <section class="job-stage" id="job-stage-preview" hidden>
@@ -263,6 +266,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const jobAvailStreets = root.querySelector<HTMLElement>('#job-avail-streets');
   const jobAvailWater = root.querySelector<HTMLElement>('#job-avail-water');
   const jobProgress = root.querySelector<HTMLElement>('#job-progress');
+  const jobProgressFill = root.querySelector<HTMLElement>('#job-progress-fill');
   const jobCanvas = root.querySelector<HTMLCanvasElement>('#job-canvas');
   const jobElevation = root.querySelector<HTMLElement>('#job-elevation');
   const jobExtent = root.querySelector<HTMLElement>('#job-extent');
@@ -299,7 +303,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !continueRequestButton || !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
       !jobArea || !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
-      !jobProgress || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
+      !jobProgress || !jobProgressFill || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
       !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
@@ -389,11 +393,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       })} km²`;
     }
 
-    if (jobState.kind === 'GENERATING') {
-      jobProgress.textContent = jobState.progress
-        ? COPY.jobFlow.progress(jobState.progress.loaded, jobState.progress.total)
-        : '';
-    }
+    // GENERATING progress is driven directly by setGenProgress: the pipeline
+    // has more phases (features, ortho bake, mount) than the reducer knows.
 
     if (jobState.kind === 'PREVIEW') {
       const { stats } = jobState.mesh;
@@ -442,10 +443,19 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     dispatchJob({ type: 'CLOSE' });
   };
 
+  // One bar across the whole pipeline. The ortho bake has no incremental
+  // signal, so its span creeps on a slow CSS transition instead of freezing.
+  const setGenProgress = (fraction: number, label: string, creep = false): void => {
+    jobProgressFill.style.transition = creep ? 'width 20s ease-out' : 'width 0.3s ease';
+    jobProgressFill.style.width = `${Math.round(fraction * 100)}%`;
+    jobProgress.textContent = label;
+  };
+
   const runTerrainJob = (bbox: BBox4326): void => {
     terrainAbort?.abort();
     const controller = new AbortController();
     terrainAbort = controller;
+    setGenProgress(0.03, '');
 
     // The orthophoto bake runs beside the terrain fetch. Like buildings it is
     // an enhancement, never a gate: without a collection server the preview
@@ -457,11 +467,16 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     generateTerrain(bbox, {
       signal: controller.signal,
       onProgress: (progress) => {
-        if (!controller.signal.aborted) dispatchJob({ type: 'PROGRESS', progress });
+        if (controller.signal.aborted) return;
+        setGenProgress(
+          0.05 + 0.4 * (progress.total > 0 ? progress.loaded / progress.total : 0),
+          COPY.jobFlow.progress(progress.loaded, progress.total),
+        );
       },
     })
       .then(async (mesh) => {
         if (controller.signal.aborted) return;
+        setGenProgress(0.5, COPY.jobFlow.progressFeatures);
 
         // Buildings are an enhancement, never a gate: if the footprint source
         // is slow, blocked or empty, the terrain still ships.
@@ -498,8 +513,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           landcover = undefined;
           featuresOk = false;
         }
+        if (!controller.signal.aborted) setGenProgress(0.95, COPY.jobFlow.progressOrtho, true);
         const ortho = await orthoPromise;
         if (controller.signal.aborted) return;
+        setGenProgress(1, COPY.jobFlow.progressMount);
 
         // Reveal the preview stage first so the canvas has layout, then mount
         // synchronously — deferring to rAF would never run while the page is
