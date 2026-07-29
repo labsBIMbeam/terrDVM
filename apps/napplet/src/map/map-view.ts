@@ -9,29 +9,42 @@ import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import { loadApprovedBytes } from '../shell/resource-client';
 import {
   assertApprovedSourceRequest,
-  basemapTileUrl,
   composeAttribution,
+  contractMetadata,
+  tileUrlFor,
   validateSourceRequest,
+  type SourceRole,
 } from './source';
+import { getRegion, viewBoundsTuple, type Region } from '../config/regions';
+import { coverageFor } from '../config/coverage';
+import { addCoverageOverlay, type CoverageOverlay } from './coverage-overlay';
 import type { BBox4326 } from '../bbox/validate';
 
 const PROTOCOL = 'terrdvm';
-const TILE_PATH = /^\/tile\/(\d+)\/(\d+)\/(\d+)\/?$/;
+const TILE_PATH = /^\/(\d+)\/(\d+)\/(\d+)\/?$/;
 const TILE_DEADLINE_MS = 15_000;
 const MAX_TILE_BYTES = 1_000_000;
-const MADEIRA_CENTER: [number, number] = [-16.9, 32.75];
-const MADEIRA_ZOOM = 11;
+
+/** Custom-protocol host → approved source role. Nothing else is routable. */
+const ROLE_BY_HOST: Record<string, SourceRole> = {
+  tile: 'basemap',
+  imagery: 'imagery',
+};
 const MARKER_DATA_URL =
-  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"%3E%3Ccircle cx="4" cy="4" r="3" fill="%2358B8E8" stroke="%230C1014" stroke-width="1"/%3E%3C/svg%3E';
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"%3E%3Ccircle cx="4" cy="4" r="3" fill="%23F7931A" stroke="%23000000" stroke-width="1"/%3E%3C/svg%3E';
 
 type MapViewCallbacks = {
   onDrawComplete: (bbox: BBox4326) => void;
   onEditStart: () => void;
   onEditComplete: (bbox: BBox4326) => void;
   onMapError?: (error: unknown) => void;
+  /** Fired once a role has actually delivered a tile, so the UI can stop claiming it is unavailable. */
+  onSourceActive?: (role: SourceRole) => void;
 };
 
 export type MapView = {
+  toggleCoverage: () => boolean;
+  coverageSummary: () => { covered: number; gap: number; sea: number; land: number } | null;
   armDrawing: () => void;
   stopDrawing: () => void;
   setSelection: (bbox: BBox4326) => void;
@@ -49,7 +62,7 @@ type PolygonFeature = {
   };
 };
 
-function parseTileUrl(rawUrl: string): { z: number; x: number; y: number } {
+function parseTileUrl(rawUrl: string): { role: SourceRole; z: number; x: number; y: number } {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -57,17 +70,12 @@ function parseTileUrl(rawUrl: string): { z: number; x: number; y: number } {
     throw new Error('Map tile URL is not a valid custom-protocol URL.', { cause: error });
   }
 
-  if (
-    parsed.protocol !== `${PROTOCOL}:` ||
-    (parsed.hostname !== '' && parsed.hostname !== 'tile') ||
-    parsed.search ||
-    parsed.hash
-  ) {
-    throw new Error('Map tile URL uses an unapproved protocol or query string.');
+  const role = ROLE_BY_HOST[parsed.hostname];
+  if (parsed.protocol !== `${PROTOCOL}:` || !role || parsed.search || parsed.hash) {
+    throw new Error('Map tile URL uses an unapproved protocol, host, or query string.');
   }
 
-  const pathname = parsed.hostname === 'tile' ? `/tile${parsed.pathname}` : parsed.pathname;
-  const match = pathname.match(TILE_PATH);
+  const match = parsed.pathname.match(TILE_PATH);
   if (!match) {
     throw new Error('Map tile URL does not match the approved tile path.');
   }
@@ -76,41 +84,30 @@ function parseTileUrl(rawUrl: string): { z: number; x: number; y: number } {
   if (![z, x, y].every((value) => Number.isSafeInteger(value) && value >= 0)) {
     throw new Error('Map tile coordinates are outside the safe integer range.');
   }
-  return { z, x, y };
+  return { role, z, x, y };
 }
 
-async function loadBasemapTile(
+async function loadRoleTile(
   rawUrl: string,
   abortController: AbortController,
 ): Promise<{ data: ArrayBuffer }> {
-  const { z, x, y } = parseTileUrl(rawUrl);
-  const url = basemapTileUrl(z, x, y);
-  const contractValidation = validateSourceRequest('basemap', {
-    url,
-    layer: 'OpenStreetMap Standard',
-    format: 'image/png',
-  });
+  const { role, z, x, y } = parseTileUrl(rawUrl);
+  const { layer, format } = contractMetadata(role);
+  const url = tileUrlFor(role, z, x, y);
+
+  const contractValidation = validateSourceRequest(role, { url, layer, format });
   if (!contractValidation.ok) {
-    throw new Error(`Basemap tile failed source-policy validation: ${contractValidation.message}`);
+    throw new Error(`${role} tile failed source-policy validation: ${contractValidation.message}`);
   }
-  assertApprovedSourceRequest('basemap', {
-    url,
-    layer: 'OpenStreetMap Standard',
-    format: 'image/png',
-  });
+  assertApprovedSourceRequest(role, { url, layer, format });
 
   const blob = await loadApprovedBytes(url, {
     deadlineMs: TILE_DEADLINE_MS,
-    isAllowed: (candidate) =>
-      validateSourceRequest('basemap', {
-        url: candidate,
-        layer: 'OpenStreetMap Standard',
-        format: 'image/png',
-      }).ok,
+    isAllowed: (candidate) => validateSourceRequest(role, { url: candidate, layer, format }).ok,
     signal: abortController.signal,
   });
   if (blob.size > MAX_TILE_BYTES) {
-    throw new Error('Basemap tile exceeded the approved response-size bound.');
+    throw new Error(`${role} tile exceeded the approved response-size bound.`);
   }
   return { data: await blob.arrayBuffer() };
 }
@@ -163,6 +160,7 @@ function rectangleFeature(bbox: BBox4326): PolygonFeature {
 export function createMapView(
   container: HTMLDivElement,
   callbacks: MapViewCallbacks,
+  region: Region = getRegion(undefined),
 ): MapView {
   let protocolRegistered = true;
   let destroyed = false;
@@ -170,15 +168,19 @@ export function createMapView(
   let pendingMode: 'select' | 'rectangle' = 'select';
   let pendingSelection: BBox4326 | null = null;
   let editingNotified = false;
+  let coverage: CoverageOverlay | null = null;
 
   maplibregl.addProtocol(PROTOCOL, (params, abortController) =>
-    loadBasemapTile(params.url, abortController),
+    loadRoleTile(params.url, abortController),
   );
 
   const map = new maplibregl.Map({
     container,
-    center: MADEIRA_CENTER,
-    zoom: MADEIRA_ZOOM,
+    center: [...region.center],
+    zoom: region.zoom,
+    minZoom: region.minZoom,
+    // The viewport cannot leave the configured region.
+    maxBounds: viewBoundsTuple(region),
     renderWorldCopies: false,
     attributionControl: false,
     style: {
@@ -191,12 +193,18 @@ export function createMapView(
           minzoom: 0,
           maxzoom: 19,
         },
+        imagery: {
+          type: 'raster',
+          tiles: [`${PROTOCOL}://imagery/{z}/{x}/{y}`],
+          tileSize: 256,
+          minzoom: 0,
+          maxzoom: 19,
+        },
       },
-      layers: [{
-        id: 'basemap',
-        type: 'raster',
-        source: 'basemap',
-      }],
+      layers: [
+        { id: 'basemap', type: 'raster', source: 'basemap' },
+        { id: 'imagery', type: 'raster', source: 'imagery' },
+      ],
     },
   });
 
@@ -208,9 +216,9 @@ export function createMapView(
         drawInteraction: 'click-drag',
         keyEvents: { cancel: 'Escape', finish: null },
         styles: {
-          fillColor: '#58B8E8',
+          fillColor: '#F7931A',
           fillOpacity: 0.12,
-          outlineColor: '#58B8E8',
+          outlineColor: '#F7931A',
           outlineOpacity: 1,
           outlineWidth: 2,
         },
@@ -230,28 +238,28 @@ export function createMapView(
           },
         },
         styles: {
-          selectedPointColor: '#58B8E8',
+          selectedPointColor: '#F7931A',
           selectedPointWidth: 8,
           selectedPointOpacity: 1,
-          selectedPointOutlineColor: '#0C1014',
+          selectedPointOutlineColor: '#000000',
           selectedPointOutlineWidth: 1,
           selectedPointOutlineOpacity: 1,
           selectedMarkerUrl: MARKER_DATA_URL,
           selectedMarkerHeight: 8,
           selectedMarkerWidth: 8,
-          selectedPolygonColor: '#58B8E8',
+          selectedPolygonColor: '#F7931A',
           selectedPolygonFillOpacity: 0.12,
-          selectedPolygonOutlineColor: '#58B8E8',
+          selectedPolygonOutlineColor: '#F7931A',
           selectedPolygonOutlineOpacity: 1,
           selectedPolygonOutlineWidth: 2,
-          selectionPointColor: '#58B8E8',
+          selectionPointColor: '#F7931A',
           selectionPointWidth: 8,
           selectionPointOpacity: 1,
-          selectionPointOutlineColor: '#0C1014',
+          selectionPointOutlineColor: '#000000',
           selectionPointOutlineWidth: 1,
           selectionPointOutlineOpacity: 1,
-          midPointColor: '#58B8E8',
-          midPointOutlineColor: '#0C1014',
+          midPointColor: '#F7931A',
+          midPointOutlineColor: '#000000',
           midPointOpacity: 0,
           midPointWidth: 8,
           midPointOutlineWidth: 1,
@@ -297,14 +305,40 @@ export function createMapView(
 
   map.on('error', (event) => callbacks.onMapError?.(event.error));
 
+  // Truthful source status: a role only counts as live once the shell has
+  // actually returned tile bytes for it. Capability-denied runs never fire this.
+  const announcedRoles = new Set<SourceRole>();
+  map.on('sourcedata', (event) => {
+    const role = event.sourceId === 'imagery' ? 'imagery' : event.sourceId === 'basemap' ? 'basemap' : null;
+    if (!role || announcedRoles.has(role)) return;
+    if (event.tile?.state !== 'loaded') return;
+    announcedRoles.add(role);
+    callbacks.onSourceActive?.(role);
+  });
+
   const resize = (): void => {
     if (!destroyed) map.resize();
   };
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
   window.addEventListener('resize', resize, { passive: true });
+  // `load` is the reliable signal: it fires once the style is parsed and the
+  // first render completes. An earlier attempt to key off `styledata` +
+  // `isStyleLoaded()` broke drawing outright — `styledata` fires before the
+  // style is ready and then never again, so `draw.start()` never ran.
   map.once('load', () => {
     if (destroyed) return;
+
+    // Coverage is advisory, so a broken survey must never stop the map coming up.
+    const survey = coverageFor(region.id);
+    if (survey) {
+      try {
+        coverage = addCoverageOverlay(map, survey);
+      } catch (error) {
+        callbacks.onMapError?.(error);
+      }
+    }
+
     draw.start();
     drawReady = true;
     draw.setMode(pendingMode);
@@ -332,6 +366,13 @@ export function createMapView(
   };
 
   return {
+    toggleCoverage: () => {
+      if (!coverage) return false;
+      const next = !coverage.isVisible();
+      coverage.setVisible(next);
+      return next;
+    },
+    coverageSummary: () => coverage?.summary ?? null,
     armDrawing: () => {
       if (destroyed) return;
       editingNotified = false;
@@ -365,6 +406,8 @@ export function createMapView(
       destroyed = true;
       resizeObserver.disconnect();
       window.removeEventListener('resize', resize);
+      coverage?.destroy();
+      coverage = null;
       try {
         if (drawReady) draw.stop();
       } finally {
@@ -379,5 +422,5 @@ export function createMapView(
 }
 
 export function mapAttribution(): string {
-  return composeAttribution({ basemap: true, imagery: false });
+  return composeAttribution({ basemap: true, imagery: true });
 }
