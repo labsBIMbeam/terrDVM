@@ -93,16 +93,28 @@ void main() {
       float column = fract(along / uWindowCol);
       float row = fract(vWorld.y / uFloorRow);
       bool window = column > 0.26 && column < 0.74 && row > 0.22 && row < 0.62;
-      structureColor = window ? vec3(0.15, 0.21, 0.29) : plaster;
+      // A per-cell hash gives windows individual depth — a scatter of them
+      // reads warm, as if lit — so facades stop looking copy-pasted.
+      vec2 cell = vec2(floor(along / uWindowCol), floor(vWorld.y / uFloorRow));
+      float cellHash = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+      vec3 glass = mix(vec3(0.15, 0.21, 0.29), vec3(0.42, 0.36, 0.22), step(0.85, cellHash));
+      // Grounding: facades darken toward the street.
+      float grounding = 0.82 + 0.18 * clamp(vWorld.y / (uFloorRow * 6.0), 0.0, 1.0);
+      structureColor = window ? glass : plaster * grounding;
     }
   }
   vec3 base = mix(ground, structureColor, uUseOverride);
   vec3 lit = base * light;
-  // Pixel look: ordered dither plus a coarse palette reads as deliberate
-  // game art, not as a degraded photo. Zero disables both entirely.
+  // Pixel look: a slight saturation lift, then ordered dither and a coarse
+  // palette quantised in gamma space — linear quantisation crushes the darks
+  // into one muddy step, gamma keeps them articulated. Zero disables it all.
   if (uPosterize > 0.5) {
-    lit += (bayer4(gl_FragCoord.xy) - 0.5) / uPosterize;
-    lit = floor(lit * uPosterize + 0.5) / uPosterize;
+    float luma = dot(lit, vec3(0.299, 0.587, 0.114));
+    lit = clamp(mix(vec3(luma), lit, 1.18) * 1.04, 0.0, 1.0);
+    vec3 graded = pow(lit, vec3(0.6));
+    graded += (bayer4(gl_FragCoord.xy) - 0.5) / uPosterize;
+    graded = floor(graded * uPosterize + 0.5) / uPosterize;
+    lit = pow(clamp(graded, 0.0, 1.0), vec3(1.6667));
   }
   outColor = vec4(lit, 1.0);
 }`;
