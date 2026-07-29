@@ -81,11 +81,11 @@ const EUROPE_COVERAGE: Bounds = {
   north: 71.5,
 };
 
-const INNSBRUCK_COVERAGE: Bounds = {
-  west: 11.28,
-  south: 47.17,
-  east: 11.52,
-  north: 47.36,
+const VIENNA_COVERAGE: Bounds = {
+  west: 16.18,
+  south: 48.11,
+  east: 16.58,
+  north: 48.33,
 };
 
 export const REGIONS: Record<string, Region> = {
@@ -111,15 +111,15 @@ export const REGIONS: Record<string, Region> = {
     minZoom: 9,
     services: [],
   },
-  innsbruck: {
-    id: 'innsbruck',
-    name: 'Innsbruck',
+  vienna: {
+    id: 'vienna',
+    name: 'Wien',
     country: 'AT',
-    // City floor at ~570 m against the Nordkette at ~2,300 m: the strongest
-    // relief-to-city contrast of any region, which is the demo's whole point.
-    coverage: INNSBRUCK_COVERAGE,
-    viewBounds: pad(INNSBRUCK_COVERAGE, 0.15),
-    center: [11.40, 47.27],
+    // basemap.at flies Vienna at 15 cm — the sharpest open urban imagery of
+    // any region here — and the box reaches the Kahlenberg for some relief.
+    coverage: VIENNA_COVERAGE,
+    viewBounds: pad(VIENNA_COVERAGE, 0.15),
+    center: [16.37, 48.21],
     zoom: 11,
     minZoom: 9,
     services: [

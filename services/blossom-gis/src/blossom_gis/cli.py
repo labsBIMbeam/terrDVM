@@ -28,7 +28,7 @@ from .store import BlobStore
 REGIONS: dict[str, BBox] = {
     "madeira": BBox(west=-17.32, south=32.35, east=-16.24, north=33.15),
     "south-tyrol": BBox(west=10.38, south=46.21, east=12.48, north=47.10),
-    "innsbruck": BBox(west=11.28, south=47.17, east=11.52, north=47.36),
+    "vienna": BBox(west=16.18, south=48.11, east=16.58, north=48.33),
     # A rectangle cannot exclude a country; this clips most of European Russia.
     "europe": BBox(west=-25.0, south=34.0, east=32.0, north=71.5),
 }
@@ -39,7 +39,7 @@ DEFAULT_ZOOM = 13
 REGION_CANDIDATES = {
     "madeira": [c for c in CANDIDATES if c.id in ("dgt-pt-ortosat", "esri-world-imagery")],
     "south-tyrol": [c for c in CANDIDATES if c.id in ("irig-south-tyrol", "esri-world-imagery")],
-    "innsbruck": [c for c in CANDIDATES if c.id == "esri-world-imagery"],
+    "vienna": [c for c in CANDIDATES if c.id == "esri-world-imagery"],
     # Continental sweep uses the one source that answers everywhere; national
     # services are upgrades applied per region, not probed 40 times per cell.
     "europe": [c for c in CANDIDATES if c.id == "esri-world-imagery"],

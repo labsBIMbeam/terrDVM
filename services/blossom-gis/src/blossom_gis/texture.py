@@ -99,8 +99,8 @@ BASEMAP_AT = TextureSource(
     max_zoom=19,
     notes=(
         "Nationwide Austrian orthophoto, 29 cm general / 15 cm urban. "
-        "Verified live 2026-07-29: z19 over Innsbruck shows genuine "
-        "architectural detail."
+        "Verified live 2026-07-29: z19 over Innsbruck and central Vienna "
+        "both show genuine architectural detail."
     ),
 )
 
@@ -113,7 +113,7 @@ SOURCES = {
 REGION_SOURCES: dict[str, list[str]] = {
     "madeira": ["drote-madeira-ortho", "esri-world-imagery"],
     "south-tyrol": ["irig-south-tyrol-ortho", "esri-world-imagery"],
-    "innsbruck": ["basemap-at-ortho", "esri-world-imagery"],
+    "vienna": ["basemap-at-ortho", "esri-world-imagery"],
     "europe": ["esri-world-imagery"],
 }
 

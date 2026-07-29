@@ -78,7 +78,7 @@ Regions are data, not code. Adding one is an entry in
 | `europe` (default) | Esri World Imagery | attribution required |
 | `south-tyrol` | IRIG regional survey | **CC0** |
 | `madeira` | DROTe RAM 2023 (10 cm, incl. Porto Santo) | free with attribution |
-| `innsbruck` | basemap.at Orthofoto (city floor to Nordkette) | CC-BY 4.0 |
+| `vienna` | basemap.at Orthofoto (15 cm urban) | CC-BY 4.0 |
 
 `europe` is a bounding box, and **a box cannot exclude a country** — the eastern
 edge clips most of European Russia but a sliver remains. Excluding it properly
