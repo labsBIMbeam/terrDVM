@@ -338,6 +338,68 @@ def fetch_texture(
     raise RuntimeError("no texture source succeeded — " + "; ".join(errors))
 
 
+def plan_texture(
+    bbox: BBox,
+    region: str,
+    target_m_per_px: float = 0.25,
+    *,
+    max_tiles: int = 400,
+    max_side_px: int = 4096,
+) -> dict:
+    """What a bake for this extent would deliver — computed, never fetched.
+
+    Answers the pre-flight question "is architectural texture available here,
+    and how sharp?" using the same caps the real fetch applies: the source's
+    max zoom, the tile budget, the WMS side clamp. Selection size decides the
+    resolution, which is exactly what a user cannot see until it is stated.
+    """
+    ids = REGION_SOURCES.get(region) or ["esri-world-imagery"]
+    source = SOURCES[ids[0]]
+    latitude, _ = bbox.center
+    notes: list[str] = []
+
+    if source.kind == "wms":
+        metres_per_degree = 111_320.0
+        width_m = (bbox.east - bbox.west) * metres_per_degree * math.cos(math.radians(latitude))
+        width_px = max(1, round(width_m / target_m_per_px))
+        height_px = max(1, round((bbox.north - bbox.south) * metres_per_degree / target_m_per_px))
+        if max(width_px, height_px) > max_side_px:
+            factor = max_side_px / max(width_px, height_px)
+            width_px = max(1, int(width_px * factor))
+            notes.append(f"clamped to {max_side_px}px — a smaller selection gets sharper")
+        m_per_px = width_m / width_px if width_px else 0.0
+    else:
+        requested = zoom_for_resolution(bbox, target_m_per_px)
+        zoom = requested
+        if source.max_zoom is not None and zoom > source.max_zoom:
+            zoom = source.max_zoom
+            notes.append(f"{source.name} stops at z{zoom}")
+        while zoom > 0:
+            min_x, min_y = _tile_xy(bbox.north, bbox.west, zoom)
+            max_x, max_y = _tile_xy(bbox.south, bbox.east, zoom)
+            if (max_x - min_x + 1) * (max_y - min_y + 1) <= max_tiles:
+                break
+            zoom -= 1
+        if zoom < min(requested, source.max_zoom or requested):
+            notes.append(
+                f"tile budget caps this extent at z{zoom} — a smaller selection gets sharper"
+            )
+        m_per_px = metres_per_pixel(zoom, latitude)
+
+    return {
+        "region": region,
+        "source": {
+            "id": source.id,
+            "name": source.name,
+            "license": source.license,
+            "attribution": source.attribution,
+        },
+        "kind": source.kind,
+        "m_per_px": round(m_per_px, 3),
+        "notes": notes,
+    }
+
+
 def write_texture(texture: Texture, directory: Path, stem: str) -> tuple[Path, Path]:
     """Write the image plus a sidecar recording where it came from."""
     directory.mkdir(parents=True, exist_ok=True)

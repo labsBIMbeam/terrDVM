@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import texture as texture_module
+from .cli import REGIONS as SURVEY_REGIONS
 from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox, tile_bbox, tile_for_point
 from .nostr import authorize, parse_auth_header
@@ -508,6 +509,30 @@ def _parse_texture_request(region: str, bbox: str, target: float) -> BBox:
     return box
 
 
+def _resolve_texture_region(region: str, box: BBox) -> str:
+    """A bbox inside a regional survey gets that survey's source chain.
+
+    The DVM promises the best qualified source for the *place*, not for the
+    URL parameter: a Funchal selection made from the continental view must
+    still reach DROTe's 10 cm survey, not the Esri fallback. Observed live —
+    the same selection came back at 2.0 m/px instead of 0.54 m/px purely
+    because the client sat in the europe region.
+    """
+    if region != "europe":
+        return region
+    for candidate, bounds in SURVEY_REGIONS.items():
+        if candidate == "europe" or candidate not in texture_module.REGION_SOURCES:
+            continue
+        if (
+            bounds.west <= box.west
+            and box.east <= bounds.east
+            and bounds.south <= box.south
+            and box.north <= bounds.north
+        ):
+            return candidate
+    return region
+
+
 def _ensure_texture(
     region: str, box: BBox, target: float, directory: Path, fetch
 ) -> tuple[Path, dict]:
@@ -553,6 +578,18 @@ def _ensure_texture(
     return image_path, meta
 
 
+@app.get("/texture/plan")
+def texture_plan(
+    region: str,
+    bbox: str,
+    target: float = 0.25,
+) -> JSONResponse:
+    """What a bake for this extent would deliver — computed, never fetched."""
+    box = _parse_texture_request(region, bbox, target)
+    resolved = _resolve_texture_region(region, box)
+    return JSONResponse(texture_module.plan_texture(box, resolved, target, max_tiles=256))
+
+
 @app.get("/texture/meta")
 def texture_meta(
     region: str,
@@ -562,6 +599,7 @@ def texture_meta(
     fetch: Annotated[object, Depends(texture_fetch)] = None,  # type: ignore[assignment]
 ) -> JSONResponse:
     box = _parse_texture_request(region, bbox, target)
+    region = _resolve_texture_region(region, box)
     _, meta = _ensure_texture(region, box, target, directory, fetch)
     return JSONResponse(meta)
 
@@ -575,6 +613,7 @@ def texture_image(
     fetch: Annotated[object, Depends(texture_fetch)] = None,  # type: ignore[assignment]
 ) -> Response:
     box = _parse_texture_request(region, bbox, target)
+    region = _resolve_texture_region(region, box)
     image_path, meta = _ensure_texture(region, box, target, directory, fetch)
     return Response(
         content=image_path.read_bytes(),

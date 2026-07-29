@@ -117,3 +117,41 @@ class TestTextureEndpoint:
             assert "no texture source succeeded" in response.json()["detail"]
         finally:
             app_module.app.dependency_overrides.clear()
+
+
+class TestTexturePlanAndRegionUpgrade:
+    def test_plan_reports_source_and_resolution_without_fetching(self) -> None:
+        with TestClient(app_module.app) as client:
+            plan = client.get(
+                "/texture/plan", params={"region": "madeira", "bbox": FUNCHAL}
+            ).json()
+        assert plan["source"]["id"] == "drote-madeira-ortho"
+        assert plan["kind"] == "wms"
+        assert plan["m_per_px"] > 0
+
+    def test_europe_request_inside_madeira_upgrades_to_the_regional_chain(self) -> None:
+        # A Funchal selection made from the continental view must still reach
+        # DROTe — observed live coming back at 2.0 m/px from Esri instead.
+        with TestClient(app_module.app) as client:
+            plan = client.get(
+                "/texture/plan", params={"region": "europe", "bbox": FUNCHAL}
+            ).json()
+        assert plan["region"] == "madeira"
+        assert plan["source"]["id"] == "drote-madeira-ortho"
+
+    def test_europe_request_outside_any_survey_stays_on_the_fallback(self) -> None:
+        with TestClient(app_module.app) as client:
+            plan = client.get(
+                "/texture/plan",
+                params={"region": "europe", "bbox": "2.30,48.83,2.36,48.87"},
+            ).json()
+        assert plan["region"] == "europe"
+        assert plan["source"]["id"] == "esri-world-imagery"
+
+    def test_fetch_upgrades_the_region_too(self, texture_client) -> None:
+        client, calls = texture_client
+        meta = client.get(
+            "/texture/meta", params={"region": "europe", "bbox": FUNCHAL}
+        ).json()
+        assert meta["region"] == "madeira"
+        assert calls == [("madeira", 0.25)]
