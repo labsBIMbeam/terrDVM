@@ -21,6 +21,7 @@ import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
 import { fetchFeatures } from '../features/source-osm';
+import { buildLandcoverMesh, type LandcoverMesh } from '../features/landcover';
 import { buildRoadMesh, type RoadMesh } from '../features/ribbon';
 import { createTerrainViewer, type TerrainViewer } from './preview3d';
 
@@ -220,6 +221,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <label><input type="checkbox" id="viewer-layer-ortho" checked /><span id="viewer-layer-ortho-label">${COPY.jobFlow.orthoLabel}</span></label>
         <label><input type="checkbox" id="viewer-layer-buildings" checked /><span id="viewer-layer-buildings-label">${COPY.jobFlow.buildingsLabel}</span></label>
         <label><input type="checkbox" id="viewer-layer-roads" checked /><span id="viewer-layer-roads-label">${COPY.jobFlow.roadsLabel}</span></label>
+        <label><input type="checkbox" id="viewer-layer-landcover" checked /><span id="viewer-layer-landcover-label">${COPY.jobFlow.landcoverLabel}</span></label>
         <label><input type="checkbox" id="viewer-isometric" /><span>${COPY.jobFlow.isometricLabel}</span></label>
         <label><input type="checkbox" id="viewer-pixel" /><span>${COPY.jobFlow.pixelLookLabel}</span></label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
@@ -283,6 +285,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerLayerOrthoLabel = root.querySelector<HTMLElement>('#viewer-layer-ortho-label');
   const viewerLayerBuildingsLabel = root.querySelector<HTMLElement>('#viewer-layer-buildings-label');
   const viewerLayerRoadsLabel = root.querySelector<HTMLElement>('#viewer-layer-roads-label');
+  const viewerLayerLandcover = root.querySelector<HTMLInputElement>('#viewer-layer-landcover');
+  const viewerLayerLandcoverLabel = root.querySelector<HTMLElement>('#viewer-layer-landcover-label');
   const viewerIsometric = root.querySelector<HTMLInputElement>('#viewer-isometric');
   const viewerPixel = root.querySelector<HTMLInputElement>('#viewer-pixel');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
@@ -301,6 +305,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
       !viewerLayerOrtho || !viewerLayerBuildings || !viewerLayerRoads ||
       !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
+      !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerIsometric || !viewerPixel || !viewerExport) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
@@ -349,6 +354,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     mesh: TerrainMesh;
     buildings?: BuildingMesh;
     roads?: RoadMesh;
+    landcover?: LandcoverMesh;
     ortho?: TexImageSource;
     featuresFailed: boolean;
   } | null = null;
@@ -461,6 +467,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         // is slow, blocked or empty, the terrain still ships.
         let buildings: BuildingMesh | undefined;
         let roads: RoadMesh | undefined;
+        let landcover: LandcoverMesh | undefined;
         let featuresOk = true;
         try {
           const features = await fetchFeatures(bbox, { signal: controller.signal });
@@ -481,9 +488,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           if (features.roads.length > 0) {
             roads = buildRoadMesh(features.roads, bbox, ground, TERRAIN_EXAGGERATION);
           }
+          if (features.landuse.length > 0) {
+            landcover = buildLandcoverMesh(features.landuse, bbox, ground, TERRAIN_EXAGGERATION);
+            if (landcover.classes.length === 0) landcover = undefined;
+          }
         } catch {
           buildings = undefined;
           roads = undefined;
+          landcover = undefined;
           featuresOk = false;
         }
         const ortho = await orthoPromise;
@@ -497,13 +509,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         roadCount = roads?.stats.roads ?? 0;
         featuresFailed = !featuresOk;
         orthoMeta = ortho?.meta ?? null;
-        lastScene = { mesh, buildings, roads, ortho: ortho?.bitmap, featuresFailed: !featuresOk };
+        lastScene = {
+          mesh,
+          buildings,
+          roads,
+          landcover,
+          ortho: ortho?.bitmap,
+          featuresFailed: !featuresOk,
+        };
         renderJobFlow();
         destroyViewer();
         try {
           viewer = createTerrainViewer(jobCanvas, mesh, {
             buildings,
             roads,
+            landcover,
             ortho: ortho?.bitmap,
           });
         } catch (error) {
@@ -750,6 +770,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         Boolean(lastScene?.buildings),
       ],
       [viewerLayerRoads, viewerLayerRoadsLabel, COPY.jobFlow.roadsLabel, Boolean(lastScene?.roads)],
+      [
+        viewerLayerLandcover,
+        viewerLayerLandcoverLabel,
+        COPY.jobFlow.landcoverLabel,
+        Boolean(lastScene?.landcover),
+      ],
     ] as const;
     for (const [input, label, name, available] of layers) {
       input.disabled = !available;
@@ -768,6 +794,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
         roads: lastScene.roads,
+        landcover: lastScene.landcover,
         ortho: lastScene.ortho,
         autoRotate: false,
         intro: true,
@@ -785,6 +812,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   });
   viewerLayerRoads.addEventListener('change', () => {
     fullViewer?.setLayerVisible('roads', viewerLayerRoads.checked);
+  });
+  viewerLayerLandcover.addEventListener('change', () => {
+    fullViewer?.setLayerVisible('landcover', viewerLayerLandcover.checked);
   });
   viewerIsometric.addEventListener('change', () => {
     fullViewer?.setProjection(viewerIsometric.checked ? 'isometric' : 'perspective');

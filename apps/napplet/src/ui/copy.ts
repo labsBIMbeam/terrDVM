@@ -180,6 +180,7 @@ export const COPY = {
     pixelLookLabel: 'Pixel look',
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
+    landcoverLabel: 'Land cover',
     layerMissing: (label: string): string => `${label} — none in view`,
     layerFailed: (label: string): string => `${label} — source did not answer`,
     sourceFailed: 'source did not answer',
