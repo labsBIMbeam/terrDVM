@@ -25,7 +25,8 @@ import {
 import { normalizeCharacter, parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
-import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
+import { extrudeFootprints, type BuildingMesh, type Footprint } from '../buildings/extrude';
+import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '../buildings/source-wien';
 import { fetchFeatures } from '../features/source-osm';
 import { buildLandcoverMesh, type LandcoverMesh } from '../features/landcover';
 import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '../features/ribbon';
@@ -210,6 +211,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <p class="job-body">${COPY.jobFlow.demoNote}</p>
         <p class="job-field-label">${COPY.jobFlow.demAttribution}</p>
         <p class="job-field-label" id="job-imagery-attribution" hidden></p>
+        <p class="job-field-label" id="job-buildings-attribution" hidden></p>
         <div class="job-actions">
           <button class="button button-primary button-wide" id="job-open-viewer" type="button">${COPY.jobFlow.viewerButton}</button>
           <button class="button button-wide" id="job-close" type="button">${COPY.jobFlow.closeButton}</button>
@@ -290,6 +292,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const jobRoads = root.querySelector<HTMLElement>('#job-roads');
   const jobOrtho = root.querySelector<HTMLElement>('#job-ortho');
   const jobImageryAttribution = root.querySelector<HTMLElement>('#job-imagery-attribution');
+  const jobBuildingsAttribution = root.querySelector<HTMLElement>('#job-buildings-attribution');
   const jobError = root.querySelector<HTMLElement>('#job-error');
   const jobStart = root.querySelector<HTMLButtonElement>('#job-start');
   const jobCancel = root.querySelector<HTMLButtonElement>('#job-cancel');
@@ -324,6 +327,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !jobArea || !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
       !jobProgress || !jobProgressFill || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
+      !jobBuildingsAttribution ||
       !jobError || !jobStart || !jobCancel || !jobClose || !jobCloseFailed || !jobRetry ||
       !jobOpenViewer || !viewerModal || !viewerCanvas || !viewerClose ||
       !viewerLayerOrtho || !viewerLayerBuildings || !viewerLayerRoads ||
@@ -372,6 +376,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let buildingCount = 0;
   let roadCount = 0;
   let featuresFailed = false;
+  let buildingsAttribution: string | null = null;
   let orthoMeta: OrthoMeta | null = null;
   // The generated scene, kept for the fullscreen viewer to remount.
   let lastScene: {
@@ -438,6 +443,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       jobImageryAttribution.textContent = orthoMeta
         ? COPY.jobFlow.imageryAttribution(orthoMeta.source.attribution)
         : '';
+      jobBuildingsAttribution.hidden = buildingsAttribution === null;
+      jobBuildingsAttribution.textContent = buildingsAttribution ?? '';
     }
 
     if (jobState.kind === 'FAILED') {
@@ -485,6 +492,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       signal: controller.signal,
     }).catch(() => null);
 
+    // Vienna's measured building-body model beats OSM storey guesses; any
+    // failure falls back to the OSM footprints from the feature fetch.
+    const wienPromise =
+      region.id === 'vienna'
+        ? fetchWienBuildings(bbox, { signal: controller.signal }).catch(() => null)
+        : Promise.resolve(null);
+
     generateTerrain(bbox, {
       signal: controller.signal,
       onProgress: (progress) => {
@@ -505,23 +519,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         let roads: RoadMesh | undefined;
         let landcover: LandcoverMesh | undefined;
         let waterways: RoadMesh | undefined;
+        let osmBuildings: Footprint[] = [];
         let featuresOk = true;
+        const ground = sampleTerrain(mesh);
         try {
           const features = await fetchFeatures(bbox, { signal: controller.signal });
-          const ground = sampleTerrain(mesh);
-          if (features.buildings.length > 0) {
-            // The ground sample comes from the exaggerated terrain, so building
-            // heights must take the same vertical scale or they sit squashed
-            // against the relief.
-            buildings = extrudeFootprints(
-              features.buildings.map((f) => ({
-                ...f,
-                heightM: f.heightM * TERRAIN_EXAGGERATION,
-              })),
-              bbox,
-              ground,
-            );
-          }
+          osmBuildings = features.buildings;
           if (features.roads.length > 0) {
             roads = buildRoadMesh(features.roads, bbox, ground, TERRAIN_EXAGGERATION);
           }
@@ -541,11 +544,27 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
             if (waterways.indices.length === 0) waterways = undefined;
           }
         } catch {
-          buildings = undefined;
           roads = undefined;
           landcover = undefined;
           waterways = undefined;
           featuresOk = false;
+        }
+
+        // Vienna's measured building bodies stand on their own: an Overpass
+        // outage must not cost the better source, and vice versa.
+        const wienFootprints = await wienPromise;
+        const fromWien = Boolean(wienFootprints && wienFootprints.length > 0);
+        buildingsAttribution = fromWien ? WIEN_BUILDINGS_ATTRIBUTION : null;
+        const footprints = fromWien ? wienFootprints! : osmBuildings;
+        if (footprints.length > 0) {
+          // The ground sample comes from the exaggerated terrain, so building
+          // heights must take the same vertical scale or they sit squashed
+          // against the relief.
+          buildings = extrudeFootprints(
+            footprints.map((f) => ({ ...f, heightM: f.heightM * TERRAIN_EXAGGERATION })),
+            bbox,
+            ground,
+          );
         }
         if (!controller.signal.aborted) setGenProgress(0.95, COPY.jobFlow.progressOrtho, true);
         const ortho = await orthoPromise;

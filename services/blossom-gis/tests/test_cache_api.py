@@ -140,3 +140,30 @@ class TestCharacterManifest:
                 assert client.get("/characters").json() == []
         finally:
             app_module.app.dependency_overrides.clear()
+
+
+class TestWfsProxy:
+    def test_fetches_registered_source_and_caches(self, cache_client) -> None:
+        client, calls = cache_client
+
+        def wfs_fetch(url: str, timeout_s: float) -> bytes:
+            calls.append(url)
+            return b'{"type":"FeatureCollection","features":[]}'
+
+        app_module.app.dependency_overrides[app_module.upstream_fetch] = lambda: wfs_fetch
+        params = {"src": "vienna-bkm", "bbox": "16.355,48.195,16.385,48.215"}
+        first = client.get("/wfs", params=params)
+        second = client.get("/wfs", params=params)
+        assert first.status_code == 200
+        assert first.headers["x-wfs-attribution"].startswith("Datenquelle: Stadt Wien")
+        assert first.content == second.content
+        assert len(calls) == 1
+        assert "FMZKBKMOGD" in calls[0]
+        assert "data.wien.gv.at" in calls[0]
+
+    def test_unknown_source_is_404_not_an_open_proxy(self, cache_client) -> None:
+        client, _ = cache_client
+        response = client.get(
+            "/wfs", params={"src": "evil", "bbox": "16.35,48.19,16.38,48.21"}
+        )
+        assert response.status_code == 404

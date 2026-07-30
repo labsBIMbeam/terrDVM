@@ -795,10 +795,11 @@ export function createTerrainViewer(
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (walkMode) return; // the canvas click locks the pointer instead
+    // In walk mode dragging steers the look — pointer lock is only an
+    // enhancement, since iframes and embedded panes routinely deny it.
     dragging = true;
     autoRotate = false;
-    cancelIntro();
+    if (!walkMode) cancelIntro();
     lastX = event.clientX;
     lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
@@ -806,6 +807,13 @@ export function createTerrainViewer(
 
   const onPointerMove = (event: PointerEvent): void => {
     if (!dragging) return;
+    if (walkMode) {
+      walkYaw += (event.clientX - lastX) * 0.005;
+      walkPitch = Math.min(1.35, Math.max(-1.35, walkPitch - (event.clientY - lastY) * 0.004));
+      lastX = event.clientX;
+      lastY = event.clientY;
+      return;
+    }
     yaw -= (event.clientX - lastX) * 0.008;
     // The dimetric angle is the whole point of the isometric mode, so only
     // yaw responds to drag there.

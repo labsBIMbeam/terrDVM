@@ -579,6 +579,69 @@ every bake as a sidecar file.</footer>
     return HTMLResponse(page)
 
 
+# --- Cached WFS proxy ---------------------------------------------------------
+
+#: Registered WFS sources — pinned, never an open proxy. Vienna's building-body
+#: model carries measured top/terrain elevations per building part, which is a
+#: different league from OSM's storey guesses.
+WFS_SOURCES: dict[str, dict[str, str]] = {
+    "vienna-bkm": {
+        "url": "https://data.wien.gv.at/daten/geo",
+        "typename": "ogdwien:FMZKBKMOGD",
+        "license": "CC-BY-4.0 (Open Government Data Wien)",
+        # ASCII only: this string travels as an HTTP header (latin-1).
+        "attribution": "Datenquelle: Stadt Wien - data.wien.gv.at",
+    },
+}
+
+
+@app.get("/wfs")
+def wfs_cached(
+    src: str,
+    bbox: str,
+    directory: Annotated[Path, Depends(cache_dir)] = None,  # type: ignore[assignment]
+    fetch: Annotated[object, Depends(upstream_fetch)] = None,  # type: ignore[assignment]
+) -> Response:
+    """Cached GetFeature for a registered WFS source, EPSG:4326 in and out."""
+    import hashlib
+    import urllib.parse
+
+    source = WFS_SOURCES.get(src)
+    if source is None:
+        raise HTTPException(404, f"unknown wfs source: {src}")
+    box = _parse_texture_request("europe", bbox, 0.25)  # reuse bbox + area validation
+
+    key = hashlib.sha256(f"{src}|{bbox}".encode()).hexdigest()[:16]
+    path = directory / "wfs" / f"{key}.json"
+    if not path.exists():
+        query = urllib.parse.urlencode(
+            {
+                "service": "WFS",
+                "request": "GetFeature",
+                "version": "2.0.0",
+                "typeNames": source["typename"],
+                "outputFormat": "application/json",
+                "srsName": "urn:ogc:def:crs:EPSG::4326",
+                "bbox": f"{box.south},{box.west},{box.north},{box.east},"
+                "urn:ogc:def:crs:EPSG::4326",
+                "count": "20000",
+            }
+        )
+        try:
+            payload = fetch(f"{source['url']}?{query}", 60)
+        except Exception as exc:  # noqa: BLE001 — surface as a named upstream failure
+            raise HTTPException(502, f"wfs fetch failed: {exc}") from exc
+        _cache_write(path, payload)
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/json",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "X-Wfs-Attribution": source["attribution"],
+        },
+    )
+
+
 # --- Character manifest -------------------------------------------------------
 
 
