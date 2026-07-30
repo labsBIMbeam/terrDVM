@@ -88,6 +88,36 @@ const VIENNA_COVERAGE: Bounds = {
   north: 48.33,
 };
 
+/** A continent as a map-only region: place nostr events anywhere on it. */
+function continent(
+  id: string,
+  name: string,
+  code: string,
+  bounds: Bounds,
+  center: [number, number],
+  zoom: number,
+): Region {
+  const padded = pad(bounds, 2);
+  return {
+    id,
+    name,
+    country: code,
+    coverage: bounds,
+    // Stay inside the world: a padded continent must not cross the poles
+    // or the antimeridian.
+    viewBounds: {
+      west: Math.max(-180, padded.west),
+      south: Math.max(-85, padded.south),
+      east: Math.min(180, padded.east),
+      north: Math.min(85, padded.north),
+    },
+    center,
+    zoom,
+    minZoom: 2,
+    services: [],
+  };
+}
+
 export const REGIONS: Record<string, Region> = {
   europe: {
     id: 'europe',
@@ -100,6 +130,16 @@ export const REGIONS: Record<string, Region> = {
     minZoom: 3,
     services: [],
   },
+  africa: continent('africa', 'Africa', 'AF',
+    { west: -20, south: -36, east: 52, north: 38 }, [17, 2], 3),
+  asia: continent('asia', 'Asia', 'AS',
+    { west: 25, south: -12, east: 179, north: 77 }, [95, 35], 3),
+  'north-america': continent('north-america', 'North America', 'NA',
+    { west: -169, south: 5, east: -50, north: 74 }, [-100, 45], 3),
+  'south-america': continent('south-america', 'South America', 'SA',
+    { west: -85, south: -57, east: -33, north: 13 }, [-60, -20], 3),
+  oceania: continent('oceania', 'Oceania', 'OC',
+    { west: 110, south: -50, east: 179, north: 1 }, [145, -27], 3),
   madeira: {
     id: 'madeira',
     name: 'Madeira',

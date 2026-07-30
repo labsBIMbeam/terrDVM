@@ -316,6 +316,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
             <input class="globe-search" id="globe-search" type="search"
               placeholder="${COPY.globe.searchPlaceholder}" autocomplete="off" spellcheck="false" />
           </form>
+          <p class="globe-hint">${COPY.globe.continentsHint}</p>
+          <div class="globe-continents" id="globe-continents">
+            ${['europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania']
+              .map((id) => `<button class="button" type="button" data-region="${id}">
+                ${id.replace('-', ' ').toUpperCase()}</button>`)
+              .join('')}
+          </div>
           <pre class="globe-log" id="globe-log">${COPY.globe.booting}</pre>
         </aside>
       </div>
@@ -1128,6 +1135,16 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   globeButton.addEventListener('click', openGlobe);
   globeClose.addEventListener('click', () => {
     globeConsole.hidden = true;
+  });
+  // Continent buttons: map-only regions where placing nostr events is the
+  // whole point — presence anywhere, generation stays with the curated
+  // regions.
+  root.querySelector('#globe-continents')?.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+      'button[data-region]',
+    );
+    if (!target) return;
+    window.location.assign(`?region=${target.dataset.region}`);
   });
   globeSearchForm.addEventListener('submit', (event) => {
     event.preventDefault();
