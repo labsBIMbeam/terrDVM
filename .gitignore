@@ -58,3 +58,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Blender working files are rebuilt by tooling/blender scripts; too big for git.
+art/blender/*.blend
+art/blender/*.blend1
+!art/characters/**/*.png
+!art/characters/**/*.glb
+!art/brand/*.png
+!docs/demo/secrab-ring/secrab_ring_f*.png
