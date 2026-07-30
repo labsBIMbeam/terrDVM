@@ -60,6 +60,17 @@ def main(argv: list[str] | None = None) -> int:
         help="store the deterministic demo character in the blob store, print its hash",
     )
 
+    mirror = sub.add_parser(
+        "mirror",
+        help="pull a content-addressed blob from another blossom server, verify its hash",
+    )
+    mirror.add_argument("--url", required=True, help="blossom URL ending in the sha256")
+    mirror.add_argument(
+        "--character",
+        default="",
+        help="also register the blob under this name in characters.json",
+    )
+
     for name in ("seed", "run", "status", "coverage"):
         p = sub.add_parser(name)
         p.add_argument("--region", required=True, choices=sorted(REGIONS))
@@ -104,6 +115,52 @@ def main(argv: list[str] | None = None) -> int:
         index.close()
         print(f"character blob: {stored.sha256} ({stored.size:,} bytes)")
         print(f"fetch as: /{stored.sha256}.glb")
+        return 0
+
+    if args.command == "mirror":
+        import hashlib
+        import json
+        import time
+        import urllib.request
+
+        expected = args.url.rsplit("/", 1)[-1].split(".", 1)[0]
+        request = urllib.request.Request(
+            args.url, headers={"User-Agent": "terrDVM-mirror/0.1"}
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            payload = response.read()
+        digest = hashlib.sha256(payload).hexdigest()
+        if digest != expected:
+            print(f"REFUSED: content hash {digest} does not match the URL ({expected})")
+            return 1
+
+        is_glb = payload[:4] == b"glTF"
+        stored = BlobStore(blob_dir).put(payload)
+        index = BlobIndex(index_path)
+        index.upsert(
+            BlobRecord(
+                sha256=stored.sha256,
+                size=stored.size,
+                media_type="model/gltf-binary" if is_glb else "application/octet-stream",
+                uploaded_by="cli:mirror",
+                uploaded_at=int(time.time()),
+                tile_z=None,
+                tile_x=None,
+                tile_y=None,
+                **geo_fields(None),
+            )
+        )
+        index.close()
+        print(f"mirrored {stored.sha256} ({stored.size:,} bytes)")
+
+        if args.character:
+            manifest_path = blob_dir.parent / "characters.json"
+            manifest = {}
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest[args.character] = {"sha256": stored.sha256, "size": stored.size}
+            manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+            print(f"registered as character: {args.character}")
         return 0
 
     queue = CrawlQueue(queue_path)

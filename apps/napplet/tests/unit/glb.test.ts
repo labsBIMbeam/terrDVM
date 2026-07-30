@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseGlb } from '../../src/viewer/glb';
+import { normalizeCharacter, parseGlb } from '../../src/viewer/glb';
 
 /** Build a minimal valid GLB: one triangle, u16 indices, a translated node. */
 function makeGlb({ withNormals = false, translation = [0, 0, 0] } = {}): ArrayBuffer {
@@ -91,5 +91,32 @@ describe('glb parser', () => {
   it('fails closed on junk', () => {
     expect(() => parseGlb(new ArrayBuffer(8))).toThrow(/binary glTF/);
     expect(() => parseGlb(new TextEncoder().encode('not a glb').buffer as ArrayBuffer)).toThrow();
+  });
+});
+
+describe('normalizeCharacter', () => {
+  it('scales any model to walker height with feet on the ground', () => {
+    const mesh = {
+      positions: new Float32Array([100, 50, 100, 100, 250, 100, 300, 50, 100]),
+      normals: new Float32Array(9),
+      indices: new Uint32Array([0, 1, 2]),
+    };
+    normalizeCharacter(mesh, 1.75);
+    const ys = [mesh.positions[1], mesh.positions[4], mesh.positions[7]];
+    expect(Math.min(...ys)).toBeCloseTo(0);
+    expect(Math.max(...ys)).toBeCloseTo(1.75);
+    // Centred: x extents symmetric around the origin.
+    const xs = [mesh.positions[0], mesh.positions[3], mesh.positions[6]];
+    expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(0);
+  });
+
+  it('leaves a degenerate mesh alone', () => {
+    const mesh = {
+      positions: new Float32Array([1, 2, 3]),
+      normals: new Float32Array(3),
+      indices: new Uint32Array([0]),
+    };
+    normalizeCharacter(mesh);
+    expect(mesh.positions[1]).toBe(2);
   });
 });

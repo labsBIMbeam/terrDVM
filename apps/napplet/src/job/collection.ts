@@ -81,14 +81,45 @@ export function isApprovedCharacterUrl(candidate: string): boolean {
   );
 }
 
-/** Fetch the character blob; a missing blob is a normal, named failure. */
-export async function fetchCharacterBytes(signal?: AbortSignal): Promise<ArrayBuffer> {
-  const blob = await loadApprovedBytes(characterUrl(), {
-    deadlineMs: 15_000,
+/** Fetch a character blob by hash; a missing blob is a normal, named failure. */
+export async function fetchCharacterBytes(
+  sha256: string = CHARACTER_SHA,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> {
+  const blob = await loadApprovedBytes(`${COLLECTION_SERVICE.baseUrl}/${sha256}.glb`, {
+    // The lore avatars run to ~14 MB; a local fetch still finishes in a blink.
+    deadlineMs: 30_000,
     isAllowed: isApprovedCharacterUrl,
     signal,
   });
   return blob.arrayBuffer();
+}
+
+export type CharacterEntry = { name: string; sha256: string; size: number };
+
+export function isApprovedCharactersManifestUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  return url.origin === collectionOrigin() && url.pathname === '/characters' && !url.search;
+}
+
+/** Named avatars the collection server holds — name → content hash. */
+export async function fetchCharacterManifest(signal?: AbortSignal): Promise<CharacterEntry[]> {
+  const blob = await loadApprovedBytes(`${COLLECTION_SERVICE.baseUrl}/characters`, {
+    deadlineMs: 15_000,
+    isAllowed: isApprovedCharactersManifestUrl,
+    signal,
+  });
+  const parsed = JSON.parse(await blob.text());
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (entry): entry is CharacterEntry =>
+      typeof entry?.name === 'string' && /^[0-9a-f]{64}$/.test(entry?.sha256 ?? ''),
+  );
 }
 
 /**

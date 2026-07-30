@@ -210,12 +210,16 @@ export type TerrainViewer = {
   setPixelLook: (on: boolean) => void;
   /** First-person walk: WASD moves, click locks the pointer, mouse looks. */
   setWalkMode: (on: boolean) => void;
-  /** Give the walker a body: a static mesh in metres, Y-up, facing -Z. */
+  /**
+   * Give the walker a body: a static mesh in metres, Y-up, facing -Z.
+   * Null removes it. With a body, walking is third person — you see the
+   * avatar walk; without one, first person.
+   */
   setCharacter: (mesh: {
     positions: Float32Array;
     normals: Float32Array;
     indices: Uint32Array;
-  }) => void;
+  } | null) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -611,15 +615,35 @@ export function createTerrainViewer(
       walkX = Math.min(limitX, Math.max(-limitX, walkX));
       walkZ = Math.min(limitZ, Math.max(-limitZ, walkZ));
 
-      const eyeY = groundAt(walkX, walkZ) + WALK_EYE_UNITS;
-      const lookX = Math.sin(walkYaw) * Math.cos(walkPitch);
-      const lookY = Math.sin(walkPitch);
-      const lookZ = -Math.cos(walkYaw) * Math.cos(walkPitch);
-      walkView = lookAt(
-        [walkX, eyeY, walkZ],
-        [walkX + lookX, eyeY + lookY, walkZ + lookZ],
-        [0, 1, 0],
-      );
+      const groundY = groundAt(walkX, walkZ);
+      const lookXh = Math.sin(walkYaw);
+      const lookZh = -Math.cos(walkYaw);
+      if (character) {
+        // Third person: the camera hangs behind and above the avatar, so you
+        // see the body walk. Mouse pitch tilts the boom.
+        const back = 5.0 * scale * Math.cos(walkPitch * 0.6);
+        const up = (2.6 - Math.sin(walkPitch) * 2.2) * 1.5 * scale;
+        const eyeYRaw = groundY + up;
+        const eyeX = walkX - lookXh * back;
+        const eyeZ = walkZ - lookZh * back;
+        const eyeYMin = groundAt(eyeX, eyeZ) + 0.6 * 1.5 * scale;
+        walkView = lookAt(
+          [eyeX, Math.max(eyeYRaw, eyeYMin), eyeZ],
+          [walkX, groundY + 1.3 * 1.5 * scale, walkZ],
+          [0, 1, 0],
+        );
+      } else {
+        // First person: no body loaded, the camera is the walker.
+        const eyeY = groundY + WALK_EYE_UNITS;
+        const lookX = lookXh * Math.cos(walkPitch);
+        const lookY = Math.sin(walkPitch);
+        const lookZ = lookZh * Math.cos(walkPitch);
+        walkView = lookAt(
+          [walkX, eyeY, walkZ],
+          [walkX + lookX, eyeY + lookY, walkZ + lookZ],
+          [0, 1, 0],
+        );
+      }
     }
 
     let flightView: Mat4 | null = null;
@@ -757,9 +781,10 @@ export function createTerrainViewer(
       gl.uniform1f(uTexturedStructure, 0);
     }
 
-    // The avatar stands where the walker last stood — visible from orbit and
-    // isometric views, never from inside its own head.
-    if (character && walkTouched && !walkMode) {
+    // The avatar walks in third person and stays standing where the walker
+    // left it, visible from orbit and isometric views. With no body loaded
+    // the walk is first person, so there is nothing to draw.
+    if (character && walkTouched) {
       const cosYaw = Math.cos(-walkYaw);
       const sinYaw = Math.sin(-walkYaw);
       const groundY = groundAt(walkX, walkZ);
@@ -872,8 +897,15 @@ export function createTerrainViewer(
       }
     },
     setCharacter: (characterMesh) => {
-      if (destroyed || character) return;
-      character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
+      if (destroyed) return;
+      if (character) {
+        for (const buffer of character.buffers) gl.deleteBuffer(buffer);
+        gl.deleteVertexArray(character.vao);
+        character = null;
+      }
+      if (characterMesh) {
+        character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
+      }
     },
     exportImage: async (): Promise<Blob | null> => {
       if (destroyed) return null;

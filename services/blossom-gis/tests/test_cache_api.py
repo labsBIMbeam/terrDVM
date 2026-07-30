@@ -110,3 +110,33 @@ class TestDashboard:
         assert "state — IGN France" in page
         assert "commercial — Esri Inc." in page
         assert "Europe coverage" in page
+
+
+class TestCharacterManifest:
+    def test_serves_named_avatars_from_the_manifest(self, tmp_path: Path) -> None:
+        manifest = tmp_path / "characters.json"
+        manifest.write_text(
+            '{"flx600": {"sha256": "'
+            + "a" * 64
+            + '", "size": 11636080}, "junk": {"sha256": "not-a-hash"}}',
+            encoding="utf-8",
+        )
+        app_module.app.dependency_overrides[app_module.characters_manifest_path] = (
+            lambda: manifest
+        )
+        try:
+            with TestClient(app_module.app) as client:
+                entries = client.get("/characters").json()
+            assert entries == [{"name": "flx600", "sha256": "a" * 64, "size": 11636080}]
+        finally:
+            app_module.app.dependency_overrides.clear()
+
+    def test_missing_manifest_is_an_empty_list(self, tmp_path: Path) -> None:
+        app_module.app.dependency_overrides[app_module.characters_manifest_path] = (
+            lambda: tmp_path / "absent.json"
+        )
+        try:
+            with TestClient(app_module.app) as client:
+                assert client.get("/characters").json() == []
+        finally:
+            app_module.app.dependency_overrides.clear()

@@ -89,6 +89,42 @@ function nodeMatrix(node: NonNullable<GltfJson['nodes']>[number]): Mat {
   ]);
 }
 
+/**
+ * Normalise an arbitrary character model into the walker's frame: feet at
+ * y = 0, centred on the origin, scaled to `targetHeightM`. Models arrive in
+ * whatever units and origin their author chose; the walker needs 1.75 m of
+ * human.
+ */
+export function normalizeCharacter(mesh: GlbMesh, targetHeightM = 1.75): GlbMesh {
+  const { positions } = mesh;
+  if (positions.length === 0) return mesh;
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    minX = Math.min(minX, positions[i]);
+    maxX = Math.max(maxX, positions[i]);
+    minY = Math.min(minY, positions[i + 1]);
+    maxY = Math.max(maxY, positions[i + 1]);
+    minZ = Math.min(minZ, positions[i + 2]);
+    maxZ = Math.max(maxZ, positions[i + 2]);
+  }
+  const height = maxY - minY;
+  if (!(height > 0)) return mesh;
+  const factor = targetHeightM / height;
+  const centreX = (minX + maxX) / 2;
+  const centreZ = (minZ + maxZ) / 2;
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] = (positions[i] - centreX) * factor;
+    positions[i + 1] = (positions[i + 1] - minY) * factor;
+    positions[i + 2] = (positions[i + 2] - centreZ) * factor;
+  }
+  return mesh;
+}
+
 export function parseGlb(buffer: ArrayBuffer): GlbMesh {
   const view = new DataView(buffer);
   if (buffer.byteLength < 20 || view.getUint32(0, true) !== MAGIC) {
@@ -114,30 +150,59 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
   }
   if (!json) throw new Error('GLB is missing its JSON chunk.');
 
+  const COMPONENT_BYTES: Record<number, number> = { 5121: 1, 5123: 2, 5125: 4, 5126: 4 };
+
   const readAccessor = (index: number): { data: Float32Array | Uint32Array; type: string } => {
     const accessor = json?.accessors?.[index];
     if (!accessor) throw new Error(`Accessor ${index} is missing.`);
     const bufferView = json?.bufferViews?.[accessor.bufferView ?? -1];
     if (!bufferView || !bin) throw new Error('Accessor points outside the binary chunk.');
-    if (bufferView.byteStride) throw new Error('Interleaved buffer views are not supported.');
     const componentCount = accessor.type === 'VEC3' ? 3 : accessor.type === 'VEC2' ? 2 : 1;
-    const start = bin.byteOffset + (bufferView.byteOffset ?? 0) + 0;
+    const componentBytes = COMPONENT_BYTES[accessor.componentType];
+    if (!componentBytes) {
+      throw new Error(`Unsupported accessor component type ${accessor.componentType}.`);
+    }
+    const start = bin.byteOffset + (bufferView.byteOffset ?? 0);
     const elementCount = accessor.count * componentCount;
-    if (accessor.componentType === 5126) {
-      return { data: new Float32Array(bin.buffer, start, elementCount), type: accessor.type };
-    }
-    if (accessor.componentType === 5123) {
-      const raw = new Uint16Array(bin.buffer, start, elementCount);
-      return { data: Uint32Array.from(raw), type: accessor.type };
-    }
-    if (accessor.componentType === 5125) {
-      return { data: new Uint32Array(bin.buffer, start, elementCount), type: accessor.type };
-    }
-    if (accessor.componentType === 5121) {
+    const tightStride = componentCount * componentBytes;
+    const stride = bufferView.byteStride ?? tightStride;
+
+    if (stride === tightStride) {
+      if (accessor.componentType === 5126) {
+        return { data: new Float32Array(bin.buffer, start, elementCount), type: accessor.type };
+      }
+      if (accessor.componentType === 5123) {
+        const raw = new Uint16Array(bin.buffer, start, elementCount);
+        return { data: Uint32Array.from(raw), type: accessor.type };
+      }
+      if (accessor.componentType === 5125) {
+        return { data: new Uint32Array(bin.buffer, start, elementCount), type: accessor.type };
+      }
       const raw = new Uint8Array(bin.buffer, start, elementCount);
       return { data: Uint32Array.from(raw), type: accessor.type };
     }
-    throw new Error(`Unsupported accessor component type ${accessor.componentType}.`);
+
+    // Interleaved buffer view: copy element-wise through a DataView.
+    const view = new DataView(bin.buffer);
+    const out =
+      accessor.componentType === 5126
+        ? new Float32Array(elementCount)
+        : new Uint32Array(elementCount);
+    for (let element = 0; element < accessor.count; element += 1) {
+      const elementStart = start + element * stride;
+      for (let component = 0; component < componentCount; component += 1) {
+        const at = elementStart + component * componentBytes;
+        out[element * componentCount + component] =
+          accessor.componentType === 5126
+            ? view.getFloat32(at, true)
+            : accessor.componentType === 5125
+              ? view.getUint32(at, true)
+              : accessor.componentType === 5123
+                ? view.getUint16(at, true)
+                : view.getUint8(at);
+      }
+    }
+    return { data: out, type: accessor.type };
   };
 
   const positions: number[] = [];

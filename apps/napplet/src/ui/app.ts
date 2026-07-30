@@ -17,8 +17,12 @@ import {
 } from '../job/job-flow';
 import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '../job/ortho';
 import { demResolution, runPreflight } from '../job/preflight';
-import { fetchCharacterBytes } from '../job/collection';
-import { parseGlb } from '../viewer/glb';
+import {
+  fetchCharacterBytes,
+  fetchCharacterManifest,
+  type CharacterEntry,
+} from '../job/collection';
+import { normalizeCharacter, parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
@@ -232,6 +236,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <label><input type="checkbox" id="viewer-isometric" /><span>${COPY.jobFlow.isometricLabel}</span></label>
         <label><input type="checkbox" id="viewer-pixel" /><span>${COPY.jobFlow.pixelLookLabel}</span></label>
         <label><input type="checkbox" id="viewer-walk" /><span>${COPY.jobFlow.walkLabel}</span></label>
+        <label class="viewer-avatar-row"><span>${COPY.jobFlow.avatarLabel}</span>
+          <select id="viewer-avatar">
+            <option value="">${COPY.jobFlow.avatarNone}</option>
+            <option value="builtin">${COPY.jobFlow.avatarBuiltin}</option>
+          </select>
+        </label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
@@ -301,6 +311,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerIsometric = root.querySelector<HTMLInputElement>('#viewer-isometric');
   const viewerPixel = root.querySelector<HTMLInputElement>('#viewer-pixel');
   const viewerWalk = root.querySelector<HTMLInputElement>('#viewer-walk');
+  const viewerAvatar = root.querySelector<HTMLSelectElement>('#viewer-avatar');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
@@ -319,7 +330,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
-      !viewerIsometric || !viewerPixel || !viewerWalk || !viewerExport) {
+      !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -839,6 +850,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     viewerIsometric.checked = false;
     viewerPixel.checked = false;
     viewerWalk.checked = false;
+    viewerAvatar.value = '';
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -849,15 +861,45 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         autoRotate: false,
         intro: true,
       });
-      // The walker's body, fetched by content hash from the collection
-      // server. Absence is normal — the walk works without a visible avatar.
-      void fetchCharacterBytes()
-        .then((bytes) => fullViewer?.setCharacter(parseGlb(bytes)))
-        .catch(() => undefined);
+      void populateAvatarChoices();
     } catch (error) {
       closeFullViewer();
       announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
     }
+  });
+
+  // Named avatars the collection server holds; fetched once per session.
+  let avatarManifest: CharacterEntry[] | null = null;
+  const populateAvatarChoices = async (): Promise<void> => {
+    if (avatarManifest === null) {
+      avatarManifest = await fetchCharacterManifest().catch(() => []);
+    }
+    for (const entry of avatarManifest) {
+      if (viewerAvatar.querySelector(`option[value="${entry.sha256}"]`)) continue;
+      const option = document.createElement('option');
+      option.value = entry.sha256;
+      option.textContent = entry.name;
+      viewerAvatar.append(option);
+    }
+  };
+
+  viewerAvatar.addEventListener('change', () => {
+    const choice = viewerAvatar.value;
+    if (!choice) {
+      fullViewer?.setCharacter(null);
+      return;
+    }
+    const label = viewerAvatar.selectedOptions[0]?.textContent ?? choice;
+    void fetchCharacterBytes(choice === 'builtin' ? undefined : choice)
+      .then((bytes) => {
+        fullViewer?.setCharacter(normalizeCharacter(parseGlb(bytes)));
+      })
+      .catch(() => {
+        // Draco-compressed or missing models fail closed with a name.
+        announce(COPY.jobFlow.avatarFailed(label));
+        viewerAvatar.value = '';
+        fullViewer?.setCharacter(null);
+      });
   });
   viewerLayerOrtho.addEventListener('change', () => {
     fullViewer?.setLayerVisible('ortho', viewerLayerOrtho.checked);

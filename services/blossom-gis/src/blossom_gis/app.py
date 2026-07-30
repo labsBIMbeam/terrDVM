@@ -579,6 +579,38 @@ every bake as a sidecar file.</footer>
     return HTMLResponse(page)
 
 
+# --- Character manifest -------------------------------------------------------
+
+
+def characters_manifest_path() -> Path:
+    return DATA_DIR / "characters.json"
+
+
+@app.get("/characters")
+def characters(
+    manifest_path: Annotated[Path, Depends(characters_manifest_path)] = None,  # type: ignore[assignment]
+) -> JSONResponse:
+    """Named avatars in the local store: name → content hash.
+
+    The blobs are ordinary content-addressed entries (mirrored with the
+    `mirror` CLI command); this manifest is the only name→hash mapping.
+    """
+    import json
+
+    if not manifest_path.is_file():
+        return JSONResponse([])
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return JSONResponse([])
+    entries = [
+        {"name": name, "sha256": entry["sha256"], "size": entry.get("size", 0)}
+        for name, entry in sorted(manifest.items())
+        if isinstance(entry, dict) and is_valid_sha256(str(entry.get("sha256", "")))
+    ]
+    return JSONResponse(entries)
+
+
 # --- Orthophoto textures -----------------------------------------------------
 #
 # The corpus stays tile-shaped for deduplication; a texture is a per-delivery
