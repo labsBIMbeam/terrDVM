@@ -186,3 +186,20 @@ describe('waterway ribbons', () => {
     expect(0.8).toBeLessThan(ROAD_DRAPE_OFFSET_M);
   });
 });
+
+describe('prewarm cache-key contract', () => {
+  it('pins the exact query string the server-side prewarmer mirrors', () => {
+    // The same string is pinned in services/blossom-gis/tests/test_prewarm.py.
+    // If either side changes, both pins fail and the contract is renegotiated.
+    const ring: BBox4326 = [16.355, 48.195, 16.385, 48.215];
+    expect(featuresQuery(ring, 6000)).toBe(
+      '[out:json][timeout:25];(' +
+        'way["building"](48.195,16.355,48.215,16.385);' +
+        'way["highway"](48.195,16.355,48.215,16.385);' +
+        'way["waterway"](48.195,16.355,48.215,16.385);' +
+        'way["landuse"](48.195,16.355,48.215,16.385);' +
+        'way["natural"](48.195,16.355,48.215,16.385);' +
+        ');out geom 6000;',
+    );
+  });
+});

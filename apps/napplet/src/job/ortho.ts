@@ -126,20 +126,24 @@ export async function fetchOrthoTexture(
   bbox: BBox4326,
   { signal }: { signal?: AbortSignal } = {},
 ): Promise<OrthoTexture> {
-  const options = {
-    deadlineMs: ORTHO_SERVICE.timeoutMs,
-    isAllowed: isApprovedOrthoUrl,
-    signal,
+  const attempt = async (deadlineMs: number): Promise<OrthoTexture> => {
+    const options = { deadlineMs, isAllowed: isApprovedOrthoUrl, signal };
+    const metaBlob = await loadApprovedBytes(orthoMetaUrl(region, bbox), options);
+    const meta = parseOrthoMeta(JSON.parse(await metaBlob.text()));
+    const imageBlob = await loadApprovedBytes(orthoImageUrl(region, bbox), options);
+    if (imageBlob.size > ORTHO_SERVICE.maxResponseBytes) {
+      throw new Error('Orthophoto exceeded the approved response-size bound.');
+    }
+    return { bitmap: await createImageBitmap(imageBlob), meta };
   };
 
-  const metaBlob = await loadApprovedBytes(orthoMetaUrl(region, bbox), options);
-  const meta = parseOrthoMeta(JSON.parse(await metaBlob.text()));
-
-  const imageBlob = await loadApprovedBytes(orthoImageUrl(region, bbox), options);
-  if (imageBlob.size > ORTHO_SERVICE.maxResponseBytes) {
-    throw new Error('Orthophoto exceeded the approved response-size bound.');
+  try {
+    return await attempt(ORTHO_SERVICE.timeoutMs);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // The server keeps baking after the client stops waiting; a short-fuse
+    // second attempt collects the finished bake from disk.
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    return attempt(60_000);
   }
-
-  const bitmap = await createImageBitmap(imageBlob);
-  return { bitmap, meta };
 }

@@ -210,6 +210,8 @@ export type TerrainViewer = {
   setPixelLook: (on: boolean) => void;
   /** First-person walk: WASD moves, click locks the pointer, mouse looks. */
   setWalkMode: (on: boolean) => void;
+  /** Where the walker stands, in local metres — null before any walk. */
+  getWalkPosition: () => { x: number; z: number; headingRad: number } | null;
   /**
    * Give the walker a body: a static mesh in metres, Y-up, facing -Z.
    * Null removes it. With a body, walking is third person — you see the
@@ -971,6 +973,11 @@ export function createTerrainViewer(
         keysDown.clear();
         if (document.pointerLockElement === canvas) document.exitPointerLock();
       }
+    },
+    getWalkPosition: () => {
+      if (!walkTouched) return null;
+      // Positions are scaled model units; hand back true metres.
+      return { x: walkX / scale, z: walkZ / scale, headingRad: walkYaw };
     },
     setCharacter: (characterMesh) => {
       if (destroyed) return;

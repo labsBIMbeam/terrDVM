@@ -60,6 +60,17 @@ def main(argv: list[str] | None = None) -> int:
         help="store the deterministic demo character in the blob store, print its hash",
     )
 
+    prewarm = sub.add_parser(
+        "prewarm",
+        help="warm every cache the demo selections touch, via the running server",
+    )
+    prewarm.add_argument(
+        "--selection",
+        default="all",
+        help="named demo selection, or 'all'",
+    )
+    prewarm.add_argument("--base-url", default="http://127.0.0.1:8787")
+
     place = sub.add_parser(
         "place",
         help="anchor a named character in the terrain at lon,lat",
@@ -124,6 +135,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"character blob: {stored.sha256} ({stored.size:,} bytes)")
         print(f"fetch as: /{stored.sha256}.glb")
         return 0
+
+    if args.command == "prewarm":
+        from .prewarm import DEMO_SELECTIONS, prewarm_selection
+
+        wanted = (
+            DEMO_SELECTIONS
+            if args.selection == "all"
+            else {args.selection: DEMO_SELECTIONS[args.selection]}
+        )
+        failures = 0
+        for name, (region, box) in wanted.items():
+            print(f"{name} ({region}):")
+            results = prewarm_selection(args.base_url, region, box)
+            failures += sum(1 for value in results.values() if value.startswith("FAILED"))
+        print("prewarm complete" + (f" — {failures} FAILURES" if failures else " — all warm"))
+        return 1 if failures else 0
 
     if args.command == "place":
         import json

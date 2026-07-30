@@ -189,6 +189,8 @@ export const COPY = {
     crabButton: 'Spawn crab',
     crabRemoveButton: 'Remove crab',
     placeButton: 'Place avatar',
+    placeHereButton: 'Place avatar here',
+    placeHereHint: 'Walk somewhere first — your standing spot becomes the placement.',
     placeHint: 'Click the map to choose where the avatar stands.',
     placeTitle: 'Publish placement',
     placePublish: 'Sign & publish',

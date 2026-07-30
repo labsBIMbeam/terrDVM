@@ -270,6 +270,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         </label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
         <button class="button" id="viewer-crab" type="button">${COPY.jobFlow.crabButton}</button>
+        <button class="button" id="viewer-place-here" type="button">${COPY.jobFlow.placeHereButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
@@ -342,6 +343,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerAvatar = root.querySelector<HTMLSelectElement>('#viewer-avatar');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const viewerCrab = root.querySelector<HTMLButtonElement>('#viewer-crab');
+  const viewerPlaceHere = root.querySelector<HTMLButtonElement>('#viewer-place-here');
   const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
   const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
@@ -369,7 +371,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
-      !viewerCrab || !placeButton || !placeModal || !placeCharacter || !placePosition ||
+      !viewerCrab || !viewerPlaceHere || !placeButton || !placeModal || !placeCharacter ||
+      !placePosition ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
@@ -416,6 +419,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let orthoMeta: OrthoMeta | null = null;
   // The generated scene, kept for the fullscreen viewer to remount.
   let lastScene: {
+    bbox: BBox4326;
     mesh: TerrainMesh;
     buildings?: BuildingMesh;
     roads?: RoadMesh;
@@ -649,6 +653,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         featuresFailed = !featuresOk;
         orthoMeta = ortho?.meta ?? null;
         lastScene = {
+          bbox,
           mesh,
           buildings,
           roads,
@@ -1119,6 +1124,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       .finally(() => {
         placePublish.disabled = false;
       });
+  });
+
+  // Place from inside the world: your standing spot becomes the placement.
+  viewerPlaceHere.addEventListener('click', () => {
+    const scene = lastScene;
+    const spot = fullViewer?.getWalkPosition();
+    if (!scene || !spot) {
+      announce(COPY.jobFlow.placeHereHint);
+      return;
+    }
+    const [west, south, east, north] = scene.bbox;
+    const { widthM, depthM } = scene.mesh.stats;
+    const lon = west + ((spot.x + widthM / 2) / widthM) * (east - west);
+    const lat = north - ((spot.z + depthM / 2) / depthM) * (north - south);
+    void openPlaceModal(lon, lat);
   });
 
   viewerClose.addEventListener('click', () => viewerModal.close());

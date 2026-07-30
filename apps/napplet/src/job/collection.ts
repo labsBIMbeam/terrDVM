@@ -165,10 +165,29 @@ export async function fetchCharacterManifest(signal?: AbortSignal): Promise<Char
   );
 }
 
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
+}
+
 /**
- * Try the collection server's cache, fall back to the direct upstream fetch.
- * Both attempts go through `loadApprovedBytes` with their own allowlists, so
- * neither path widens what the shell may be asked for.
+ * Try the collection server's cache, fall back to the direct upstream fetch,
+ * then retry the cache once more.
+ *
+ * The final retry is what makes a cold demo solid: when the client gives up
+ * waiting, the server's own upstream fetch keeps running and lands in the
+ * cache moments later — one short-fuse retry turns "works on the second
+ * click" into works. Both attempts go through `loadApprovedBytes` with their
+ * own allowlists, so neither path widens what the shell may be asked for.
  */
 export async function loadBytesCacheFirst(
   cacheUrl: string,
@@ -176,9 +195,20 @@ export async function loadBytesCacheFirst(
   directUrl: string,
   options: LoadApprovedBytesOptions,
 ): Promise<Blob> {
+  const cacheOptions = {
+    ...options,
+    isAllowed: isCacheAllowed,
+    // The cold path is the server waiting on its upstream; give it room.
+    deadlineMs: Math.max(options.deadlineMs, 45_000),
+  };
   try {
-    return await loadApprovedBytes(cacheUrl, { ...options, isAllowed: isCacheAllowed });
+    return await loadApprovedBytes(cacheUrl, cacheOptions);
   } catch {
-    return loadApprovedBytes(directUrl, options);
+    try {
+      return await loadApprovedBytes(directUrl, options);
+    } catch {
+      await delay(2_000, options.signal);
+      return loadApprovedBytes(cacheUrl, { ...cacheOptions, deadlineMs: 12_000 });
+    }
   }
 }
