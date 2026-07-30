@@ -1,35 +1,67 @@
+/* 600B Design System v0.2.0 — dark application surface.
+   Palette, type, spacing and radii are canon; display sizes are scaled down
+   from the print scale (SECTION 30px) to tool-UI density. */
 :root {
-  /* color */
-  --color-bg: #14171B;          /* dominant 60% */
-  --color-surface: #1F242B;     /* secondary 30% */
-  --color-border: #333A44;
-  --color-text: #E6EAEF;
-  --color-text-muted: #9AA4B0;
-  --color-accent: #58B8E8;      /* reserved: draw CTA, selection geometry, focus ring, live-source dot */
-  --color-on-accent: #0C1014;
-  --color-error: #FF8A80;       /* semantic: invalid/clear/destructive/error only */
-  --color-error-surface: #3B2224;
+  /* palette · fire */
+  --c-orange: #F7931A;
+  --c-orange-bright: #FFA733;
+  --c-orange-deep: #D97A00;
+  --c-ember: #FF6A00;
+  --c-gold: #F3C244;
+
+  /* palette · stone */
+  --c-black: #000000;
+  --c-soot: #111111;
+  --c-charcoal: #222222;
+  --c-volcanic: #2A1810;
+  --c-ember-white: #FFF7EC;
+
+  /* semantic mapping */
+  --color-bg: var(--c-soot);
+  --color-surface: var(--c-charcoal);
+  /* Outer frames are orange on stone — the canonical 600B framing.
+     Interior rules stay muted so the panel does not read as a cage. */
+  --color-border: var(--c-orange);
+  --color-divider: color-mix(in srgb, var(--c-orange) 28%, var(--c-charcoal));
+  --color-text: var(--c-ember-white);
+  --color-text-muted: color-mix(in srgb, var(--c-ember-white) 55%, var(--c-charcoal));
+  --color-accent: var(--c-orange);
+  --color-accent-hover: var(--c-orange-bright);
+  --color-on-accent: var(--c-black);
+  --color-error: var(--c-ember);
+  --color-error-surface: var(--c-volcanic);
 
   /* type */
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Noto Sans Mono", Menlo, Consolas, monospace;
-  --text-caption: 12px; --text-body: 14px; --text-heading: 16px; --text-display: 20px;
-  --weight-regular: 400; --weight-semibold: 600;
+  --font-display: Impact, Haettenschweiler, "Arial Narrow Bold", "Franklin Gothic Bold", sans-serif;
+  --font-ui: "Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", "Noto Sans Mono", Menlo, Consolas, monospace;
+  --text-caption: 12px; --text-body: 15px; --text-heading: 18px; --text-display: 26px;
+  --weight-regular: 400; --weight-semibold: 600; --weight-display: 800;
   --leading-tight: 1.2; --leading-caption: 1.4; --leading-body: 1.5;
+  --tracking-display: 0.04em; --tracking-eyebrow: 0.18em;
 
-  /* space */
-  --space-xs: 4px; --space-sm: 8px; --space-md: 16px;
+  /* space · sp-1 … sp-8 */
+  --space-xs: 4px; --space-sm: 8px; --space-3: 12px; --space-md: 16px;
   --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px; --space-3xl: 64px;
 
-  /* interaction */
+  /* interaction — r-0 sharp is the default radius */
   --target-min: 44px;
   --focus-ring: 2px solid var(--color-accent);
   --focus-offset: 4px;
-  --radius: 4px;               /* one radius everywhere; workbench, not bubbles */
+  --radius: 0;
+  --radius-1: 4px;
+  --radius-2: 8px;
   --panel-width: 320px;
 
   /* motion */
   --motion-fast: 120ms; --motion-base: 200ms; --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
@@ -43,13 +75,37 @@ body {
 }
 
 body {
-  margin: var(--space-xs);
+  margin: 0;
 }
 
+/* App shell: header + workbench fill the viewport exactly; only the request
+   panel scrolls. Nothing below the fold. */
+#app {
+  block-size: 100dvh;
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: var(--space-sm);
+}
+
+/* Off-screen until focused. Deliberately not display/visibility hidden: the
+   skip link must stay the first focusable element. */
 .skip-link {
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
   color: var(--color-text);
-  display: inline-block;
+  inset-block-start: var(--space-sm);
+  inset-inline-start: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
+  position: fixed;
+  transform: translateY(-250%);
+  transition: transform var(--motion-fast) var(--motion-ease);
+  z-index: 20;
+}
+
+.skip-link:focus-visible {
+  transform: none;
 }
 
 :focus-visible {
@@ -58,19 +114,19 @@ body {
 }
 
 .app-header,
-.map-region,
-.request-panel {
-  border-radius: var(--radius);
-  padding: var(--space-md);
-}
-
-.app-header,
 .request-panel {
   background: var(--color-surface);
+  border-radius: var(--radius);
 }
 
 .app-header {
-  margin-block: var(--space-sm);
+  align-items: center;
+  column-gap: var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  margin-block: 0;
+  padding: var(--space-sm) var(--space-md);
+  row-gap: var(--space-sm);
 }
 
 .app-title,
@@ -83,21 +139,31 @@ body {
   margin-block: var(--space-sm);
 }
 
+.brand {
+  align-items: center;
+  display: flex;
+  gap: var(--space-sm);
+  margin-inline-end: auto;
+}
+
+.app-header .app-title {
+  margin-block: 0;
+}
+
 .workbench {
   align-items: stretch;
   display: flex;
-  gap: var(--space-md);
+  gap: var(--space-sm);
+  min-block-size: 0;
 }
 
 .map-region {
   background: var(--color-bg);
+  display: grid;
   flex-grow: 1;
-}
-
-.empty-state,
-.source-status {
-  margin-block: var(--space-lg);
-  padding: var(--space-md);
+  gap: var(--space-xs);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-inline-size: 0;
 }
 
 .source-status,
@@ -107,7 +173,11 @@ body {
 }
 
 .request-panel {
+  flex-shrink: 0;
   inline-size: var(--panel-width);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-md);
 }
 
 .request-list {
@@ -168,15 +238,15 @@ body {
 }
 
 .map-shell {
-  min-block-size: min(55vh, 480px);
+  min-block-size: 0;
   position: relative;
 }
 
 .map-canvas {
   background: var(--color-bg);
+  block-size: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  min-block-size: min(55vh, 480px);
   overflow: hidden;
   position: relative;
 }
@@ -203,33 +273,108 @@ body {
   z-index: 2;
 }
 
-.selection-helper,
-.status-alert,
-.live-announcement,
-.undo-toast {
-  margin-block: var(--space-md);
-  padding: var(--space-md);
+/* Author display rules below would otherwise defeat the UA [hidden] rule. */
+[hidden] {
+  display: none !important;
 }
 
+/* ---- map overlays ------------------------------------------------------
+   Status, empty state and toasts float over the map instead of stacking
+   underneath it, so the map keeps the full height of the workbench. */
+
+.map-overlay,
+.empty-state,
+.source-status,
+.status-alert,
+.undo-toast {
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  position: absolute;
+}
+
+.source-status {
+  inset-block-start: var(--space-sm);
+  inset-inline-start: var(--space-sm);
+  max-inline-size: min(320px, calc(100% - 2 * var(--space-sm)));
+  z-index: 3;
+}
+
+.source-status .status-title {
+  font-size: var(--text-body);
+  margin-block: 0;
+}
+
+.source-status p {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  margin-block: var(--space-xs) 0;
+}
+
+.empty-state {
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  max-inline-size: min(340px, calc(100% - 2 * var(--space-lg)));
+  padding: var(--space-md);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.empty-state p {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  margin-block: var(--space-xs) 0;
+}
+
+.empty-state .empty-state-title {
+  margin-block: 0;
+}
+
+/* Errors take the same corner as the source chip and cover it: when something
+   is wrong, that outranks the source label. */
 .status-alert {
   background: var(--color-error-surface);
-  border: 1px solid var(--color-error);
+  border-color: var(--color-error);
   color: var(--color-error);
-}
-
-.live-announcement {
-  min-block-size: var(--target-min);
-  padding-block: var(--space-sm);
+  inset-block-start: var(--space-sm);
+  inset-inline-start: var(--space-sm);
+  max-inline-size: min(360px, calc(100% - 2 * var(--space-sm)));
+  z-index: 6;
 }
 
 .undo-toast {
   align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
   display: flex;
   gap: var(--space-md);
+  inset-block-end: var(--space-sm);
+  inset-inline-start: 50%;
   justify-content: space-between;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.selection-helper {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  margin: 0;
+  padding-inline: var(--space-xs);
+}
+
+/* Screen-reader only: must not occupy layout. */
+.live-announcement {
+  block-size: 1px;
+  clip-path: inset(50%);
+  inline-size: 1px;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
 }
 
 .section-title {
@@ -244,7 +389,7 @@ body {
 .request-preview,
 .request-action,
 .request-gate {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
   margin-block-start: var(--space-lg);
   padding-block-start: var(--space-sm);
 }
@@ -355,5 +500,759 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .undo-toast {
     transition: none;
+  }
+}
+
+/* ---- job flow modal ---------------------------------------------------- */
+
+.job-modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  inline-size: min(440px, calc(100vw - 2 * var(--space-lg)));
+  max-block-size: calc(100dvh - 2 * var(--space-lg));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-lg);
+}
+
+.job-modal::backdrop {
+  background: rgb(10 12 16 / 72%);
+}
+
+.job-stage {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.job-stage-centered {
+  justify-items: center;
+  text-align: center;
+}
+
+.job-title {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.job-body {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.job-facts {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+}
+
+.job-fact {
+  border-block-end: 1px solid var(--color-divider);
+  display: flex;
+  gap: var(--space-md);
+  justify-content: space-between;
+  padding-block-end: var(--space-sm);
+}
+
+.job-fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.job-fact dd {
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  text-align: end;
+}
+
+.job-actions {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.job-badge {
+  background: var(--color-error-surface);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  padding: 2px var(--space-sm);
+  vertical-align: middle;
+}
+
+.job-warning {
+  background: var(--color-error-surface);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  margin: 0;
+  padding: var(--space-sm);
+}
+
+.job-viewer {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.job-progress-track {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  block-size: 10px;
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.job-progress-fill {
+  background: linear-gradient(
+    100deg,
+    var(--color-accent) 0%,
+    var(--c-orange-bright) 45%,
+    var(--color-accent) 90%
+  );
+  background-size: 220% 100%;
+  animation: progress-shimmer 1.6s linear infinite;
+  block-size: 100%;
+  inline-size: 0%;
+  transition: width 0.3s ease;
+}
+
+@keyframes progress-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Buttons answer the hand: glow on hover, sink on press. */
+.button {
+  transition: box-shadow 0.18s ease, transform 0.1s ease, background-color 0.18s ease;
+}
+
+.button:hover {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button.is-muted {
+  opacity: 0.45;
+}
+
+/* The finished terrain takes one golden breath. */
+@keyframes terrain-ready-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  30% { box-shadow: 0 0 26px 4px color-mix(in srgb, var(--color-accent) 65%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.terrain-ready-flash {
+  animation: terrain-ready-glow 1.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terrain-ready-flash {
+    animation: none;
+  }
+}
+
+/* The crab is an event: a flash of ember and a shudder through the frame. */
+@keyframes crab-flash {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+@keyframes crab-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-6px, 3px); }
+  40% { transform: translate(5px, -4px); }
+  60% { transform: translate(-4px, -3px); }
+  80% { transform: translate(3px, 4px); }
+}
+
+.viewer-modal.crab-arrival .viewer-canvas {
+  animation: crab-shake 0.55s ease-out;
+}
+
+.viewer-modal.crab-arrival::after {
+  animation: crab-flash 0.9s ease-out forwards;
+  background: radial-gradient(
+    circle at 50% 60%,
+    color-mix(in srgb, var(--c-ember) 70%, transparent),
+    transparent 70%
+  );
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-modal.crab-arrival .viewer-canvas {
+    animation: none;
+  }
+  .job-progress-fill {
+    animation: none;
+  }
+}
+
+/* ---- fullscreen viewer -------------------------------------------------- */
+
+.viewer-modal {
+  background: var(--color-bg);
+  block-size: 100dvh;
+  /* The canonical 600B framing: orange on stone, same as every outer frame. */
+  border: 2px solid var(--color-border);
+  inline-size: 100vw;
+  margin: 0;
+  max-block-size: none;
+  max-inline-size: none;
+  padding: 0;
+}
+
+.viewer-modal::backdrop {
+  background: rgb(10 12 16 / 90%);
+}
+
+.viewer-canvas {
+  block-size: 100%;
+  cursor: grab;
+  display: block;
+  inline-size: 100%;
+  touch-action: none;
+}
+
+.viewer-canvas:active {
+  cursor: grabbing;
+}
+
+.viewer-modal-close {
+  inset-block-start: var(--space-md);
+  inset-inline-end: var(--space-md);
+  position: absolute;
+}
+
+.viewer-layers {
+  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: var(--space-xs);
+  inset-block-start: var(--space-md);
+  inset-inline-start: var(--space-md);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  position: absolute;
+}
+
+.viewer-layers legend {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  padding: 0;
+  text-transform: uppercase;
+}
+
+.viewer-layers label {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-caption);
+  gap: var(--space-sm);
+}
+
+.viewer-layers input:disabled + span {
+  color: var(--color-text-muted);
+}
+
+/* City and avatar labels now live inside the map as symbol layers
+   (map-view.ts bakes them into icons), so no marker CSS is needed. */
+
+/* One number for the whole preview: the data score with its traffic light. */
+.job-score {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-block: 10px;
+}
+
+.job-score-dot {
+  background: var(--color-text-muted);
+  block-size: 14px;
+  border: 1px solid #111;
+  border-radius: 50%;
+  display: inline-block;
+  inline-size: 14px;
+}
+
+.job-score-dot--green { background: #3fbf6f; box-shadow: 0 0 10px #3fbf6f66; }
+.job-score-dot--amber { background: var(--c-orange-bright); box-shadow: 0 0 10px #ffa73366; }
+.job-score-dot--red { background: var(--c-ember); box-shadow: 0 0 10px #ff6a0066; }
+
+.job-score-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.job-score-caption {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+/* --- Globe console --------------------------------------------------------
+   The matrix terminal: phosphor green on black, scanlines humming, a
+   dot-earth turning with every event on the wire. */
+.globe-console {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0, transparent 3px,
+      rgba(0, 255, 102, 0.03) 4px),
+    #020604;
+  color: #00ff66;
+  display: flex;
+  flex-direction: column;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  inset: 0;
+  position: fixed;
+  z-index: 55;
+}
+
+.globe-head {
+  align-items: center;
+  border-block-end: 1px solid rgba(0, 255, 102, 0.35);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+}
+
+.globe-title {
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 8px rgba(0, 255, 102, 0.7);
+}
+
+.globe-title::after {
+  animation: globe-cursor 1.1s steps(1) infinite;
+  content: '▌';
+  margin-inline-start: 6px;
+}
+
+@keyframes globe-cursor {
+  50% { opacity: 0; }
+}
+
+.globe-console .button {
+  background: transparent;
+  border-color: rgba(0, 255, 102, 0.5);
+  color: #00ff66;
+}
+
+.globe-body {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  grid-template-columns: 1fr minmax(260px, 380px);
+  min-block-size: 0;
+  padding: 12px 16px 16px;
+}
+
+.globe-canvas {
+  block-size: 100%;
+  inline-size: 100%;
+  min-block-size: 0;
+}
+
+.globe-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-block-size: 0;
+}
+
+.globe-search {
+  background: rgba(0, 20, 8, 0.9);
+  border: 1px solid rgba(0, 255, 102, 0.5);
+  color: #00ff66;
+  font: inherit;
+  inline-size: 100%;
+  padding: 9px 12px;
+}
+
+.globe-search::placeholder {
+  color: rgba(0, 255, 102, 0.45);
+}
+
+.globe-hint {
+  color: rgba(0, 255, 102, 0.6);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.globe-continents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.globe-continents .button {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  padding: 5px 9px;
+}
+
+.globe-log {
+  border: 1px solid rgba(0, 255, 102, 0.25);
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  text-shadow: 0 0 6px rgba(0, 255, 102, 0.5);
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .globe-title::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .globe-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+}
+
+/* --- Start screen ---------------------------------------------------------
+   One deliberate click opens the app; the gesture doubles as the browser's
+   audio unlock, so the world arrives with its chime. */
+.start-screen {
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 38%, #241307, #111111 70%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  inset: 0;
+  justify-content: center;
+  overflow: hidden;
+  position: fixed;
+  z-index: 60;
+}
+
+/* The intro film plays muted, full screen; a click skips into the app. */
+.start-video {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+}
+
+.start-screen > :not(.start-video) {
+  position: relative;
+  transition: opacity 0.8s ease;
+  z-index: 1;
+}
+
+/* Cinema mode: the film runs, the menu steps aside until the user stirs. */
+.start-screen.is-cinema {
+  cursor: pointer;
+}
+
+.start-screen.is-cinema > :not(.start-video) {
+  /* Entrance animations use fill:both and would pin opacity otherwise. */
+  animation: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A slow drift of scanlines: the vending machine is humming. */
+.start-screen::before {
+  animation: start-scan 9s linear infinite;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 5px,
+    color-mix(in srgb, var(--color-accent) 7%, transparent) 6px
+  );
+  content: '';
+  inset: -12px 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes start-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(12px); }
+}
+
+.start-kicker {
+  animation: start-fade 0.9s ease-out both;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.start-title {
+  animation: start-rise 0.9s cubic-bezier(0.2, 0.9, 0.25, 1) both 0.15s;
+  color: var(--color-accent);
+  font-size: clamp(3.2rem, 14vw, 7rem);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-shadow: 0 0 34px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.start-enter {
+  animation: start-fade 0.9s ease-out both 0.45s, start-pulse 2.4s ease-in-out infinite 1.4s;
+  font-size: 1.05rem;
+  padding-block: 12px;
+  padding-inline: 34px;
+}
+
+@keyframes start-rise {
+  from { opacity: 0; transform: translateY(26px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes start-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes start-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); }
+  50% { box-shadow: 0 0 22px 4px color-mix(in srgb, var(--color-accent) 45%, transparent); }
+}
+
+/* The crab patrols the bottom edge — it owns this demo. */
+.start-crab {
+  animation: start-scuttle 11s linear infinite;
+  bottom: 5vh;
+  font-size: 2.6rem;
+  left: -3rem;
+  position: absolute;
+}
+
+@keyframes start-scuttle {
+  0% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(28vw) rotate(-6deg); }
+  50% { transform: translateX(56vw) rotate(0deg); }
+  75% { transform: translateX(84vw) rotate(6deg); }
+  100% { transform: translateX(calc(100vw + 6rem)) rotate(0deg); }
+}
+
+.start-screen.is-leaving {
+  animation: start-exit 0.8s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes start-exit {
+  to { filter: blur(6px); opacity: 0; transform: scale(1.05); }
+}
+
+/* The app arrives from below the departing curtain. */
+.app-header.is-arriving,
+.map-region.is-arriving {
+  animation: start-rise 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) both 0.25s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-screen::before,
+  .start-kicker,
+  .start-title,
+  .start-enter,
+  .start-crab {
+    animation: none;
+  }
+  .start-screen.is-leaving {
+    animation: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .app-header.is-arriving,
+  .map-region.is-arriving {
+    animation: none;
+  }
+}
+
+.viewer-avatar-row select {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-caption);
+  padding: 2px var(--space-sm);
+}
+
+.job-canvas {
+  aspect-ratio: 4 / 3;
+  cursor: grab;
+  display: block;
+  inline-size: 100%;
+  touch-action: none;
+}
+
+.job-canvas:active {
+  cursor: grabbing;
+}
+
+.job-field-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  margin: 0;
+}
+
+.job-spinner {
+  animation: job-spin 900ms linear infinite;
+  block-size: 32px;
+  border: 3px solid var(--color-border);
+  border-block-start-color: var(--color-accent);
+  border-radius: 50%;
+  inline-size: 32px;
+}
+
+@keyframes job-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.source-status[data-state='live'] .status-title {
+  color: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .job-spinner {
+    animation-duration: 2400ms;
+  }
+}
+
+/* ---- narrow viewports --------------------------------------------------
+   Below this width the side-by-side workbench squeezes the map too hard, so
+   the panel moves under it and the page is allowed to scroll again. */
+
+@media (max-width: 860px) {
+  #app {
+    block-size: auto;
+    min-block-size: 100dvh;
+  }
+
+  .workbench {
+    flex-direction: column;
+  }
+
+  .map-shell {
+    min-block-size: 55dvh;
+  }
+
+  .request-panel {
+    inline-size: 100%;
+    overflow-y: visible;
+  }
+}
+
+
+/* ---- 600B brand type ---------------------------------------------------- */
+
+.app-title,
+.empty-state-title,
+.panel-title,
+.status-title,
+.section-title,
+.job-title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
+}
+
+/* Eyebrow: Impact caps, wide tracking. Short labels only, never sentences. */
+.request-label,
+.job-field-label,
+.job-fact dt {
+  font-family: var(--font-display);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.helper-caption,
+.job-body,
+.empty-state p,
+.source-status p {
+  font-family: var(--font-ui);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Buttons: sharp, Impact caps, hover lifts to bright orange, press to 0.97. */
+.button {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.button:hover {
+  border-color: var(--color-accent-hover);
+  color: var(--color-accent-hover);
+}
+
+.button-primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: var(--color-on-accent);
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+/* Badge: status stamp. Sharp, condensed, never rounded. */
+.job-badge {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+/* ---- 600B mark ----------------------------------------------------------
+   The 600 glyph, inlined so the napplet stays a single-file artifact. */
+
+.brand-mark {
+  background-image: url('data:image/png;base64,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');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  block-size: 32px;
+  flex-shrink: 0;
+  inline-size: 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:active {
+    transform: none;
   }
 }

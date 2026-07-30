@@ -151,22 +151,45 @@ function policyOrigin(contract: SourceContract): string {
   return expectedOrigin(contract);
 }
 
-export function basemapTileUrl(z: number, x: number, y: number): string {
+export function tileUrlFor(role: SourceRole, z: number, x: number, y: number): string {
   if (![z, x, y].every((value) => Number.isSafeInteger(value) && value >= 0)) {
-    throw new RangeError('Basemap tile coordinates must be non-negative safe integers.');
+    throw new RangeError(`${role} tile coordinates must be non-negative safe integers.`);
   }
 
-  const contract = contractFor('basemap');
+  const contract = contractFor(role);
+  // The template names its own axis order, so the ArcGIS {z}/{y}/{x} imagery
+  // path and the slippy {z}/{x}/{y} basemap path both expand correctly here.
   const path = expandTemplate(contract.path_template, { z, x, y });
   const url = `${policyOrigin(contract)}${path}`;
 
-  assertApprovedSourceRequest('basemap', {
+  assertApprovedSourceRequest(role, {
     url,
     layer: contract.layer,
     format: contract.format,
   });
 
   return url;
+}
+
+export function basemapTileUrl(z: number, x: number, y: number): string {
+  return tileUrlFor('basemap', z, x, y);
+}
+
+export function imageryTileUrl(z: number, x: number, y: number): string {
+  return tileUrlFor('imagery', z, x, y);
+}
+
+export function contractMetadata(role: SourceRole): {
+  layer: string;
+  format: string;
+  attribution: string;
+} {
+  const contract = contractFor(role);
+  return {
+    layer: contract.layer,
+    format: contract.format,
+    attribution: contract.attribution,
+  };
 }
 
 export function composeAttribution(active: {
