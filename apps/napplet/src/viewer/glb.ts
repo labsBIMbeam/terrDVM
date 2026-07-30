@@ -125,6 +125,44 @@ export function normalizeCharacter(mesh: GlbMesh, targetHeightM = 1.75): GlbMesh
   return mesh;
 }
 
+/**
+ * Normalise a set of animation frames with ONE shared transform, derived
+ * from the first (rest) frame — per-frame normalisation would rescale a
+ * lifted leg and make the whole body pump.
+ */
+export function normalizeCharacterFrames(frames: GlbMesh[], targetHeightM = 1.75): GlbMesh[] {
+  if (frames.length === 0) return frames;
+  const rest = frames[0].positions;
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+  for (let i = 0; i < rest.length; i += 3) {
+    minX = Math.min(minX, rest[i]);
+    maxX = Math.max(maxX, rest[i]);
+    minY = Math.min(minY, rest[i + 1]);
+    maxY = Math.max(maxY, rest[i + 1]);
+    minZ = Math.min(minZ, rest[i + 2]);
+    maxZ = Math.max(maxZ, rest[i + 2]);
+  }
+  const height = maxY - minY;
+  if (!(height > 0)) return frames;
+  const factor = targetHeightM / height;
+  const centreX = (minX + maxX) / 2;
+  const centreZ = (minZ + maxZ) / 2;
+  for (const frame of frames) {
+    const { positions } = frame;
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i] = (positions[i] - centreX) * factor;
+      positions[i + 1] = (positions[i + 1] - minY) * factor;
+      positions[i + 2] = (positions[i + 2] - centreZ) * factor;
+    }
+  }
+  return frames;
+}
+
 export function parseGlb(buffer: ArrayBuffer): GlbMesh {
   const view = new DataView(buffer);
   if (buffer.byteLength < 20 || view.getUint32(0, true) !== MAGIC) {

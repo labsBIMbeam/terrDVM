@@ -95,7 +95,13 @@ export async function fetchCharacterBytes(
   return blob.arrayBuffer();
 }
 
-export type CharacterEntry = { name: string; sha256: string; size: number };
+export type CharacterEntry = {
+  name: string;
+  sha256: string;
+  size: number;
+  /** Vertex-animation frames (stomp cycle), each its own blob. */
+  frames?: string[];
+};
 
 /** A model anchored in the terrain: content hash plus geo position. */
 export type Placement = {

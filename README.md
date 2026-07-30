@@ -106,6 +106,26 @@ Terrain and imagery drain before vector features: they are the demo-critical
 layers and the cheap ones to fetch. Schedule `run` on a timer — see
 [the service README](services/blossom-gis/README.md).
 
+## Models in the terrain — the interop story
+
+A placed avatar is two records, and nothing else:
+
+1. **The model** — a GLB blob, addressed by its SHA-256, served by any
+   Blossom mirror that holds it.
+2. **The placement** — where it stands: a signed nostr event (NIP-94,
+   kind 1063) carrying the hash (`x`), a fetch URL, the exact position as a
+   `bbox` tag, a `heading`, and one `g` tag per geohash precision so any
+   generic relay answers coarse geo queries by plain tag filtering.
+
+Any app or napplet that can subscribe to a relay and fetch a blob by hash
+can stand the avatar in its own scene — two requests, no accounts, no
+custom API. This client places from the map (click) or from inside the
+world (walk somewhere, *Place avatar here*); a NIP-07 signer signs, so
+neither the app nor the server ever holds a key. Animation travels the
+same way: secrab's walk cycle is ten vertex-frames baked in Blender, each
+frame its own content-addressed blob — the gait's symmetry deduplicates
+them to five.
+
 ## Documentation
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the tile format and its

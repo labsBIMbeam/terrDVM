@@ -26,7 +26,7 @@ import {
 import { projector } from '../buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
 import { buildPlacementEvent, signAndPublish } from '../nostr/publish';
-import { normalizeCharacter, parseGlb } from '../viewer/glb';
+import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh, type Footprint } from '../buildings/extrude';
@@ -1055,9 +1055,20 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       announce(COPY.jobFlow.avatarFailed('secrab'));
       return;
     }
-    void fetchCharacterBytes(entry.sha256)
-      .then((bytes) => {
-        fullViewer?.setKaiju(normalizeCharacter(parseGlb(bytes), 42));
+    // The stomp cycle is a set of frame blobs; identical frames share a hash,
+    // so each unique blob is fetched exactly once.
+    const frameShas = entry.frames && entry.frames.length > 0 ? entry.frames : [entry.sha256];
+    const uniqueShas = [...new Set(frameShas)];
+    void Promise.all(uniqueShas.map((sha) => fetchCharacterBytes(sha)))
+      .then((buffers) => {
+        // Normalise the unique meshes exactly once — duplicated frames share
+        // objects, and a second pass would rescale them.
+        const uniqueMeshes = normalizeCharacterFrames(
+          buffers.map((buffer) => parseGlb(buffer)),
+          42,
+        );
+        const bySha = new Map(uniqueShas.map((sha, i) => [sha, uniqueMeshes[i]]));
+        fullViewer?.setKaiju(frameShas.map((sha) => bySha.get(sha)!));
         crabActive = true;
         viewerCrab.textContent = COPY.jobFlow.crabRemoveButton;
       })

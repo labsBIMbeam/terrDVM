@@ -816,11 +816,19 @@ def characters(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return JSONResponse([])
-    entries = [
-        {"name": name, "sha256": entry["sha256"], "size": entry.get("size", 0)}
-        for name, entry in sorted(manifest.items())
-        if isinstance(entry, dict) and is_valid_sha256(str(entry.get("sha256", "")))
-    ]
+    entries = []
+    for name, entry in sorted(manifest.items()):
+        if not isinstance(entry, dict) or not is_valid_sha256(str(entry.get("sha256", ""))):
+            continue
+        record: dict[str, object] = {
+            "name": name,
+            "sha256": entry["sha256"],
+            "size": entry.get("size", 0),
+        }
+        frames = entry.get("frames")
+        if isinstance(frames, list) and all(is_valid_sha256(str(f)) for f in frames):
+            record["frames"] = frames
+        entries.append(record)
     return JSONResponse(entries)
 
 

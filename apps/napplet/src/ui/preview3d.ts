@@ -235,14 +235,14 @@ export type TerrainViewer = {
     }[],
   ) => void;
   /**
-   * Drop a kaiju into the scene: a mesh in metres that stomps back and forth
-   * across the selection on its own. Null removes it.
+   * Drop a kaiju into the scene: one or more animation frames in metres that
+   * stomp back and forth across the selection on their own. Null removes it.
    */
-  setKaiju: (mesh: {
-    positions: Float32Array;
-    normals: Float32Array;
-    indices: Uint32Array;
-  } | null) => void;
+  setKaiju: (
+    frames:
+      | { positions: Float32Array; normals: Float32Array; indices: Uint32Array }[]
+      | null,
+  ) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -474,8 +474,13 @@ export function createTerrainViewer(
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
   let character: Drawable | null = null;
-  let kaiju: { drawable: Drawable; x: number; z: number; heading: number; phase: number } | null =
-    null;
+  let kaiju: {
+    drawables: Drawable[];
+    x: number;
+    z: number;
+    heading: number;
+    phase: number;
+  } | null = null;
   let npcs: { drawable: Drawable; x: number; z: number; theta: number }[] = [];
 
   /** Bilinear terrain height at a point in scaled model space. */
@@ -818,7 +823,8 @@ export function createTerrainViewer(
         kaiju.z = Math.min(limitZ, Math.max(-limitZ, kaiju.z));
         kaiju.heading += Math.PI * 0.72; // turn, but never retrace exactly
       }
-      const stompBob = Math.abs(Math.sin(kaiju.phase)) * 2.4 * 1.5 * scale;
+      // The baked gait carries the leg motion; only a mild body bob remains.
+      const stompBob = Math.abs(Math.sin(kaiju.phase)) * 0.8 * 1.5 * scale;
       const theta = Math.PI - kaiju.heading;
       const c = Math.cos(theta);
       const s = Math.sin(theta);
@@ -835,8 +841,12 @@ export function createTerrainViewer(
       gl.uniform1f(uUseOverride, 1);
       gl.uniform1f(uTexturedStructure, 0);
       gl.uniform3f(uOverrideColor, 0.82, 0.32, 0.2);
-      gl.bindVertexArray(kaiju.drawable.vao);
-      gl.drawElements(gl.TRIANGLES, kaiju.drawable.count, gl.UNSIGNED_INT, 0);
+      const frameIndex =
+        Math.floor(((kaiju.phase / (Math.PI * 2)) % 1) * kaiju.drawables.length) %
+        kaiju.drawables.length;
+      const frame = kaiju.drawables[frameIndex];
+      gl.bindVertexArray(frame.vao);
+      gl.drawElements(gl.TRIANGLES, frame.count, gl.UNSIGNED_INT, 0);
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
       gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
     }
@@ -1003,16 +1013,20 @@ export function createTerrainViewer(
         theta: npc.theta,
       }));
     },
-    setKaiju: (kaijuMesh) => {
+    setKaiju: (frames) => {
       if (destroyed) return;
       if (kaiju) {
-        for (const buffer of kaiju.drawable.buffers) gl.deleteBuffer(buffer);
-        gl.deleteVertexArray(kaiju.drawable.vao);
+        for (const drawable of kaiju.drawables) {
+          for (const buffer of drawable.buffers) gl.deleteBuffer(buffer);
+          gl.deleteVertexArray(drawable.vao);
+        }
         kaiju = null;
       }
-      if (kaijuMesh) {
+      if (frames && frames.length > 0) {
         kaiju = {
-          drawable: upload(kaijuMesh.positions, kaijuMesh.normals, kaijuMesh.indices),
+          drawables: frames.map((frame) =>
+            upload(frame.positions, frame.normals, frame.indices),
+          ),
           // Enter from a corner, heading across the middle of town.
           x: -mesh.stats.widthM * scale * 0.4,
           z: mesh.stats.depthM * scale * 0.4,
@@ -1097,7 +1111,7 @@ export function createTerrainViewer(
         roadways,
         waterways,
         character,
-        kaiju?.drawable ?? null,
+        ...(kaiju?.drawables ?? []),
         ...npcs.map((npc) => npc.drawable),
         ...landcover.map((p) => p.drawable),
       ]) {
