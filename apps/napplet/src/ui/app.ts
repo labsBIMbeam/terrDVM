@@ -26,7 +26,7 @@ import {
 import { projector } from '../buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
 import { buildPlacementEvent, buildPresenceEvent, signAndPublish } from '../nostr/publish';
-import { fetchGlobalPresences, fetchPresences } from '../nostr/presence';
+import { fetchGeoNotes, fetchGlobalPresences, fetchPresences } from '../nostr/presence';
 import { createMatrixGlobe, type MatrixGlobe } from './globe';
 import cities from '../config/cities.json';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
@@ -1174,6 +1174,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     })
     .catch(() => undefined);
 
+  // Fresh geo-tagged notes from the wider network land on the map too —
+  // the wire is alive, not just our own events.
+  void fetchGeoNotes([
+    region.viewBounds.west,
+    region.viewBounds.south,
+    region.viewBounds.east,
+    region.viewBounds.north,
+  ])
+    .then((notes) => {
+      for (const note of notes.slice(0, 40)) {
+        mapView.addNoteMarker(note.id, note.content, note.lon, note.lat);
+      }
+    })
+    .catch(() => undefined);
+
   continueRequestButton.addEventListener('click', openJobFlow);
   jobCancel.addEventListener('click', closeJobFlow);
   jobClose.addEventListener('click', closeJobFlow);
@@ -1388,25 +1403,50 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
 
   // The start screen: one deliberate click opens the app — and that same
   // gesture is what unlocks the AudioContext, so the chime lands with it.
+  // The intro belongs to the session's FIRST entry only. Region hops
+  // (continent buttons, globe pins) reload the page — the flag keeps the
+  // start screen from replaying on them. In a sandboxed shell without
+  // storage the try/catch degrades to the old always-intro behaviour.
+  const ENTERED_FLAG = 'terrdvm-entered';
+  const hasEntered = (): boolean => {
+    try {
+      return sessionStorage.getItem(ENTERED_FLAG) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const markEntered = (): void => {
+    try {
+      sessionStorage.setItem(ENTERED_FLAG, '1');
+    } catch {
+      // No storage in this shell — the intro will simply play again.
+    }
+  };
+
+  // A pin click from another region carries its target in the hash and
+  // goes straight to generation.
+  const resolveGoTarget = (): Curated | undefined => {
+    const goKey = window.location.hash.replace('#go=', '');
+    const target = CURATED.find(
+      (entry) => entry.key === goKey && entry.region === region.id,
+    );
+    if (target) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    return target;
+  };
+
   const enterApp = (): void => {
     if (startScreen.classList.contains('is-leaving')) return;
+    markEntered();
     sound.chime();
     startScreen.classList.add('is-leaving');
     root.querySelector('.app-header')?.classList.add('is-arriving');
     root.querySelector('.map-region')?.classList.add('is-arriving');
     setTimeout(() => startScreen.remove(), 800);
-    // A pin click from another region carries its target in the hash and
-    // goes straight to generation; otherwise the world comes first.
-    const goKey = window.location.hash.replace('#go=', '');
-    const goTarget = CURATED.find(
-      (entry) => entry.key === goKey && entry.region === region.id,
-    );
-    if (goTarget) {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-      runCurated(goTarget);
-    } else {
-      openGlobe();
-    }
+    const goTarget = resolveGoTarget();
+    if (goTarget) runCurated(goTarget);
+    else openGlobe();
   };
   startScreen.addEventListener('click', enterApp);
   startEnter.addEventListener('click', (event) => {
@@ -1593,11 +1633,23 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       stopDrawing: () => undefined,
       armPlacing: () => undefined,
       addAvatarMarker: () => undefined,
+      addNoteMarker: () => undefined,
       setSelection: () => undefined,
       clearSelection: () => undefined,
       destroy: () => undefined,
     };
     announce(error instanceof Error ? error.message : COPY.sourceUnavailable.body);
+  }
+
+  // Region hops skip the ceremony: no intro replay, no 17 MB video load —
+  // straight to the pin's generation or the map the user navigated to.
+  if (hasEntered() && startScreen.isConnected) {
+    startVideo.pause();
+    startVideo.removeAttribute('src');
+    startVideo.load();
+    startScreen.remove();
+    const goTarget = resolveGoTarget();
+    if (goTarget) runCurated(goTarget);
   }
 
   updateView();

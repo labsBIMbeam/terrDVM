@@ -55,6 +55,8 @@ export type MapView = {
   armPlacing: () => void;
   /** Show a placed avatar immediately, without waiting for a refetch. */
   addAvatarMarker: (name: string, lon: number, lat: number, sha256: string) => void;
+  /** A live geo-tagged note from the wider network. */
+  addNoteMarker: (id: string, text: string, lon: number, lat: number) => void;
   setSelection: (bbox: BBox4326) => void;
   clearSelection: () => void;
   destroy: () => void;
@@ -186,16 +188,17 @@ export function createMapView(
   // the style has no glyph server.
   const bakeLabelIcon = (
     label: string,
-    style: 'city' | 'avatar',
+    style: 'city' | 'avatar' | 'note',
   ): { data: ImageData; pixelRatio: number } | null => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return null;
-    const font = `${style === 'avatar' ? 700 : 600} ${11 * ratio}px system-ui, sans-serif`;
+    const font = `${style === 'avatar' ? 700 : style === 'note' ? 400 : 600} ${
+      (style === 'note' ? 10 : 11) * ratio}px system-ui, sans-serif`;
     context.font = font;
     const textWidth = Math.ceil(context.measureText(label).width);
-    const dot = (style === 'avatar' ? 9 : 7) * ratio;
+    const dot = (style === 'avatar' ? 9 : style === 'note' ? 6 : 7) * ratio;
     const gap = 5 * ratio;
     const pad = 3 * ratio;
     canvas.width = pad + dot + gap + textWidth + pad;
@@ -216,7 +219,8 @@ export function createMapView(
       context.lineTo(pad, midY);
       context.closePath();
     } else {
-      context.fillStyle = '#f5efe2';
+      // Cities bone-white, live notes phosphor green.
+      context.fillStyle = style === 'note' ? '#4be38a' : '#f5efe2';
       context.beginPath();
       context.arc(pad + dot / 2, midY, dot / 2, 0, Math.PI * 2);
     }
@@ -227,7 +231,8 @@ export function createMapView(
     context.lineWidth = 3 * ratio;
     context.strokeStyle = 'rgba(17, 17, 17, 0.92)';
     context.strokeText(label, textX, midY);
-    context.fillStyle = style === 'avatar' ? '#FFA733' : '#f5efe2';
+    context.fillStyle =
+      style === 'avatar' ? '#FFA733' : style === 'note' ? '#8df5b6' : '#f5efe2';
     context.fillText(label, textX, midY);
     return {
       data: context.getImageData(0, 0, canvas.width, canvas.height),
@@ -250,6 +255,26 @@ export function createMapView(
       'icon-offset': [2, 0],
     },
   });
+
+  let noteFeatures: LabelFeature[] = [];
+
+  const noteMarker = (id: string, text: string, lon: number, lat: number): void => {
+    const source = map.getSource('notes') as maplibregl.GeoJSONSource | undefined;
+    if (!source || noteFeatures.some((feature) => feature.properties.name === id)) return;
+    const label = text.replace(/\s+/g, ' ').trim().slice(0, 28) || '(note)';
+    const iconId = `note-${id.slice(0, 12)}`;
+    if (!map.hasImage(iconId)) {
+      const icon = bakeLabelIcon(label, 'note');
+      if (!icon) return;
+      map.addImage(iconId, icon.data, { pixelRatio: icon.pixelRatio });
+    }
+    noteFeatures.push({
+      type: 'Feature',
+      properties: { icon: iconId, name: id },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+    });
+    source.setData({ type: 'FeatureCollection', features: noteFeatures });
+  };
 
   const avatarMarker = (name: string, lon: number, lat: number, sha256: string): void => {
     const source = map.getSource('avatars') as maplibregl.GeoJSONSource | undefined;
@@ -482,6 +507,11 @@ export function createMapView(
       data: { type: 'FeatureCollection', features: [] },
     });
     map.addLayer(labelLayer('avatars'));
+    map.addSource('notes', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    map.addLayer(labelLayer('notes'));
 
     // Placed avatars: every marker is a blob anyone can fetch by hash.
     void fetchPlacements()
@@ -554,6 +584,10 @@ export function createMapView(
     addAvatarMarker: (name, lon, lat, sha256) => {
       if (destroyed) return;
       avatarMarker(name, lon, lat, sha256);
+    },
+    addNoteMarker: (id, text, lon, lat) => {
+      if (destroyed) return;
+      noteMarker(id, text, lon, lat);
     },
     setSelection: (bbox) => {
       if (destroyed) return;
