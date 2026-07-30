@@ -62,12 +62,114 @@ function noise(duration: number, peak: number, lowpassHz: number): void {
   source.start();
 }
 
+// --- Ambient wind ----------------------------------------------------------
+// A looping noise bed under the viewer: barely there at street level, it
+// opens up as the camera climbs. One shared node set, started and stopped
+// with the scene.
+let ambient: { source: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode } | null =
+  null;
+
+function stopAmbientNodes(): void {
+  if (!ambient) return;
+  try {
+    ambient.source.stop();
+  } catch {
+    // Already stopped — fine.
+  }
+  ambient.source.disconnect();
+  ambient.filter.disconnect();
+  ambient.gain.disconnect();
+  ambient = null;
+}
+
 export const sound = {
   setMuted(value: boolean): void {
     muted = value;
+    if (muted) stopAmbientNodes();
   },
   isMuted(): boolean {
     return muted;
+  },
+  /** Start the wind bed; idempotent while one is playing. */
+  startAmbient(): void {
+    const ctx = ensureContext();
+    if (!ctx || ambient) return;
+    const seconds = 2;
+    const length = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 240;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.045 * MASTER_GAIN;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    ambient = { source, filter, gain };
+  },
+  stopAmbient(): void {
+    stopAmbientNodes();
+  },
+  /** 0 = on the ground, 1 = high orbit: the wind swells with altitude. */
+  setAmbientLift(lift: number): void {
+    if (!ambient || !context) return;
+    const clamped = Math.min(1, Math.max(0, lift));
+    const now = context.currentTime;
+    ambient.filter.frequency.setTargetAtTime(240 + clamped * 620, now, 0.4);
+    ambient.gain.gain.setTargetAtTime((0.045 + clamped * 0.11) * MASTER_GAIN, now, 0.4);
+  },
+  /** Airflow swell for the spiral reveal. */
+  whoosh(): void {
+    const ctx = ensureContext();
+    if (!ctx) return;
+    const seconds = 3.2;
+    const length = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 0.8;
+    const now = ctx.currentTime;
+    // The descent: airflow pitch falls as the camera bleeds off height.
+    filter.frequency.setValueAtTime(900, now);
+    filter.frequency.exponentialRampToValueAtTime(180, now + seconds);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.5 * MASTER_GAIN, now + 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    source.stop(now + seconds);
+  },
+  /** The crab announces itself: a low sawtooth snarl over gravel. */
+  roar(): void {
+    const ctx = ensureContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    const now = ctx.currentTime;
+    osc.frequency.setValueAtTime(68, now);
+    osc.frequency.linearRampToValueAtTime(92, now + 0.35);
+    osc.frequency.exponentialRampToValueAtTime(41, now + 1.3);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 560;
+    osc.connect(filter);
+    filter.connect(envelope(ctx, 1.4, 0.5));
+    osc.start();
+    osc.stop(now + 1.4);
+    noise(0.9, 0.3, 340);
   },
   /** Soft UI tick for buttons and toggles. */
   tick(): void {

@@ -287,8 +287,11 @@ export function createTerrainViewer(
      * reduced motion jumps straight to the end state.
      */
     intro?: boolean;
-    /** Footstep and kaiju-stomp callbacks, fired on the gait beats. */
-    audio?: { step?: () => void; stomp?: () => void };
+    /**
+     * Footstep and kaiju-stomp callbacks fired on the gait beats, plus an
+     * altitude signal (0 ground … 1 high orbit) for the ambient wind.
+     */
+    audio?: { step?: () => void; stomp?: () => void; lift?: (value: number) => void };
   } = {},
 ): TerrainViewer {
   const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
@@ -508,6 +511,7 @@ export function createTerrainViewer(
   let walkStepBeat = 0;
   let walkMoving = false;
   let lastFrameTime = 0;
+  let lastLiftAt = 0;
   const keysDown = new Set<string>();
   let character: Drawable | null = null;
   let characterTexture: WebGLTexture | null = null;
@@ -653,6 +657,8 @@ export function createTerrainViewer(
 
     if (autoRotate) yaw += 0.0022;
 
+    // Eye height of whichever camera wins this frame, for the wind swell.
+    let currentEyeY = 0;
     let walkView: Mat4 | null = null;
     if (walkMode) {
       const forward =
@@ -711,10 +717,12 @@ export function createTerrainViewer(
           targetY + (desired[1] - targetY) * clear,
           groundAt(eyeX, eyeZ) + 0.4 * f * 1.5 * scale,
         );
+        currentEyeY = eyeY;
         walkView = lookAt([eyeX, eyeY, eyeZ], [walkX, targetY, walkZ], [0, 1, 0]);
       } else {
         // First person: no body loaded, the camera is the walker.
         const eyeY = groundY + WALK_EYE_UNITS;
+        currentEyeY = eyeY;
         const lookX = lookXh * Math.cos(walkPitch);
         const lookY = Math.sin(walkPitch);
         const lookZ = lookZh * Math.cos(walkPitch);
@@ -747,6 +755,7 @@ export function createTerrainViewer(
       // Over the relief, never through it.
       const ey = Math.max(Math.sin(spiralPitch) * spiralDist, groundAt(ex, ez) + INTRO_CLEARANCE);
       intro.eye = [ex, ey, ez];
+      currentEyeY = ey;
       flightView = lookAt(intro.eye, [0, 0, 0], [0, 1, 0]);
 
       if (t >= 1) {
@@ -764,6 +773,12 @@ export function createTerrainViewer(
       Math.sin(pitch) * distance,
       Math.cos(pitch) * Math.cos(yaw) * distance,
     ];
+    if (!walkView && !flightView) currentEyeY = eye[1];
+    if (options.audio?.lift && frameNow - lastLiftAt > 250) {
+      lastLiftAt = frameNow;
+      // 2.2 model units ≈ the default orbit apex; walking pins the wind low.
+      options.audio.lift(Math.min(1, Math.max(0, currentEyeY / 2.2)));
+    }
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.067, 0.067, 0.067, 1); // --c-soot #111111

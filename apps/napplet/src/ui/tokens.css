@@ -647,6 +647,23 @@ body {
   opacity: 0.45;
 }
 
+/* The finished terrain takes one golden breath. */
+@keyframes terrain-ready-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  30% { box-shadow: 0 0 26px 4px color-mix(in srgb, var(--color-accent) 65%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.terrain-ready-flash {
+  animation: terrain-ready-glow 1.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terrain-ready-flash {
+    animation: none;
+  }
+}
+
 /* The crab is an event: a flash of ember and a shudder through the frame. */
 @keyframes crab-flash {
   0% { opacity: 0.85; }

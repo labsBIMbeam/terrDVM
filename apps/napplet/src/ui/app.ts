@@ -673,6 +673,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         // backgrounded or not compositing.
         dispatchJob({ type: 'TERRAIN_READY', mesh });
         sound.chime();
+        // A golden breath around the fresh scene.
+        jobCanvas.classList.add('terrain-ready-flash');
+        setTimeout(() => jobCanvas.classList.remove('terrain-ready-flash'), 1400);
         buildingCount = buildings?.stats.footprints ?? 0;
         roadCount = roads?.stats.roads ?? 0;
         featuresFailed = !featuresOk;
@@ -983,10 +986,18 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         ortho: lastScene.ortho,
         autoRotate: false,
         intro: true,
-        audio: { step: () => sound.step(), stomp: () => sound.stomp() },
+        audio: {
+          step: () => sound.step(),
+          stomp: () => sound.stomp(),
+          lift: (value) => sound.setAmbientLift(value),
+        },
       });
       if (lastScene.npcs && lastScene.npcs.length > 0) fullViewer.setNpcs(lastScene.npcs);
       void populateAvatarChoices();
+      // The reveal has a voice: wind bed under the scene, airflow over the
+      // spiral descent.
+      sound.startAmbient();
+      sound.whoosh();
     } catch (error) {
       closeFullViewer();
       announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
@@ -1107,8 +1118,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         );
         crabActive = true;
         viewerCrab.textContent = COPY.jobFlow.crabRemoveButton;
-        // The crab is an event: flash, shake, sub-bass.
+        // The crab is an event: flash, shake, sub-bass — and it announces
+        // itself.
         sound.boom();
+        sound.roar();
         viewerModal.classList.add('crab-arrival');
         setTimeout(() => viewerModal.classList.remove('crab-arrival'), 900);
       })
@@ -1131,6 +1144,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     sound.setMuted(!sound.isMuted());
     soundButton.setAttribute('aria-pressed', String(!sound.isMuted()));
     soundButton.classList.toggle('is-muted', sound.isMuted());
+    // Muting kills the wind bed; unmuting inside the viewer brings it back.
+    if (!sound.isMuted() && viewerModal.open) sound.startAmbient();
   });
   const openPlaceModal = async (lon: number, lat: number): Promise<void> => {
     pendingPlace = { lon, lat };
@@ -1235,6 +1250,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   viewerClose.addEventListener('click', () => viewerModal.close());
   // Covers Escape as well: the native close event is the single teardown path.
   viewerModal.addEventListener('close', () => {
+    sound.stopAmbient();
     fullViewer?.destroy();
     fullViewer = undefined;
   });
