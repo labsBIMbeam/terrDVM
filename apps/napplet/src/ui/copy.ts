@@ -139,6 +139,7 @@ export const COPY = {
   },
   globe: {
     button: 'Globe',
+    enter: 'Enter map ▸',
     title: 'TERR//DVM · GLOBAL EVENT CONSOLE',
     searchPlaceholder: 'locate: wien, funchal, bruneck…',
     booting: '> scanning relays for terrdvm events…',

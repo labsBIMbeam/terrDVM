@@ -17,7 +17,9 @@ export const OSM_BUILDINGS_SOURCE = {
   attribution: '© OpenStreetMap contributors',
   license: 'ODbL-1.0',
   timeoutMs: 15_000,
-  maxResponseBytes: 8_000_000,
+  // The 16k-element feature query delivers the full Ring at ~10 MB; 8 MB
+  // silently vetoed exactly the delivery the higher limit was raised for.
+  maxResponseBytes: 24_000_000,
 } as const;
 
 /** Assumed storey height where OSM gives levels but not metres. */

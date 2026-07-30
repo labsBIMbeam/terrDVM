@@ -15,8 +15,16 @@ export type GlobeEvent = {
   message?: string;
 };
 
+/** A GPS-pinned button on the globe: click it to enter that place. */
+export type GlobePin = {
+  name: string;
+  lon: number;
+  lat: number;
+};
+
 export type MatrixGlobe = {
   setEvents: (events: GlobeEvent[]) => void;
+  setPins: (pins: GlobePin[]) => void;
   flyTo: (lon: number, lat: number) => void;
   destroy: () => void;
 };
@@ -32,11 +40,17 @@ const LAND = (dots as [number, number][]).map(([lon, lat]) => {
   };
 });
 
-export function createMatrixGlobe(canvas: HTMLCanvasElement): MatrixGlobe {
+export function createMatrixGlobe(
+  canvas: HTMLCanvasElement,
+  options: { onPin?: (pin: GlobePin) => void } = {},
+): MatrixGlobe {
   const context = canvas.getContext('2d');
   if (!context) throw new Error('2D canvas is unavailable.');
 
   let events: (GlobeEvent & { x: number; y: number; z: number })[] = [];
+  let pins: (GlobePin & { x: number; y: number; z: number })[] = [];
+  /** Screen-space boxes of the pins drawn this frame, for click hit-tests. */
+  let pinHits: { pin: GlobePin; x: number; y: number; w: number; h: number }[] = [];
   let yaw = 0.6;
   let pitch = 0.42;
   let autoSpin = true;
@@ -128,6 +142,39 @@ export function createMatrixGlobe(canvas: HTMLCanvasElement): MatrixGlobe {
       context.fillRect(p.x, p.y, dotSize, dotSize);
     }
 
+    // GPS-pinned buttons: a target ring plus a boxed label, clickable.
+    pinHits = [];
+    context.font = `${Math.round(12 * ratio)}px ui-monospace, monospace`;
+    for (const pin of pins) {
+      const p = project(pin);
+      if (!p.front) continue;
+      const ring = radius * 0.02;
+      context.strokeStyle = 'rgba(0, 255, 102, 0.9)';
+      context.lineWidth = ratio * 1.6;
+      context.beginPath();
+      context.arc(p.x, p.y, ring, 0, Math.PI * 2);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(p.x - ring * 1.7, p.y);
+      context.lineTo(p.x + ring * 1.7, p.y);
+      context.moveTo(p.x, p.y - ring * 1.7);
+      context.lineTo(p.x, p.y + ring * 1.7);
+      context.stroke();
+      const label = ` ${pin.name} `;
+      const width = context.measureText(label).width + 8 * ratio;
+      const height = 20 * ratio;
+      const bx = p.x + ring * 2;
+      const by = p.y - height / 2;
+      context.fillStyle = 'rgba(0, 24, 10, 0.85)';
+      context.fillRect(bx, by, width, height);
+      context.strokeStyle = 'rgba(0, 255, 102, 0.7)';
+      context.lineWidth = ratio;
+      context.strokeRect(bx, by, width, height);
+      context.fillStyle = 'rgba(0, 255, 102, 0.95)';
+      context.fillText(label, bx + 4 * ratio, by + height * 0.68);
+      pinHits.push({ pin, x: bx - ring * 3, y: by - ring, w: width + ring * 4, h: height + ring * 2 });
+    }
+
     // Events pulse.
     const pulse = 0.5 + 0.5 * Math.sin(now / 320);
     for (const event of events) {
@@ -149,12 +196,16 @@ export function createMatrixGlobe(canvas: HTMLCanvasElement): MatrixGlobe {
     frame = requestAnimationFrame(draw);
   };
 
+  let downX = 0;
+  let downY = 0;
   const onPointerDown = (event: PointerEvent): void => {
     dragging = true;
     autoSpin = false;
     flight = null;
     lastX = event.clientX;
     lastY = event.clientY;
+    downX = event.clientX;
+    downY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent): void => {
@@ -167,6 +218,18 @@ export function createMatrixGlobe(canvas: HTMLCanvasElement): MatrixGlobe {
   const onPointerUp = (event: PointerEvent): void => {
     dragging = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    // A click (no drag) on a pinned button enters that place.
+    if (Math.hypot(event.clientX - downX, event.clientY - downY) > 6) return;
+    const rect = canvas.getBoundingClientRect();
+    const ratio = canvas.width / Math.max(1, rect.width);
+    const x = (event.clientX - rect.left) * ratio;
+    const y = (event.clientY - rect.top) * ratio;
+    for (const hit of pinHits) {
+      if (x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h) {
+        options.onPin?.(hit.pin);
+        return;
+      }
+    }
   };
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
@@ -178,6 +241,9 @@ export function createMatrixGlobe(canvas: HTMLCanvasElement): MatrixGlobe {
   return {
     setEvents: (list) => {
       events = list.map((event) => ({ ...event, ...toVector(event.lon, event.lat) }));
+    },
+    setPins: (list) => {
+      pins = list.map((pin) => ({ ...pin, ...toVector(pin.lon, pin.lat) }));
     },
     flyTo: (lon, lat) => {
       // The point faces the viewer when yaw = -lon and pitch = lat.

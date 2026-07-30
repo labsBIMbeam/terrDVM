@@ -21,7 +21,7 @@ def _js_number(value: float) -> str:
     return text[:-2] if text.endswith(".0") else text
 
 
-def features_query(box: BBox, limit: int = 6000) -> str:
+def features_query(box: BBox, limit: int = 16000) -> str:
     """Mirror of the client's featuresQuery — pinned by a conformance test."""
     area = (
         f"{_js_number(box.south)},{_js_number(box.west)},"
@@ -122,4 +122,6 @@ DEMO_SELECTIONS: dict[str, tuple[str, BBox]] = {
     "schoenbrunn": ("vienna", BBox(west=16.3, south=48.178, east=16.32, north=48.19)),
     "ring": ("vienna", BBox(west=16.355, south=48.195, east=16.385, north=48.215)),
     "bruneck": ("south-tyrol", BBox(west=11.925, south=46.788, east=11.955, north=46.805)),
+    # The Dolomites showcase from the demo-2 plan: Innichen / San Candido.
+    "innichen": ("south-tyrol", BBox(west=12.265, south=46.725, east=12.295, north=46.745)),
 }

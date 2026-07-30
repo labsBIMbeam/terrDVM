@@ -192,14 +192,14 @@ describe('prewarm cache-key contract', () => {
     // The same string is pinned in services/blossom-gis/tests/test_prewarm.py.
     // If either side changes, both pins fail and the contract is renegotiated.
     const ring: BBox4326 = [16.355, 48.195, 16.385, 48.215];
-    expect(featuresQuery(ring, 6000)).toBe(
+    expect(featuresQuery(ring, 16000)).toBe(
       '[out:json][timeout:25];(' +
         'way["building"](48.195,16.355,48.215,16.385);' +
         'way["highway"](48.195,16.355,48.215,16.385);' +
         'way["waterway"](48.195,16.355,48.215,16.385);' +
         'way["landuse"](48.195,16.355,48.215,16.385);' +
         'way["natural"](48.195,16.355,48.215,16.385);' +
-        ');out geom 6000;',
+        ');out geom 16000;',
     );
   });
 });

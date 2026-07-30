@@ -307,7 +307,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     <div class="globe-console" id="globe-console" hidden>
       <header class="globe-head">
         <span class="globe-title">${COPY.globe.title}</span>
-        <button class="button globe-close" id="globe-close" type="button">${COPY.jobFlow.closeButton}</button>
+        <button class="button globe-close" id="globe-close" type="button">${COPY.globe.enter}</button>
       </header>
       <div class="globe-body">
         <canvas class="globe-canvas" id="globe-canvas"></canvas>
@@ -1022,25 +1022,37 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     announce(COPY.jobFlow.readyTitle);
   };
 
-  // The demo path: one click, a curated prewarmed selection, straight into
-  // generation — the map path with a drawn bbox stays untouched next to it.
-  const DEMO_SELECTIONS: Record<string, { label: string; bbox: BBox4326 }> = {
-    vienna: { label: 'Wien Ring', bbox: [16.355, 48.195, 16.385, 48.215] },
-    madeira: { label: 'Funchal', bbox: [-16.92, 32.64, -16.9, 32.66] },
-    'south-tyrol': { label: 'Bruneck', bbox: [11.925, 46.788, 11.955, 46.805] },
+  // The curated places: prewarmed selections that double as GPS-pinned
+  // buttons on the globe and as the region's demo shortcut.
+  type Curated = {
+    key: string; name: string; region: string;
+    lon: number; lat: number; bbox: BBox4326;
   };
-  const demoSelection = DEMO_SELECTIONS[region.id];
+  const CURATED: Curated[] = [
+    { key: 'ring', name: 'Wien Ring', region: 'vienna',
+      lon: 16.37, lat: 48.205, bbox: [16.355, 48.195, 16.385, 48.215] },
+    { key: 'schoenbrunn', name: 'Schönbrunn', region: 'vienna',
+      lon: 16.31, lat: 48.184, bbox: [16.3, 48.178, 16.32, 48.19] },
+    { key: 'funchal', name: 'Funchal', region: 'madeira',
+      lon: -16.91, lat: 32.65, bbox: [-16.92, 32.64, -16.9, 32.66] },
+    { key: 'bruneck', name: 'Bruneck', region: 'south-tyrol',
+      lon: 11.94, lat: 46.796, bbox: [11.925, 46.788, 11.955, 46.805] },
+    { key: 'innichen', name: 'Innichen', region: 'south-tyrol',
+      lon: 12.28, lat: 46.735, bbox: [12.265, 46.725, 12.295, 46.745] },
+  ];
+  const runCurated = (entry: Curated): void => {
+    state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: entry.bbox });
+    alert('');
+    updateView();
+    mapView.setSelection(entry.bbox);
+    openJobFlow();
+    startTerrainJob();
+  };
+  const demoSelection = CURATED.find((entry) => entry.region === region.id);
   if (demoSelection) {
     demoButton.hidden = false;
-    demoButton.textContent = COPY.jobFlow.demoRun(demoSelection.label);
-    demoButton.addEventListener('click', () => {
-      state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: demoSelection.bbox });
-      alert('');
-      updateView();
-      mapView.setSelection(demoSelection.bbox);
-      openJobFlow();
-      startTerrainJob();
-    });
+    demoButton.textContent = COPY.jobFlow.demoRun(demoSelection.name);
+    demoButton.addEventListener('click', () => runCurated(demoSelection));
   }
 
   // The intro film runs muted behind the start screen; if the asset is not
@@ -1065,7 +1077,27 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   };
   const openGlobe = (): void => {
     globeConsole.hidden = false;
-    globe ??= createMatrixGlobe(globeCanvas);
+    globe ??= createMatrixGlobe(globeCanvas, {
+      // GPS-pinned buttons: a click flies in, then enters the place — in
+      // this region directly, otherwise via a region switch that carries
+      // the target in the hash.
+      onPin: (pin) => {
+        const entry = CURATED.find((candidate) => candidate.name === pin.name);
+        if (!entry) return;
+        sound.tick();
+        globe?.flyTo(entry.lon, entry.lat);
+        logLine(COPY.globe.locate(entry.name, entry.lat, entry.lon));
+        setTimeout(() => {
+          if (entry.region === region.id) {
+            globeConsole.hidden = true;
+            runCurated(entry);
+          } else {
+            window.location.assign(`?region=${entry.region}#go=${entry.key}`);
+          }
+        }, 1500);
+      },
+    });
+    globe.setPins(CURATED.map(({ name, lon, lat }) => ({ name, lon, lat })));
     globeLog.textContent = COPY.globe.booting;
     void Promise.all([
       fetchPlacements().catch(() => []),
@@ -1345,6 +1377,18 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     root.querySelector('.app-header')?.classList.add('is-arriving');
     root.querySelector('.map-region')?.classList.add('is-arriving');
     setTimeout(() => startScreen.remove(), 800);
+    // A pin click from another region carries its target in the hash and
+    // goes straight to generation; otherwise the world comes first.
+    const goKey = window.location.hash.replace('#go=', '');
+    const goTarget = CURATED.find(
+      (entry) => entry.key === goKey && entry.region === region.id,
+    );
+    if (goTarget) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      runCurated(goTarget);
+    } else {
+      openGlobe();
+    }
   };
   startScreen.addEventListener('click', enterApp);
   startEnter.addEventListener('click', (event) => {

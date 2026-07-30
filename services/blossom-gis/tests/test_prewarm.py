@@ -19,7 +19,7 @@ PINNED_RING_QUERY = (
     'way["waterway"](48.195,16.355,48.215,16.385);'
     'way["landuse"](48.195,16.355,48.215,16.385);'
     'way["natural"](48.195,16.355,48.215,16.385);'
-    ');out geom 6000;'
+    ');out geom 16000;'
 )
 
 
@@ -36,7 +36,7 @@ class TestPrewarm:
             'way["waterway"](32.64,-17,32.66,-16.9);'
             'way["landuse"](32.64,-17,32.66,-16.9);'
             'way["natural"](32.64,-17,32.66,-16.9);'
-            ');out geom 6000;'
+            ');out geom 16000;'
         )
 
     def test_dem_tiles_cover_the_selection_at_both_zooms(self) -> None:
