@@ -66,3 +66,4 @@ art/blender/*.blend1
 !art/characters/**/*.glb
 !art/brand/*.png
 !docs/demo/secrab-ring/secrab_ring_f*.png
+!/intro.mp4
