@@ -1327,10 +1327,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     void Promise.all(uniqueShas.map((sha) => fetchCharacterBytes(sha)))
       .then(async (buffers) => {
         // Normalise the unique meshes exactly once — duplicated frames share
-        // objects, and a second pass would rescale them.
+        // objects, and a second pass would rescale them. 63 m: half again
+        // over the old kaiju, three times the giants.
         const uniqueMeshes = normalizeCharacterFrames(
           buffers.map((buffer) => parseGlb(buffer)),
-          42,
+          63,
         );
         // Every frame deforms the same painted body; decode the skin once.
         const skin = uniqueMeshes.find((m) => m.texture)?.texture ?? null;

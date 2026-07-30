@@ -1169,9 +1169,9 @@ export function createTerrainViewer(
             upload(frame.positions, frame.normals, frame.indices, frame.uvs),
           ),
           texture: skin ? makeModelTexture(skin) : null,
-          // Enter from a corner, heading across the middle of town.
-          x: -mesh.stats.widthM * scale * 0.4,
-          z: mesh.stats.depthM * scale * 0.4,
+          // Spawn dead centre — the crab IS the event, not an arrival.
+          x: 0,
+          z: 0,
           heading: Math.PI * 0.25,
           phase: 0,
           lastStomp: 0,
