@@ -45,6 +45,8 @@ export const COPY = {
     toolbarLabel: 'Toolbar',
     appTitle: 'terrDVM',
     mapRegionLabel: 'Map region',
+    startKicker: 'terrain data vending machine',
+    startEnter: 'Click to enter',
   },
   buttons: {
     drawBoundingBox: 'Draw bounding box',

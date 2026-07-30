@@ -294,6 +294,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
+    <div class="start-screen" id="start-screen">
+      <p class="start-kicker">${COPY.boot.startKicker}</p>
+      <h1 class="start-title">${COPY.boot.appTitle}</h1>
+      <button class="button button-primary start-enter" id="start-enter" type="button" autofocus>
+        ${COPY.boot.startEnter}
+      </button>
+      <span class="start-crab" aria-hidden="true">🦀</span>
+    </div>
   `;
 
   const mapCanvas = root.querySelector<HTMLDivElement>('#map-canvas');
@@ -366,6 +374,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerPlaceHere = root.querySelector<HTMLButtonElement>('#viewer-place-here');
   const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
   const soundButton = root.querySelector<HTMLButtonElement>('#sound-button');
+  const startScreen = root.querySelector<HTMLDivElement>('#start-screen');
+  const startEnter = root.querySelector<HTMLButtonElement>('#start-enter');
   const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
   const placePosition = root.querySelector<HTMLElement>('#place-position');
@@ -393,7 +403,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
-      !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton || !placeModal ||
+      !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton ||
+      !startScreen || !startEnter || !placeModal ||
       !placeCharacter ||
       !placePosition || !placeMessage ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
@@ -1139,6 +1150,22 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // Every button clicks softly; the toggle silences the whole layer.
   root.addEventListener('click', (event) => {
     if ((event.target as HTMLElement | null)?.closest('button')) sound.tick();
+  });
+
+  // The start screen: one deliberate click opens the app — and that same
+  // gesture is what unlocks the AudioContext, so the chime lands with it.
+  const enterApp = (): void => {
+    if (startScreen.classList.contains('is-leaving')) return;
+    sound.chime();
+    startScreen.classList.add('is-leaving');
+    root.querySelector('.app-header')?.classList.add('is-arriving');
+    root.querySelector('.map-region')?.classList.add('is-arriving');
+    setTimeout(() => startScreen.remove(), 800);
+  };
+  startScreen.addEventListener('click', enterApp);
+  startEnter.addEventListener('click', (event) => {
+    event.stopPropagation();
+    enterApp();
   });
   soundButton.addEventListener('click', () => {
     sound.setMuted(!sound.isMuted());

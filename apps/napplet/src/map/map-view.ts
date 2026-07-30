@@ -178,16 +178,97 @@ export function createMapView(
   let editingNotified = false;
   let coverage: CoverageOverlay | null = null;
   let placing = false;
-  const cityMarkers: maplibregl.Marker[] = [];
+
+  // --- Coordinate-anchored labels -------------------------------------------
+  // Dots and names render as symbol layers INSIDE the GL scene, positioned
+  // purely by their coordinates — no DOM markers that can drift or need CSS
+  // the shell does not ship. Labels are baked into per-name icons because
+  // the style has no glyph server.
+  const bakeLabelIcon = (
+    label: string,
+    style: 'city' | 'avatar',
+  ): { data: ImageData; pixelRatio: number } | null => {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    const font = `${style === 'avatar' ? 700 : 600} ${11 * ratio}px system-ui, sans-serif`;
+    context.font = font;
+    const textWidth = Math.ceil(context.measureText(label).width);
+    const dot = (style === 'avatar' ? 9 : 7) * ratio;
+    const gap = 5 * ratio;
+    const pad = 3 * ratio;
+    canvas.width = pad + dot + gap + textWidth + pad;
+    canvas.height = Math.ceil(18 * ratio);
+    // Resizing resets 2D state, so the font is set again.
+    context.font = font;
+    context.textBaseline = 'middle';
+    const midY = canvas.height / 2;
+    context.strokeStyle = '#111111';
+    context.lineWidth = ratio;
+    if (style === 'avatar') {
+      // The ember diamond of the placed avatars.
+      context.fillStyle = '#FF6A00';
+      context.beginPath();
+      context.moveTo(pad + dot / 2, midY - dot / 2);
+      context.lineTo(pad + dot, midY);
+      context.lineTo(pad + dot / 2, midY + dot / 2);
+      context.lineTo(pad, midY);
+      context.closePath();
+    } else {
+      context.fillStyle = '#f5efe2';
+      context.beginPath();
+      context.arc(pad + dot / 2, midY, dot / 2, 0, Math.PI * 2);
+    }
+    context.fill();
+    context.stroke();
+    const textX = pad + dot + gap;
+    context.lineJoin = 'round';
+    context.lineWidth = 3 * ratio;
+    context.strokeStyle = 'rgba(17, 17, 17, 0.92)';
+    context.strokeText(label, textX, midY);
+    context.fillStyle = style === 'avatar' ? '#FFA733' : '#f5efe2';
+    context.fillText(label, textX, midY);
+    return {
+      data: context.getImageData(0, 0, canvas.width, canvas.height),
+      pixelRatio: ratio,
+    };
+  };
+
+  type LabelFeature = GeoJSON.Feature<GeoJSON.Point, { icon: string; name: string }>;
+  let avatarFeatures: LabelFeature[] = [];
+
+  const labelLayer = (id: string): maplibregl.LayerSpecification => ({
+    id,
+    type: 'symbol',
+    source: id,
+    layout: {
+      'icon-image': ['get', 'icon'],
+      'icon-anchor': 'left',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-offset': [2, 0],
+    },
+  });
 
   const avatarMarker = (name: string, lon: number, lat: number, sha256: string): void => {
-    const element = document.createElement('div');
-    element.className = 'avatar-marker';
-    element.innerHTML = `<i></i><span>${name}</span>`;
-    element.title = `blossom blob ${sha256.slice(0, 12)}…`;
-    cityMarkers.push(
-      new maplibregl.Marker({ element, anchor: 'left' }).setLngLat([lon, lat]).addTo(map),
-    );
+    const source = map.getSource('avatars') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    const iconId = `avatar-${name}`;
+    if (!map.hasImage(iconId)) {
+      const icon = bakeLabelIcon(name, 'avatar');
+      if (!icon) return;
+      map.addImage(iconId, icon.data, { pixelRatio: icon.pixelRatio });
+    }
+    // One marker per character: a re-placement moves it. The hash rides in
+    // the feature so map tooling can resolve the blob.
+    avatarFeatures = avatarFeatures.filter((feature) => feature.properties.name !== name);
+    avatarFeatures.push({
+      type: 'Feature',
+      properties: { icon: iconId, name, sha256 } as LabelFeature['properties'],
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+    });
+    source.setData({ type: 'FeatureCollection', features: avatarFeatures });
   };
 
   maplibregl.addProtocol(PROTOCOL, (params, abortController) =>
@@ -367,8 +448,9 @@ export function createMapView(
       }
     }
 
-    // Orientation dots: HTML markers need no glyph server, so labels work in
-    // any shell. Only cities inside the region's view bounds are added.
+    // Orientation dots: only cities inside the region's view bounds, each
+    // baked into an icon and anchored by its coordinates.
+    const cityFeatures: LabelFeature[] = [];
     for (const city of cities as { name: string; lon: number; lat: number }[]) {
       if (
         city.lon < region.viewBounds.west ||
@@ -378,14 +460,28 @@ export function createMapView(
       ) {
         continue;
       }
-      const element = document.createElement('div');
-      element.className = 'city-marker';
-      element.innerHTML = `<i></i><span>${city.name}</span>`;
-      const marker = new maplibregl.Marker({ element, anchor: 'left' })
-        .setLngLat([city.lon, city.lat])
-        .addTo(map);
-      cityMarkers.push(marker);
+      const iconId = `city-${city.name}`;
+      if (!map.hasImage(iconId)) {
+        const icon = bakeLabelIcon(city.name, 'city');
+        if (!icon) continue;
+        map.addImage(iconId, icon.data, { pixelRatio: icon.pixelRatio });
+      }
+      cityFeatures.push({
+        type: 'Feature',
+        properties: { icon: iconId, name: city.name },
+        geometry: { type: 'Point', coordinates: [city.lon, city.lat] },
+      });
     }
+    map.addSource('cities', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: cityFeatures },
+    });
+    map.addLayer(labelLayer('cities'));
+    map.addSource('avatars', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    map.addLayer(labelLayer('avatars'));
 
     // Placed avatars: every marker is a blob anyone can fetch by hash.
     void fetchPlacements()
@@ -482,8 +578,7 @@ export function createMapView(
       window.removeEventListener('resize', resize);
       coverage?.destroy();
       coverage = null;
-      for (const marker of cityMarkers) marker.remove();
-      cityMarkers.length = 0;
+      avatarFeatures = [];
       try {
         if (drawReady) draw.stop();
       } finally {

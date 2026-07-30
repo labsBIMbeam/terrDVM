@@ -773,75 +773,134 @@ body {
   color: var(--color-text-muted);
 }
 
-.city-marker {
+/* City and avatar labels now live inside the map as symbol layers
+   (map-view.ts bakes them into icons), so no marker CSS is needed. */
+
+/* --- Start screen ---------------------------------------------------------
+   One deliberate click opens the app; the gesture doubles as the browser's
+   audio unlock, so the world arrives with its chime. */
+.start-screen {
   align-items: center;
+  background:
+    radial-gradient(circle at 50% 38%, #241307, #111111 70%);
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 20px;
+  inset: 0;
+  justify-content: center;
+  overflow: hidden;
+  position: fixed;
+  z-index: 60;
+}
+
+/* A slow drift of scanlines: the vending machine is humming. */
+.start-screen::before {
+  animation: start-scan 9s linear infinite;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 5px,
+    color-mix(in srgb, var(--color-accent) 7%, transparent) 6px
+  );
+  content: '';
+  inset: -12px 0;
   pointer-events: none;
-  /* The app ships no maplibre-gl.css, so the marker positioning that
-     normally comes from there must live here. */
   position: absolute;
-  will-change: transform;
 }
 
-.city-marker i {
-  background: #f5efe2;
-  border: 1px solid #111;
-  border-radius: 50%;
-  block-size: 6px;
-  display: block;
-  inline-size: 6px;
+@keyframes start-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(12px); }
 }
 
-.city-marker span {
-  color: #f5efe2;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-shadow: 0 0 3px #000, 0 0 3px #000;
-  white-space: nowrap;
+.start-kicker {
+  animation: start-fade 0.9s ease-out both;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
 }
 
-.avatar-marker {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-  pointer-events: auto;
+.start-title {
+  animation: start-rise 0.9s cubic-bezier(0.2, 0.9, 0.25, 1) both 0.15s;
+  color: var(--color-accent);
+  font-size: clamp(3.2rem, 14vw, 7rem);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-shadow: 0 0 34px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.start-enter {
+  animation: start-fade 0.9s ease-out both 0.45s, start-pulse 2.4s ease-in-out infinite 1.4s;
+  font-size: 1.05rem;
+  padding-block: 12px;
+  padding-inline: 34px;
+}
+
+@keyframes start-rise {
+  from { opacity: 0; transform: translateY(26px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes start-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes start-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); }
+  50% { box-shadow: 0 0 22px 4px color-mix(in srgb, var(--color-accent) 45%, transparent); }
+}
+
+/* The crab patrols the bottom edge — it owns this demo. */
+.start-crab {
+  animation: start-scuttle 11s linear infinite;
+  bottom: 5vh;
+  font-size: 2.6rem;
+  left: -3rem;
   position: absolute;
-  will-change: transform;
 }
 
-/* The placed avatars breathe: a soft bob keeps the map alive. */
-@keyframes marker-bob {
-  0%, 100% { transform: rotate(45deg) translate(0, 0); }
-  50% { transform: rotate(45deg) translate(-1.6px, -1.6px); }
+@keyframes start-scuttle {
+  0% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(28vw) rotate(-6deg); }
+  50% { transform: translateX(56vw) rotate(0deg); }
+  75% { transform: translateX(84vw) rotate(6deg); }
+  100% { transform: translateX(calc(100vw + 6rem)) rotate(0deg); }
 }
 
-.avatar-marker i {
-  animation: marker-bob 2.2s ease-in-out infinite;
+.start-screen.is-leaving {
+  animation: start-exit 0.8s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes start-exit {
+  to { filter: blur(6px); opacity: 0; transform: scale(1.05); }
+}
+
+/* The app arrives from below the departing curtain. */
+.app-header.is-arriving,
+.map-region.is-arriving {
+  animation: start-rise 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) both 0.25s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .avatar-marker i {
+  .start-screen::before,
+  .start-kicker,
+  .start-title,
+  .start-enter,
+  .start-crab {
     animation: none;
   }
-}
-
-.avatar-marker i {
-  background: var(--c-ember);
-  block-size: 9px;
-  border: 1px solid #111;
-  display: block;
-  inline-size: 9px;
-  transform: rotate(45deg);
-}
-
-.avatar-marker span {
-  color: var(--c-orange-bright);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-shadow: 0 0 3px #000, 0 0 3px #000;
-  white-space: nowrap;
+  .start-screen.is-leaving {
+    animation: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .app-header.is-arriving,
+  .map-region.is-arriving {
+    animation: none;
+  }
 }
 
 .viewer-avatar-row select {
