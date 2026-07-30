@@ -74,11 +74,14 @@ GAIT_CYCLE_S = 2.2
 ROSTER_CENTER = (16.3640, 48.2062)
 ROSTER_SPACING = 16.0
 
-#: The finale breathes: takedown, then almost five seconds for the goose.
+#: The finale breathes: takedown, morph, then the goose owns the sky.
 ATTACK_START_F = 340
 TOPPLE_F = 376
 TOPPLE_END_F = 400
-GOOSE_RISE_START_F = 388
+#: Crab spins into a point by here; the goose grows out of the same point.
+MORPH_END_F = 428
+GOOSE_GROW_START_F = 410
+GOOSE_GROW_END_F = 446
 
 #: The twin museums on the Maria-Theresien-Platz go down as the crab passes:
 #: (lon, lat, radius m) demolition zones beyond the walking corridor.
@@ -603,15 +606,24 @@ def build_goose_rig(ground_at, crab_end: Vector) -> bpy.types.Object | None:
     height = max(1.0, hi - lo)
 
     ground = ground_at(crab_end.x, crab_end.y)
-    # Parked fully below the city until the transformation.
-    rig.location = (crab_end.x, crab_end.y, ground - height - 120.0)
-    rig.keyframe_insert("location", frame=1)
-    rig.keyframe_insert("location", frame=GOOSE_RISE_START_F - 2)
-    # Feet just over the fallen crab, then a stately climb.
-    rig.location = (crab_end.x, crab_end.y, ground - lo + 8.0)
-    rig.keyframe_insert("location", frame=GOOSE_RISE_START_F + 10)
+
+    # The transformation, part two: the goose spins up out of the point the
+    # crab collapsed into, growing from nothing to her full 21x while her
+    # feet ride just over the ground.
+    def grow_key(frame: float, factor: float) -> None:
+        rig.scale = (21.0 * factor, 21.0 * factor, 21.0 * factor)
+        rig.location = (crab_end.x, crab_end.y, ground + 8.0 - lo * factor)
+        rig.keyframe_insert("scale", frame=frame)
+        rig.keyframe_insert("location", frame=frame)
+
+    grow_key(1, 0.001)
+    grow_key(GOOSE_GROW_START_F, 0.001)
+    rig.rotation_euler = (0.0, 0.0, math.radians(-360))
+    rig.keyframe_insert("rotation_euler", frame=GOOSE_GROW_START_F)
+    grow_key(GOOSE_GROW_END_F, 1.0)
     rig.rotation_euler = (0.0, 0.0, 0.0)
-    rig.keyframe_insert("rotation_euler", frame=GOOSE_RISE_START_F + 10)
+    rig.keyframe_insert("rotation_euler", frame=GOOSE_GROW_END_F)
+    # Then the stately climb.
     rig.location = (crab_end.x, crab_end.y, ground - lo + 190.0)
     rig.rotation_euler = (0.0, 0.0, math.radians(40))
     rig.keyframe_insert("location", frame=END_FRAME)
@@ -772,6 +784,15 @@ def animate(crab: bpy.types.Object, destructibles: list[bpy.types.Object],
     crab.keyframe_insert("location", frame=TOPPLE_END_F)
     crab.keyframe_insert("rotation_euler", frame=TOPPLE_END_F)
 
+    # The transformation, part one: the beaten crab spins itself into a
+    # point — the goose grows out of that same point (build_goose_rig).
+    crab.keyframe_insert("scale", frame=TOPPLE_END_F + 2)
+    crab.rotation_euler = (math.radians(118), 0.0, end_yaw + math.pi * 4)
+    crab.scale = (0.001, 0.001, 0.001)
+    crab.location = (crab_end.x, crab_end.y, ground_end + 6.0)
+    for channel in ("location", "rotation_euler", "scale"):
+        crab.keyframe_insert(channel, frame=MORPH_END_F)
+
     # Gait cycle until the fall, then stillness.
     shape_keys = crab.data.shape_keys
     if shape_keys:
@@ -887,10 +908,12 @@ def _animate_camera(scene, point_at, walk_fraction, ground_at,
     # Phase 4 (F368-408): wide witness shot of the takedown.
     key(392, (crab_end.x + 260.0, crab_end.y - 330.0, 150.0),
         (crab_end.x, crab_end.y, 22.0))
-    # Phase 5 (F408-504): the giant goose holds the frame while the camera
-    # pulls back and back — the city shrinks beneath her.
-    key(420, (crab_end.x + 300.0, crab_end.y - 420.0, ground_end + 190.0),
-        (crab_end.x, crab_end.y, ground_end + 150.0))
+    # Phase 5 (F408-504): hold on the morph point, then pull back and back —
+    # the goose grows into frame and the city shrinks beneath her.
+    key(412, (crab_end.x + 280.0, crab_end.y - 380.0, ground_end + 140.0),
+        (crab_end.x, crab_end.y, ground_end + 50.0))
+    key(446, (crab_end.x + 460.0, crab_end.y - 620.0, ground_end + 260.0),
+        (crab_end.x, crab_end.y, ground_end + 140.0))
     key(END_FRAME, (crab_end.x + 1050.0, crab_end.y - 1450.0, ground_end + 560.0),
         (crab_end.x, crab_end.y, ground_end + 300.0))
     return camera
