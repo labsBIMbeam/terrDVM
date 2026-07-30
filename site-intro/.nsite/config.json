@@ -1,0 +1,5 @@
+{
+  "$schema": "https://nsyte.run/schemas/config.schema.json",
+  "relays": ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"],
+  "servers": ["https://blossom.primal.net", "https://nostr.download"]
+}
