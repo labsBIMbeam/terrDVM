@@ -443,6 +443,11 @@ export function createTerrainViewer(
   let walkPitch = -0.05;
   let walkX = 0;
   let walkZ = 0;
+  /** Third-person boom length in metres; the mouse wheel zooms it. */
+  let walkBoom = 5;
+  /** Stride phase driving the procedural walk bob. */
+  let walkPhase = 0;
+  let walkMoving = false;
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
   let character: Drawable | null = null;
@@ -494,78 +499,42 @@ export function createTerrainViewer(
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let autoRotate = (options.autoRotate ?? true) && !reduceMotion;
 
-  const INTRO_EYE_HEIGHT_M = 21;
-  const INTRO_DURATION_MS = 4000;
-  const ORTHO_PITCH = 1.45; // the viewer's own pitch clamp — near-vertical
-  const ORTHO_DISTANCE = 2.5;
-  /** Fraction of the intro spent tracing the low→high line; the rest settles into the ortho view. */
-  const INTRO_LINE_FRACTION = 0.7;
+  const INTRO_DURATION_MS = 4500;
+  // Spiral reveal: high and far, ~1.75 turns around the scene while closing
+  // in, everything on one shared ease so the axes never fight each other.
+  const INTRO_TURNS = 1.75;
+  const INTRO_START_PITCH = 1.3;
+  const INTRO_START_DIST = 7;
+  const INTRO_END_PITCH = 0.62; // the viewer's own default oblique pose
+  const INTRO_END_DIST = 2.5;
+  /** The spiral clears every ridge by this much instead of flying through. */
+  const INTRO_CLEARANCE = 24 * 1.5 * scale;
 
   type Vec3 = [number, number, number];
-  let intro: {
-    start: number;
-    last: number;
-    lowEye: Vec3;
-    highEye: Vec3;
-    peak: Vec3;
-    endEye: Vec3;
-    endYaw: number;
-    eye: Vec3;
-  } | null = null;
+  let intro: { start: number; last: number; endYaw: number; eye: Vec3 } | null = null;
 
   if (options.intro) {
-    if (reduceMotion) {
-      yaw = 0;
-      pitch = ORTHO_PITCH;
-      distance = ORTHO_DISTANCE;
-    } else {
-      // The flight traces the terrain's own extremes: 21 m above the lowest
-      // vertex, straight along the line to the highest, then settling into
-      // the straight-down ortho view. The low→high line is the alignment.
-      const vertexTotal = scaled.length / 3;
-      let lowIndex = 0;
-      let highIndex = 0;
-      for (let i = 1; i < vertexTotal; i += 1) {
-        const y = scaled[i * 3 + 1];
-        if (y < scaled[lowIndex * 3 + 1]) lowIndex = i;
-        if (y > scaled[highIndex * 3 + 1]) highIndex = i;
-      }
-      const at = (index: number): Vec3 => [
-        scaled[index * 3],
-        scaled[index * 3 + 1],
-        scaled[index * 3 + 2],
-      ];
-      const peak = at(highIndex);
-      let low = at(lowIndex);
-      // A flat selection has no meaningful line — approach from the south.
-      if (peak[1] - low[1] < 1e-4) low = [peak[0], peak[1], Math.min(1, peak[2] + 0.8)];
+    // End the reveal facing uphill: the azimuth of the low→high terrain axis.
+    const vertexTotal = scaled.length / 3;
+    let lowIndex = 0;
+    let highIndex = 0;
+    for (let i = 1; i < vertexTotal; i += 1) {
+      const y = scaled[i * 3 + 1];
+      if (y < scaled[lowIndex * 3 + 1]) lowIndex = i;
+      if (y > scaled[highIndex * 3 + 1]) highIndex = i;
+    }
+    const dirX = scaled[highIndex * 3] - scaled[lowIndex * 3];
+    const dirZ = scaled[highIndex * 3 + 2] - scaled[lowIndex * 3 + 2];
+    const horizontal = Math.hypot(dirX, dirZ);
+    const endYaw =
+      horizontal > 1e-6 ? Math.atan2(-dirX / horizontal, -dirZ / horizontal) : 0;
 
-      const lift = INTRO_EYE_HEIGHT_M * scale;
-      const horizontal = Math.hypot(peak[0] - low[0], peak[2] - low[2]);
-      const direction: Vec3 =
-        horizontal > 1e-6
-          ? [(peak[0] - low[0]) / horizontal, 0, (peak[2] - low[2]) / horizontal]
-          : [0, 0, -1];
-      // The ending orbit eye sits opposite the flight direction, so the
-      // settle keeps looking the way the flight was going.
-      const endYaw = Math.atan2(-direction[0], -direction[2]);
-      const endEye: Vec3 = [
-        Math.cos(ORTHO_PITCH) * Math.sin(endYaw) * ORTHO_DISTANCE,
-        Math.sin(ORTHO_PITCH) * ORTHO_DISTANCE,
-        Math.cos(ORTHO_PITCH) * Math.cos(endYaw) * ORTHO_DISTANCE,
-      ];
-      intro = {
-        start: 0,
-        last: 0,
-        lowEye: [low[0], low[1] + lift, low[2]],
-        // Hold short of the peak so the look-down never turns exactly
-        // vertical, which would degenerate the view basis.
-        highEye: [peak[0] - direction[0] * lift, peak[1] + lift, peak[2] - direction[2] * lift],
-        peak,
-        endEye,
-        endYaw,
-        eye: [0, 0, 0],
-      };
+    if (reduceMotion) {
+      yaw = endYaw;
+      pitch = INTRO_END_PITCH;
+      distance = INTRO_END_DIST;
+    } else {
+      intro = { start: 0, last: 0, endYaw, eye: [0, 0, 0] };
     }
     autoRotate = false;
   }
@@ -607,6 +576,8 @@ export function createTerrainViewer(
       const strafe = (keysDown.has('KeyD') ? 1 : 0) - (keysDown.has('KeyA') ? 1 : 0);
       const speed =
         keysDown.has('ShiftLeft') || keysDown.has('ShiftRight') ? WALK_RUN_SPEED : WALK_SPEED;
+      walkMoving = forward !== 0 || strafe !== 0;
+      if (walkMoving) walkPhase += dt * (speed === WALK_RUN_SPEED ? 15 : 9);
       walkX += (Math.sin(walkYaw) * forward + Math.cos(walkYaw) * strafe) * speed * dt;
       walkZ += (-Math.cos(walkYaw) * forward + Math.sin(walkYaw) * strafe) * speed * dt;
       // Stay on the terrain: the walker cannot leave the selection.
@@ -619,19 +590,31 @@ export function createTerrainViewer(
       const lookXh = Math.sin(walkYaw);
       const lookZh = -Math.cos(walkYaw);
       if (character) {
-        // Third person: the camera hangs behind and above the avatar, so you
-        // see the body walk. Mouse pitch tilts the boom.
-        const back = 5.0 * scale * Math.cos(walkPitch * 0.6);
-        const up = (2.6 - Math.sin(walkPitch) * 2.2) * 1.5 * scale;
-        const eyeYRaw = groundY + up;
-        const eyeX = walkX - lookXh * back;
-        const eyeZ = walkZ - lookZh * back;
-        const eyeYMin = groundAt(eyeX, eyeZ) + 0.6 * 1.5 * scale;
-        walkView = lookAt(
-          [eyeX, Math.max(eyeYRaw, eyeYMin), eyeZ],
-          [walkX, groundY + 1.3 * 1.5 * scale, walkZ],
-          [0, 1, 0],
+        // Third person: the camera hangs on a boom behind the avatar. The
+        // wheel zooms the boom, mouse pitch tilts it, and a WoW-style
+        // collision march zooms in past any terrain that would swallow it.
+        const targetY = groundY + 1.3 * 1.5 * scale;
+        const back = walkBoom * scale * Math.cos(walkPitch * 0.6);
+        const up = (walkBoom * 0.52 - Math.sin(walkPitch) * walkBoom * 0.44) * 1.5 * scale;
+        const desired: Vec3 = [walkX - lookXh * back, groundY + up, walkZ - lookZh * back];
+        let clear = 1;
+        for (let step = 1; step <= 12; step += 1) {
+          const t = step / 12;
+          const sx = walkX + (desired[0] - walkX) * t;
+          const sy = targetY + (desired[1] - targetY) * t;
+          const sz = walkZ + (desired[2] - walkZ) * t;
+          if (sy < groundAt(sx, sz) + 0.5 * 1.5 * scale) {
+            clear = Math.max(0.12, t - 1 / 12);
+            break;
+          }
+        }
+        const eyeX = walkX + (desired[0] - walkX) * clear;
+        const eyeZ = walkZ + (desired[2] - walkZ) * clear;
+        const eyeY = Math.max(
+          targetY + (desired[1] - targetY) * clear,
+          groundAt(eyeX, eyeZ) + 0.4 * 1.5 * scale,
         );
+        walkView = lookAt([eyeX, eyeY, eyeZ], [walkX, targetY, walkZ], [0, 1, 0]);
       } else {
         // First person: no body loaded, the camera is the walker.
         const eyeY = groundY + WALK_EYE_UNITS;
@@ -655,35 +638,24 @@ export function createTerrainViewer(
       if (intro.last !== 0 && now - intro.last > 400) intro.start += now - intro.last;
       intro.last = now;
       const t = Math.min(1, (now - intro.start) / INTRO_DURATION_MS);
-      const smooth = (k: number): number => k * k * (3 - 2 * k);
-      const lerp3 = (a: Vec3, b: Vec3, k: number): Vec3 => [
-        a[0] + (b[0] - a[0]) * k,
-        a[1] + (b[1] - a[1]) * k,
-        a[2] + (b[2] - a[2]) * k,
-      ];
+      const eased = t * t * (3 - 2 * t);
 
-      let flightEye: Vec3;
-      let flightTarget: Vec3;
-      if (t < INTRO_LINE_FRACTION) {
-        // Trace the low→high line, eyes on the peak.
-        const k = smooth(t / INTRO_LINE_FRACTION);
-        flightEye = lerp3(intro.lowEye, intro.highEye, k);
-        flightTarget = intro.peak;
-      } else {
-        // Settle from above the peak into the straight-down ortho view.
-        const k = smooth((t - INTRO_LINE_FRACTION) / (1 - INTRO_LINE_FRACTION));
-        flightEye = lerp3(intro.highEye, intro.endEye, k);
-        flightTarget = lerp3(intro.peak, [0, 0, 0], k);
-      }
-      intro.eye = flightEye;
-      flightView = lookAt(flightEye, flightTarget, [0, 1, 0]);
+      // One eased parameter drives angle, distance and pitch together — the
+      // spiral unwinds onto the exact orbit pose it hands over to.
+      const angle = intro.endYaw + (1 - eased) * INTRO_TURNS * Math.PI * 2;
+      const spiralDist = INTRO_START_DIST + (INTRO_END_DIST - INTRO_START_DIST) * eased;
+      const spiralPitch = INTRO_START_PITCH + (INTRO_END_PITCH - INTRO_START_PITCH) * eased;
+      const ex = Math.cos(spiralPitch) * Math.sin(angle) * spiralDist;
+      const ez = Math.cos(spiralPitch) * Math.cos(angle) * spiralDist;
+      // Over the relief, never through it.
+      const ey = Math.max(Math.sin(spiralPitch) * spiralDist, groundAt(ex, ez) + INTRO_CLEARANCE);
+      intro.eye = [ex, ey, ez];
+      flightView = lookAt(intro.eye, [0, 0, 0], [0, 1, 0]);
 
       if (t >= 1) {
-        // The final flight frame equals this orbit pose, so the handover is
-        // seamless.
         yaw = intro.endYaw;
-        pitch = ORTHO_PITCH;
-        distance = ORTHO_DISTANCE;
+        pitch = INTRO_END_PITCH;
+        distance = INTRO_END_DIST;
         intro = null;
         flightView = null;
       }
@@ -785,10 +757,16 @@ export function createTerrainViewer(
     // left it, visible from orbit and isometric views. With no body loaded
     // the walk is first person, so there is nothing to draw.
     if (character && walkTouched) {
-      const cosYaw = Math.cos(-walkYaw);
-      const sinYaw = Math.sin(-walkYaw);
-      const groundY = groundAt(walkX, walkZ);
-      // Column-major translate(walk position) · rotateY(-walkYaw) · scale.
+      // glTF models face +Z, so π−walkYaw points the face along the walking
+      // direction and the camera sees the back — with a stride sway and a
+      // double-step bob selling the walk on a rigid mesh.
+      const sway = walkMode && walkMoving ? Math.sin(walkPhase * 0.5) * 0.06 : 0;
+      const theta = Math.PI - walkYaw + sway;
+      const cosYaw = Math.cos(theta);
+      const sinYaw = Math.sin(theta);
+      const bob = walkMode && walkMoving ? Math.abs(Math.sin(walkPhase)) * 0.1 * 1.5 * scale : 0;
+      const groundY = groundAt(walkX, walkZ) + bob;
+      // Column-major translate(walk position) · rotateY(theta) · scale.
       gl.uniformMatrix4fv(
         uModel,
         false,
@@ -845,7 +823,11 @@ export function createTerrainViewer(
 
   const onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    if (walkMode) return;
+    if (walkMode) {
+      // WoW-style: the wheel zooms the third-person boom.
+      walkBoom = Math.min(14, Math.max(2, walkBoom + Math.sign(event.deltaY) * 0.8));
+      return;
+    }
     autoRotate = false;
     cancelIntro();
     distance = Math.min(9, Math.max(1.2, distance + Math.sign(event.deltaY) * 0.2));
