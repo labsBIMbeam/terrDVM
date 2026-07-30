@@ -229,6 +229,10 @@ export const COPY = {
       `Mapzen DEM z${zoom} · ~${mPerPx.toFixed(0)} m/px`,
     availOrtho: (name: string, mPerPx: number): string => `${name} · ~${mPerPx} m/px`,
     orthoLine: (name: string, mPerPx: number): string => `${name} · ${mPerPx} m/px`,
+    orthoCapped: '(capped — hover for why)',
+    buildingsMeasuredNote:
+      'Vienna Baukörpermodell: only parts with measured heights (O_KOTE − T_KOTE, ' +
+      'clamped 1.5–220 m) are built — parts without a survey height are skipped.',
     imageryAttribution: (attribution: string): string => `Imagery: ${attribution}`,
   },
 } as const;

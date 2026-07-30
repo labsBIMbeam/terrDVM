@@ -551,9 +551,16 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         ? buildingCount.toLocaleString('en-US')
         : absentLabel;
       jobRoads.textContent = roadCount > 0 ? roadCount.toLocaleString('en-US') : absentLabel;
+      // Bake warnings (tile budgets, size clamps) explain WHY a delivery is
+      // coarser than the neighbour's — the number alone reads as a defect.
       jobOrtho.textContent = orthoMeta
-        ? COPY.jobFlow.orthoLine(orthoMeta.source.name, orthoMeta.mPerPx)
+        ? COPY.jobFlow.orthoLine(orthoMeta.source.name, orthoMeta.mPerPx) +
+          (orthoMeta.warnings.length > 0 ? ` ${COPY.jobFlow.orthoCapped}` : '')
         : COPY.jobFlow.orthoUnavailable;
+      jobOrtho.title = orthoMeta?.warnings.join('; ') ?? '';
+      // The Vienna model measures most parts, not all — say so instead of
+      // letting three different counts circulate.
+      jobBuildings.title = buildingsAttribution ? COPY.jobFlow.buildingsMeasuredNote : '';
       // Attribution is a licence obligation wherever imagery is shown, so the
       // line appears exactly when a texture is draped.
       jobImageryAttribution.hidden = orthoMeta === null;
