@@ -14,6 +14,7 @@ import type { TerrainMesh } from '../terrain/mesh';
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
 in vec3 aNormal;
+uniform mat4 uModel;
 uniform mat4 uModelView;
 uniform mat4 uProjection;
 uniform float uInvMaxHeight;
@@ -23,13 +24,16 @@ out float vHeight;
 out vec2 vUV;
 out vec3 vWorld;
 void main() {
-  vNormal = aNormal;
-  vHeight = aPosition.y * uInvMaxHeight;
+  // uModel is identity for the scene; only dynamic props (the character)
+  // carry a transform of their own.
+  vec4 world = uModel * vec4(aPosition, 1.0);
+  vNormal = normalize(mat3(uModel) * aNormal);
+  vHeight = world.y * uInvMaxHeight;
   // The terrain grid is centred on the origin with north at -Z, and the
   // orthophoto's first row is north — so no flip is needed on either axis.
-  vUV = aPosition.xz / uGroundSize + 0.5;
-  vWorld = aPosition;
-  gl_Position = uProjection * uModelView * vec4(aPosition, 1.0);
+  vUV = world.xz / uGroundSize + 0.5;
+  vWorld = world.xyz;
+  gl_Position = uProjection * uModelView * world;
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
@@ -206,6 +210,12 @@ export type TerrainViewer = {
   setPixelLook: (on: boolean) => void;
   /** First-person walk: WASD moves, click locks the pointer, mouse looks. */
   setWalkMode: (on: boolean) => void;
+  /** Give the walker a body: a static mesh in metres, Y-up, facing -Z. */
+  setCharacter: (mesh: {
+    positions: Float32Array;
+    normals: Float32Array;
+    indices: Uint32Array;
+  }) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -219,6 +229,11 @@ const ROAD_COLOR: readonly [number, number, number] = [0.13, 0.13, 0.14];
 
 /** Waterways: a shade brighter than still-water patches so currents read. */
 const WATERWAY_COLOR: readonly [number, number, number] = [0.14, 0.34, 0.48];
+
+/** The avatar: warm bone-white, distinct from every data layer. */
+const CHARACTER_COLOR: readonly [number, number, number] = [0.92, 0.88, 0.8];
+
+const IDENTITY_MODEL = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
 export function createTerrainViewer(
   canvas: HTMLCanvasElement,
@@ -368,6 +383,7 @@ export function createTerrainViewer(
   const uPosterize = gl.getUniformLocation(program, 'uPosterize');
   const uWindowCol = gl.getUniformLocation(program, 'uWindowCol');
   const uFloorRow = gl.getUniformLocation(program, 'uFloorRow');
+  const uModel = gl.getUniformLocation(program, 'uModel');
 
   // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
   // as-is and still gets mipmaps for the oblique viewing angles.
@@ -418,12 +434,14 @@ export function createTerrainViewer(
   const WALK_SPEED = 12 * scale;
   const WALK_RUN_SPEED = 36 * scale;
   let walkMode = false;
+  let walkTouched = false;
   let walkYaw = 0;
   let walkPitch = -0.05;
   let walkX = 0;
   let walkZ = 0;
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
+  let character: Drawable | null = null;
 
   /** Bilinear terrain height at a point in scaled model space. */
   const groundAt = (x: number, z: number): number => {
@@ -693,6 +711,7 @@ export function createTerrainViewer(
       gl.bindTexture(gl.TEXTURE_2D, orthoTexture);
     }
 
+    gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
     gl.uniform1f(uUseOverride, 0);
     gl.uniform1f(uTexturedStructure, 0);
     gl.bindVertexArray(terrain.vao);
@@ -736,6 +755,31 @@ export function createTerrainViewer(
       gl.bindVertexArray(structures.vao);
       gl.drawElements(gl.TRIANGLES, structures.count, gl.UNSIGNED_INT, 0);
       gl.uniform1f(uTexturedStructure, 0);
+    }
+
+    // The avatar stands where the walker last stood — visible from orbit and
+    // isometric views, never from inside its own head.
+    if (character && walkTouched && !walkMode) {
+      const cosYaw = Math.cos(-walkYaw);
+      const sinYaw = Math.sin(-walkYaw);
+      const groundY = groundAt(walkX, walkZ);
+      // Column-major translate(walk position) · rotateY(-walkYaw) · scale.
+      gl.uniformMatrix4fv(
+        uModel,
+        false,
+        new Float32Array([
+          scale * cosYaw, 0, -scale * sinYaw, 0,
+          0, scale, 0, 0,
+          scale * sinYaw, 0, scale * cosYaw, 0,
+          walkX, groundY, walkZ, 1,
+        ]),
+      );
+      gl.uniform1f(uUseOverride, 1);
+      gl.uniform3f(uOverrideColor, ...CHARACTER_COLOR);
+      gl.bindVertexArray(character.vao);
+      gl.drawElements(gl.TRIANGLES, character.count, gl.UNSIGNED_INT, 0);
+      gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+      gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
     }
     gl.bindVertexArray(null);
   };
@@ -814,6 +858,7 @@ export function createTerrainViewer(
       if (on) {
         cancelIntro();
         autoRotate = false;
+        walkTouched = true;
         walkX = 0;
         walkZ = 0;
         // Face the way the orbit camera was looking, so entering walk mode
@@ -825,6 +870,10 @@ export function createTerrainViewer(
         keysDown.clear();
         if (document.pointerLockElement === canvas) document.exitPointerLock();
       }
+    },
+    setCharacter: (characterMesh) => {
+      if (destroyed || character) return;
+      character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
     },
     exportImage: async (): Promise<Blob | null> => {
       if (destroyed) return null;
@@ -901,6 +950,7 @@ export function createTerrainViewer(
         structures,
         roadways,
         waterways,
+        character,
         ...landcover.map((p) => p.drawable),
       ]) {
         if (!drawable) continue;

@@ -17,6 +17,8 @@ import {
 } from '../job/job-flow';
 import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '../job/ortho';
 import { demResolution, runPreflight } from '../job/preflight';
+import { fetchCharacterBytes } from '../job/collection';
+import { parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh } from '../buildings/extrude';
@@ -847,6 +849,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         autoRotate: false,
         intro: true,
       });
+      // The walker's body, fetched by content hash from the collection
+      // server. Absence is normal — the walk works without a visible avatar.
+      void fetchCharacterBytes()
+        .then((bytes) => fullViewer?.setCharacter(parseGlb(bytes)))
+        .catch(() => undefined);
     } catch (error) {
       closeFullViewer();
       announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .coverage import summarise, survey, write_geojson
 from .crawl import KINDS, CrawlQueue, RateLimiter, run
-from .db import BlobIndex
+from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox
 from .source_check import CANDIDATES
 from .store import BlobStore
@@ -55,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blossom-gis-crawler")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser(
+        "character",
+        help="store the deterministic demo character in the blob store, print its hash",
+    )
+
     for name in ("seed", "run", "status", "coverage"):
         p = sub.add_parser(name)
         p.add_argument("--region", required=True, choices=sorted(REGIONS))
@@ -74,6 +79,33 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     blob_dir, index_path, queue_path = _paths()
+
+    if args.command == "character":
+        import time
+
+        from .character import build_character_glb
+
+        payload = build_character_glb()
+        stored = BlobStore(blob_dir).put(payload)
+        index = BlobIndex(index_path)
+        index.upsert(
+            BlobRecord(
+                sha256=stored.sha256,
+                size=stored.size,
+                media_type="model/gltf-binary",
+                uploaded_by="cli:character",
+                uploaded_at=int(time.time()),
+                tile_z=None,
+                tile_x=None,
+                tile_y=None,
+                **geo_fields(None),
+            )
+        )
+        index.close()
+        print(f"character blob: {stored.sha256} ({stored.size:,} bytes)")
+        print(f"fetch as: /{stored.sha256}.glb")
+        return 0
+
     queue = CrawlQueue(queue_path)
 
     try:
