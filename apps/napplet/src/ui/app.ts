@@ -1012,19 +1012,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // served (production napplet build), the animated start screen stands alone.
   startVideo.addEventListener('error', () => startVideo.remove());
 
-  // Cinema mode: while the film plays, the menu bows out after a moment of
-  // stillness; any movement brings it back, and a click still enters the app.
-  let cinemaTimer: ReturnType<typeof setTimeout> | undefined;
-  const armCinema = (): void => {
-    clearTimeout(cinemaTimer);
-    startScreen.classList.remove('is-cinema');
-    cinemaTimer = setTimeout(() => startScreen.classList.add('is-cinema'), 2500);
-  };
-  startVideo.addEventListener('playing', armCinema);
-  startScreen.addEventListener('pointermove', () => {
-    if (!startVideo.isConnected || startVideo.paused) return;
-    armCinema();
-  });
+  // Cinema mode: while the film plays it owns the whole screen — no menu at
+  // all. A click anywhere skips into the app.
+  startVideo.addEventListener('playing', () => startScreen.classList.add('is-cinema'));
 
   // Everyone whose presence status stands in this region appears on the map.
   void fetchPresences([
@@ -1255,7 +1245,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // gesture is what unlocks the AudioContext, so the chime lands with it.
   const enterApp = (): void => {
     if (startScreen.classList.contains('is-leaving')) return;
-    clearTimeout(cinemaTimer);
     sound.chime();
     startScreen.classList.add('is-leaving');
     root.querySelector('.app-header')?.classList.add('is-arriving');

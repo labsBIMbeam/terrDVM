@@ -586,21 +586,38 @@ def build_goose_rig(ground_at, crab_end: Vector) -> bpy.types.Object | None:
             goose.scale = (1.5, 1.5, 1.5)
             goose.location = (0.0, 0.0, floor / max(1e-6, rig.scale.z) - 4.6)
 
-    # Twice life-size, so goose and balloons read from the finale camera.
-    rig.scale = (2.0, 2.0, 2.0)
+    # 21x — the number of the whole project. The goose ends the film as a
+    # monument over the city.
+    rig.scale = (21.0, 21.0, 21.0)
+    bpy.context.view_layer.update()
+    lo, hi = 1e9, -1e9
+    stack = [rig]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.type != "MESH":
+            continue
+        for corner in node.bound_box:
+            z = (node.matrix_world @ Vector(corner)).z
+            lo, hi = min(lo, z), max(hi, z)
+    height = max(1.0, hi - lo)
+
     ground = ground_at(crab_end.x, crab_end.y)
-    # Parked out of sight below the city until the transformation.
-    rig.location = (crab_end.x, crab_end.y, ground - 600.0)
+    # Parked fully below the city until the transformation.
+    rig.location = (crab_end.x, crab_end.y, ground - height - 120.0)
     rig.keyframe_insert("location", frame=1)
     rig.keyframe_insert("location", frame=GOOSE_RISE_START_F - 2)
-    rig.location = (crab_end.x, crab_end.y, ground + 2.0)
-    rig.keyframe_insert("location", frame=GOOSE_RISE_START_F)
+    # Feet just over the fallen crab, then a stately climb.
+    rig.location = (crab_end.x, crab_end.y, ground - lo + 8.0)
+    rig.keyframe_insert("location", frame=GOOSE_RISE_START_F + 10)
     rig.rotation_euler = (0.0, 0.0, 0.0)
-    rig.keyframe_insert("rotation_euler", frame=GOOSE_RISE_START_F)
-    rig.location = (crab_end.x + 30.0, crab_end.y - 24.0, ground + 320.0)
-    rig.rotation_euler = (0.0, 0.0, math.radians(55))
+    rig.keyframe_insert("rotation_euler", frame=GOOSE_RISE_START_F + 10)
+    rig.location = (crab_end.x, crab_end.y, ground - lo + 190.0)
+    rig.rotation_euler = (0.0, 0.0, math.radians(40))
     rig.keyframe_insert("location", frame=END_FRAME)
     rig.keyframe_insert("rotation_euler", frame=END_FRAME)
+    rig["goose_lo"] = lo
+    rig["goose_height"] = height
     return rig
 
 
@@ -870,11 +887,12 @@ def _animate_camera(scene, point_at, walk_fraction, ground_at,
     # Phase 4 (F368-408): wide witness shot of the takedown.
     key(392, (crab_end.x + 260.0, crab_end.y - 330.0, 150.0),
         (crab_end.x, crab_end.y, 22.0))
-    # Phase 5 (F408-504): a long, unhurried rise with the goose.
-    key(440, (crab_end.x + 170.0, crab_end.y - 230.0, ground_end + 160.0),
-        (crab_end.x + 16.0, crab_end.y - 13.0, ground_end + 130.0))
-    key(END_FRAME, (crab_end.x + 110.0, crab_end.y - 150.0, ground_end + 330.0),
-        (crab_end.x + 30.0, crab_end.y - 24.0, ground_end + 315.0))
+    # Phase 5 (F408-504): the giant goose holds the frame while the camera
+    # pulls back and back — the city shrinks beneath her.
+    key(420, (crab_end.x + 300.0, crab_end.y - 420.0, ground_end + 190.0),
+        (crab_end.x, crab_end.y, ground_end + 150.0))
+    key(END_FRAME, (crab_end.x + 1050.0, crab_end.y - 1450.0, ground_end + 560.0),
+        (crab_end.x, crab_end.y, ground_end + 300.0))
     return camera
 
 
