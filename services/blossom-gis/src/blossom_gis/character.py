@@ -16,6 +16,179 @@ GLB_MAGIC = 0x46546C67
 CHUNK_JSON = 0x4E4F534A
 CHUNK_BIN = 0x004E4942
 
+
+def _node_world_matrices(gltf: dict) -> dict[int, list[list[float]]]:
+    """World matrix per node index (column vectors), TRS or matrix form."""
+
+    def local(node: dict) -> list[list[float]]:
+        if "matrix" in node:
+            m = node["matrix"]
+            return [[m[c * 4 + r] for c in range(4)] for r in range(4)]
+        tx, ty, tz = node.get("translation", [0, 0, 0])
+        qx, qy, qz, qw = node.get("rotation", [0, 0, 0, 1])
+        sx, sy, sz = node.get("scale", [1, 1, 1])
+        xx, yy, zz = qx * qx, qy * qy, qz * qz
+        xy, xz, yz = qx * qy, qx * qz, qy * qz
+        wx, wy, wz = qw * qx, qw * qy, qw * qz
+        return [
+            [(1 - 2 * (yy + zz)) * sx, 2 * (xy - wz) * sy, 2 * (xz + wy) * sz, tx],
+            [2 * (xy + wz) * sx, (1 - 2 * (xx + zz)) * sy, 2 * (yz - wx) * sz, ty],
+            [2 * (xz - wy) * sx, 2 * (yz + wx) * sy, (1 - 2 * (xx + yy)) * sz, tz],
+            [0, 0, 0, 1],
+        ]
+
+    def multiply(a, b):
+        return [
+            [sum(a[r][k] * b[k][c] for k in range(4)) for c in range(4)] for r in range(4)
+        ]
+
+    world: dict[int, list[list[float]]] = {}
+
+    def visit(index: int, parent):
+        node = gltf["nodes"][index]
+        matrix = multiply(parent, local(node))
+        world[index] = matrix
+        for child in node.get("children", []):
+            visit(child, matrix)
+
+    identity = [[1.0 if r == c else 0.0 for c in range(4)] for r in range(4)]
+    for root in gltf.get("scenes", [{}])[gltf.get("scene", 0)].get("nodes", []):
+        visit(root, identity)
+    return world
+
+
+def transcode_draco_glb(payload: bytes) -> bytes:
+    """Decode a Draco-compressed GLB into a plain-geometry GLB.
+
+    Materials, textures and animations are dropped on purpose — the napplet
+    viewer renders bare geometry and colours it itself. Node transforms are
+    applied so the merged mesh stands the way its author posed it.
+    """
+    import DracoPy
+
+    magic, version, _total = struct.unpack_from("<III", payload, 0)
+    if magic != GLB_MAGIC or version != 2:
+        raise ValueError("not a glTF 2.0 binary container")
+    json_length, json_type = struct.unpack_from("<II", payload, 12)
+    if json_type != CHUNK_JSON:
+        raise ValueError("first chunk is not JSON")
+    gltf = json.loads(payload[20 : 20 + json_length])
+    bin_start = 20 + json_length
+    bin_length, bin_type = struct.unpack_from("<II", payload, bin_start)
+    if bin_type != CHUNK_BIN:
+        raise ValueError("second chunk is not BIN")
+    binary = payload[bin_start + 8 : bin_start + 8 + bin_length]
+
+    world = _node_world_matrices(gltf)
+    positions: list[float] = []
+    normals: list[float] = []
+    indices: list[int] = []
+
+    for node_index, matrix in world.items():
+        mesh_index = gltf["nodes"][node_index].get("mesh")
+        if mesh_index is None:
+            continue
+        for primitive in gltf["meshes"][mesh_index].get("primitives", []):
+            draco = primitive.get("extensions", {}).get("KHR_draco_mesh_compression")
+            if not draco:
+                continue
+            view = gltf["bufferViews"][draco["bufferView"]]
+            start = view.get("byteOffset", 0)
+            decoded = DracoPy.decode(binary[start : start + view["byteLength"]])
+            base = len(positions) // 3
+            has_normals = decoded.normals is not None and len(decoded.normals) > 0
+            for i, point in enumerate(decoded.points):
+                x, y, z = float(point[0]), float(point[1]), float(point[2])
+                positions.extend(
+                    [
+                        matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3],
+                        matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3],
+                        matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3],
+                    ]
+                )
+                if has_normals:
+                    nx, ny, nz = (float(v) for v in decoded.normals[i])
+                    tx = matrix[0][0] * nx + matrix[0][1] * ny + matrix[0][2] * nz
+                    ty = matrix[1][0] * nx + matrix[1][1] * ny + matrix[1][2] * nz
+                    tz = matrix[2][0] * nx + matrix[2][1] * ny + matrix[2][2] * nz
+                    length = (tx * tx + ty * ty + tz * tz) ** 0.5 or 1.0
+                    normals.extend([tx / length, ty / length, tz / length])
+                else:
+                    normals.extend([0.0, 1.0, 0.0])
+            for face in decoded.faces:
+                indices.extend([base + int(face[0]), base + int(face[1]), base + int(face[2])])
+
+    if not positions:
+        raise ValueError("no draco geometry found")
+    return _pack_glb(positions, normals, indices)
+
+
+def _pack_glb(positions: list[float], normals: list[float], indices: list[int]) -> bytes:
+    """Assemble plain geometry into a byte-stable binary glTF."""
+    position_bytes = struct.pack(f"<{len(positions)}f", *positions)
+    normal_bytes = struct.pack(f"<{len(normals)}f", *normals)
+    index_bytes = struct.pack(f"<{len(indices)}I", *indices)
+    binary = position_bytes + normal_bytes + index_bytes
+
+    minimum = [min(positions[i::3]) for i in range(3)]
+    maximum = [max(positions[i::3]) for i in range(3)]
+    gltf = {
+        "asset": {"generator": "terrdvm-transcode", "version": "2.0"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [{"primitives": [{"attributes": {"NORMAL": 1, "POSITION": 0}, "indices": 2}]}],
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [
+            {"buffer": 0, "byteLength": len(position_bytes), "byteOffset": 0},
+            {
+                "buffer": 0,
+                "byteLength": len(normal_bytes),
+                "byteOffset": len(position_bytes),
+            },
+            {
+                "buffer": 0,
+                "byteLength": len(index_bytes),
+                "byteOffset": len(position_bytes) + len(normal_bytes),
+            },
+        ],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": len(positions) // 3,
+                "max": maximum,
+                "min": minimum,
+                "type": "VEC3",
+            },
+            {
+                "bufferView": 1,
+                "componentType": 5126,
+                "count": len(normals) // 3,
+                "type": "VEC3",
+            },
+            {
+                "bufferView": 2,
+                "componentType": 5125,
+                "count": len(indices),
+                "type": "SCALAR",
+            },
+        ],
+    }
+    payload = json.dumps(gltf, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    if len(payload) % 4:
+        payload += b" " * (4 - len(payload) % 4)
+    total = 12 + 8 + len(payload) + 8 + len(binary)
+    return b"".join(
+        [
+            struct.pack("<III", GLB_MAGIC, 2, total),
+            struct.pack("<II", len(payload), CHUNK_JSON),
+            payload,
+            struct.pack("<II", len(binary), CHUNK_BIN),
+            binary,
+        ]
+    )
+
 #: (min_x, min_y, min_z, max_x, max_y, max_z) per cuboid, metres.
 CHARACTER_BOXES: tuple[tuple[float, float, float, float, float, float], ...] = (
     (-0.20, 0.0, -0.11, -0.02, 0.80, 0.11),  # left leg

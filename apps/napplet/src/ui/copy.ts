@@ -186,6 +186,8 @@ export const COPY = {
     avatarNone: 'No avatar (first person)',
     avatarBuiltin: 'Blocky (built-in)',
     avatarFailed: (name: string): string => `${name}: model format unsupported`,
+    crabButton: 'Spawn crab',
+    crabRemoveButton: 'Remove crab',
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     landcoverLabel: 'Land cover',

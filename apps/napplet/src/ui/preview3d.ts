@@ -220,6 +220,15 @@ export type TerrainViewer = {
     normals: Float32Array;
     indices: Uint32Array;
   } | null) => void;
+  /**
+   * Drop a kaiju into the scene: a mesh in metres that stomps back and forth
+   * across the selection on its own. Null removes it.
+   */
+  setKaiju: (mesh: {
+    positions: Float32Array;
+    normals: Float32Array;
+    indices: Uint32Array;
+  } | null) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -451,6 +460,8 @@ export function createTerrainViewer(
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
   let character: Drawable | null = null;
+  let kaiju: { drawable: Drawable; x: number; z: number; heading: number; phase: number } | null =
+    null;
 
   /** Bilinear terrain height at a point in scaled model space. */
   const groundAt = (x: number, z: number): number => {
@@ -753,6 +764,43 @@ export function createTerrainViewer(
       gl.uniform1f(uTexturedStructure, 0);
     }
 
+    // The kaiju stomps across the selection on its own clock, heading for
+    // the far side and turning back at the edge.
+    if (kaiju) {
+      const stompSpeed = 10 * scale;
+      kaiju.phase += dt * 4.5;
+      kaiju.x += Math.sin(kaiju.heading) * stompSpeed * dt;
+      kaiju.z += -Math.cos(kaiju.heading) * stompSpeed * dt;
+      const limitX = mesh.stats.widthM * scale * 0.45;
+      const limitZ = mesh.stats.depthM * scale * 0.45;
+      if (Math.abs(kaiju.x) > limitX || Math.abs(kaiju.z) > limitZ) {
+        kaiju.x = Math.min(limitX, Math.max(-limitX, kaiju.x));
+        kaiju.z = Math.min(limitZ, Math.max(-limitZ, kaiju.z));
+        kaiju.heading += Math.PI * 0.72; // turn, but never retrace exactly
+      }
+      const stompBob = Math.abs(Math.sin(kaiju.phase)) * 2.4 * 1.5 * scale;
+      const theta = Math.PI - kaiju.heading;
+      const c = Math.cos(theta);
+      const s = Math.sin(theta);
+      gl.uniformMatrix4fv(
+        uModel,
+        false,
+        new Float32Array([
+          scale * c, 0, -scale * s, 0,
+          0, scale, 0, 0,
+          scale * s, 0, scale * c, 0,
+          kaiju.x, groundAt(kaiju.x, kaiju.z) + stompBob, kaiju.z, 1,
+        ]),
+      );
+      gl.uniform1f(uUseOverride, 1);
+      gl.uniform1f(uTexturedStructure, 0);
+      gl.uniform3f(uOverrideColor, 0.82, 0.32, 0.2);
+      gl.bindVertexArray(kaiju.drawable.vao);
+      gl.drawElements(gl.TRIANGLES, kaiju.drawable.count, gl.UNSIGNED_INT, 0);
+      gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+      gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
+    }
+
     // The avatar walks in third person and stays standing where the walker
     // left it, visible from orbit and isometric views. With no body loaded
     // the walk is first person, so there is nothing to draw.
@@ -897,6 +945,24 @@ export function createTerrainViewer(
         character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
       }
     },
+    setKaiju: (kaijuMesh) => {
+      if (destroyed) return;
+      if (kaiju) {
+        for (const buffer of kaiju.drawable.buffers) gl.deleteBuffer(buffer);
+        gl.deleteVertexArray(kaiju.drawable.vao);
+        kaiju = null;
+      }
+      if (kaijuMesh) {
+        kaiju = {
+          drawable: upload(kaijuMesh.positions, kaijuMesh.normals, kaijuMesh.indices),
+          // Enter from a corner, heading across the middle of town.
+          x: -mesh.stats.widthM * scale * 0.4,
+          z: mesh.stats.depthM * scale * 0.4,
+          heading: Math.PI * 0.25,
+          phase: 0,
+        };
+      }
+    },
     exportImage: async (): Promise<Blob | null> => {
       if (destroyed) return null;
       // One synchronous high-resolution frame, read back before anything else
@@ -973,6 +1039,7 @@ export function createTerrainViewer(
         roadways,
         waterways,
         character,
+        kaiju?.drawable ?? null,
         ...landcover.map((p) => p.drawable),
       ]) {
         if (!drawable) continue;

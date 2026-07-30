@@ -245,6 +245,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           </select>
         </label>
         <button class="button" id="viewer-export" type="button">${COPY.jobFlow.exportMapButton}</button>
+        <button class="button" id="viewer-crab" type="button">${COPY.jobFlow.crabButton}</button>
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
@@ -316,6 +317,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerWalk = root.querySelector<HTMLInputElement>('#viewer-walk');
   const viewerAvatar = root.querySelector<HTMLSelectElement>('#viewer-avatar');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
+  const viewerCrab = root.querySelector<HTMLButtonElement>('#viewer-crab');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
@@ -334,7 +336,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerOrthoLabel || !viewerLayerBuildingsLabel || !viewerLayerRoadsLabel ||
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
-      !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport) {
+      !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
+      !viewerCrab) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -870,6 +873,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     viewerPixel.checked = false;
     viewerWalk.checked = false;
     viewerAvatar.value = '';
+    crabActive = false;
+    viewerCrab.textContent = COPY.jobFlow.crabButton;
     try {
       fullViewer = createTerrainViewer(viewerCanvas, lastScene.mesh, {
         buildings: lastScene.buildings,
@@ -961,6 +966,30 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       URL.revokeObjectURL(url);
     });
   });
+  // The crab: secrab from the blossom store, normalised to 42 m, stomping
+  // across the selection. The button toggles it.
+  let crabActive = false;
+  viewerCrab.addEventListener('click', () => {
+    if (crabActive) {
+      fullViewer?.setKaiju(null);
+      crabActive = false;
+      viewerCrab.textContent = COPY.jobFlow.crabButton;
+      return;
+    }
+    const entry = avatarManifest?.find((candidate) => candidate.name === 'secrab');
+    if (!entry) {
+      announce(COPY.jobFlow.avatarFailed('secrab'));
+      return;
+    }
+    void fetchCharacterBytes(entry.sha256)
+      .then((bytes) => {
+        fullViewer?.setKaiju(normalizeCharacter(parseGlb(bytes), 42));
+        crabActive = true;
+        viewerCrab.textContent = COPY.jobFlow.crabRemoveButton;
+      })
+      .catch(() => announce(COPY.jobFlow.avatarFailed('secrab')));
+  });
+
   viewerClose.addEventListener('click', () => viewerModal.close());
   // Covers Escape as well: the native close event is the single teardown path.
   viewerModal.addEventListener('close', () => {
