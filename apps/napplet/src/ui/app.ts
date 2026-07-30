@@ -27,6 +27,7 @@ import { projector } from '../buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
 import { buildPlacementEvent, signAndPublish } from '../nostr/publish';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
+import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
 import { extrudeFootprints, type BuildingMesh, type Footprint } from '../buildings/extrude';
@@ -104,6 +105,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <button class="button" id="coordinates-button" type="button" aria-expanded="false" aria-controls="coordinates-panel">${COPY.buttons.enterCoordinates}</button>
         <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
         <button class="button" id="place-avatar-button" type="button">${COPY.jobFlow.placeButton}</button>
+        <button class="button" id="sound-button" type="button" aria-pressed="true">${COPY.jobFlow.soundButton}</button>
         <button class="button button-danger" id="clear-button" type="button">${COPY.buttons.clearSelection}</button>
       </div>
     </header>
@@ -345,6 +347,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerCrab = root.querySelector<HTMLButtonElement>('#viewer-crab');
   const viewerPlaceHere = root.querySelector<HTMLButtonElement>('#viewer-place-here');
   const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
+  const soundButton = root.querySelector<HTMLButtonElement>('#sound-button');
   const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
   const placePosition = root.querySelector<HTMLElement>('#place-position');
@@ -371,7 +374,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
-      !viewerCrab || !viewerPlaceHere || !placeButton || !placeModal || !placeCharacter ||
+      !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton || !placeModal ||
+      !placeCharacter ||
       !placePosition ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
@@ -648,6 +652,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         // synchronously — deferring to rAF would never run while the page is
         // backgrounded or not compositing.
         dispatchJob({ type: 'TERRAIN_READY', mesh });
+        sound.chime();
         buildingCount = buildings?.stats.footprints ?? 0;
         roadCount = roads?.stats.roads ?? 0;
         featuresFailed = !featuresOk;
@@ -672,6 +677,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
             landcover,
             waterways,
             ortho: ortho?.bitmap,
+            audio: { step: () => sound.step(), stomp: () => sound.stomp() },
           });
           if (npcs.length > 0) viewer.setNpcs(npcs);
         } catch (error) {
@@ -957,6 +963,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         ortho: lastScene.ortho,
         autoRotate: false,
         intro: true,
+        audio: { step: () => sound.step(), stomp: () => sound.stomp() },
       });
       if (lastScene.npcs && lastScene.npcs.length > 0) fullViewer.setNpcs(lastScene.npcs);
       void populateAvatarChoices();
@@ -1071,6 +1078,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         fullViewer?.setKaiju(frameShas.map((sha) => bySha.get(sha)!));
         crabActive = true;
         viewerCrab.textContent = COPY.jobFlow.crabRemoveButton;
+        // The crab is an event: flash, shake, sub-bass.
+        sound.boom();
+        viewerModal.classList.add('crab-arrival');
+        setTimeout(() => viewerModal.classList.remove('crab-arrival'), 900);
       })
       .catch(() => announce(COPY.jobFlow.avatarFailed('secrab')));
   });
@@ -1081,6 +1092,16 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   placeButton.addEventListener('click', () => {
     mapView.armPlacing();
     announce(COPY.jobFlow.placeHint);
+  });
+
+  // Every button clicks softly; the toggle silences the whole layer.
+  root.addEventListener('click', (event) => {
+    if ((event.target as HTMLElement | null)?.closest('button')) sound.tick();
+  });
+  soundButton.addEventListener('click', () => {
+    sound.setMuted(!sound.isMuted());
+    soundButton.setAttribute('aria-pressed', String(!sound.isMuted()));
+    soundButton.classList.toggle('is-muted', sound.isMuted());
   });
   const openPlaceModal = async (lon: number, lat: number): Promise<void> => {
     pendingPlace = { lon, lat };

@@ -612,10 +612,79 @@ body {
 }
 
 .job-progress-fill {
-  background: var(--color-accent);
+  background: linear-gradient(
+    100deg,
+    var(--color-accent) 0%,
+    var(--c-orange-bright) 45%,
+    var(--color-accent) 90%
+  );
+  background-size: 220% 100%;
+  animation: progress-shimmer 1.6s linear infinite;
   block-size: 100%;
   inline-size: 0%;
   transition: width 0.3s ease;
+}
+
+@keyframes progress-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Buttons answer the hand: glow on hover, sink on press. */
+.button {
+  transition: box-shadow 0.18s ease, transform 0.1s ease, background-color 0.18s ease;
+}
+
+.button:hover {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button.is-muted {
+  opacity: 0.45;
+}
+
+/* The crab is an event: a flash of ember and a shudder through the frame. */
+@keyframes crab-flash {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+@keyframes crab-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-6px, 3px); }
+  40% { transform: translate(5px, -4px); }
+  60% { transform: translate(-4px, -3px); }
+  80% { transform: translate(3px, 4px); }
+}
+
+.viewer-modal.crab-arrival .viewer-canvas {
+  animation: crab-shake 0.55s ease-out;
+}
+
+.viewer-modal.crab-arrival::after {
+  animation: crab-flash 0.9s ease-out forwards;
+  background: radial-gradient(
+    circle at 50% 60%,
+    color-mix(in srgb, var(--c-ember) 70%, transparent),
+    transparent 70%
+  );
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-modal.crab-arrival .viewer-canvas {
+    animation: none;
+  }
+  .job-progress-fill {
+    animation: none;
+  }
 }
 
 /* ---- fullscreen viewer -------------------------------------------------- */
@@ -722,6 +791,22 @@ body {
   pointer-events: auto;
   position: absolute;
   will-change: transform;
+}
+
+/* The placed avatars breathe: a soft bob keeps the map alive. */
+@keyframes marker-bob {
+  0%, 100% { transform: rotate(45deg) translate(0, 0); }
+  50% { transform: rotate(45deg) translate(-1.6px, -1.6px); }
+}
+
+.avatar-marker i {
+  animation: marker-bob 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-marker i {
+    animation: none;
+  }
 }
 
 .avatar-marker i {

@@ -282,6 +282,8 @@ export function createTerrainViewer(
      * reduced motion jumps straight to the end state.
      */
     intro?: boolean;
+    /** Footstep and kaiju-stomp callbacks, fired on the gait beats. */
+    audio?: { step?: () => void; stomp?: () => void };
   } = {},
 ): TerrainViewer {
   const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
@@ -470,6 +472,7 @@ export function createTerrainViewer(
   let walkBoom = 5;
   /** Stride phase driving the procedural walk bob. */
   let walkPhase = 0;
+  let walkStepBeat = 0;
   let walkMoving = false;
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
@@ -480,6 +483,7 @@ export function createTerrainViewer(
     z: number;
     heading: number;
     phase: number;
+    lastStomp: number;
   } | null = null;
   let npcs: { drawable: Drawable; x: number; z: number; theta: number }[] = [];
 
@@ -608,7 +612,15 @@ export function createTerrainViewer(
       const speed =
         keysDown.has('ShiftLeft') || keysDown.has('ShiftRight') ? WALK_RUN_SPEED : WALK_SPEED;
       walkMoving = forward !== 0 || strafe !== 0;
-      if (walkMoving) walkPhase += dt * (speed === WALK_RUN_SPEED ? 15 : 9);
+      if (walkMoving) {
+        walkPhase += dt * (speed === WALK_RUN_SPEED ? 15 : 9);
+        // One footfall per half stride.
+        const beat = Math.floor(walkPhase / Math.PI);
+        if (beat !== walkStepBeat) {
+          walkStepBeat = beat;
+          options.audio?.step?.();
+        }
+      }
       walkX += (Math.sin(walkYaw) * forward + Math.cos(walkYaw) * strafe) * speed * dt;
       walkZ += (-Math.cos(walkYaw) * forward + Math.sin(walkYaw) * strafe) * speed * dt;
       // Stay on the terrain: the walker cannot leave the selection.
@@ -814,6 +826,11 @@ export function createTerrainViewer(
     if (kaiju) {
       const stompSpeed = 10 * scale;
       kaiju.phase += dt * 4.5;
+      const stompBeat = Math.floor(kaiju.phase / Math.PI);
+      if (stompBeat !== kaiju.lastStomp) {
+        kaiju.lastStomp = stompBeat;
+        options.audio?.stomp?.();
+      }
       kaiju.x += Math.sin(kaiju.heading) * stompSpeed * dt;
       kaiju.z += -Math.cos(kaiju.heading) * stompSpeed * dt;
       const limitX = mesh.stats.widthM * scale * 0.45;
@@ -1032,6 +1049,7 @@ export function createTerrainViewer(
           z: mesh.stats.depthM * scale * 0.4,
           heading: Math.PI * 0.25,
           phase: 0,
+          lastStomp: 0,
         };
       }
     },
