@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "status": "TEST FIXTURE",
+  "artifact": "terrain-sample-ridge.glb",
+  "generator": "Python stdlib deterministic terrain fixture generator",
+  "case": "ridge-and-basin",
+  "source": "synthetic; no external source or live imagery",
+  "dimensions_m": [
+    200.0,
+    160.0
+  ],
+  "grid": [
+    17,
+    17
+  ],
+  "vertices": 289,
+  "triangles": 512,
+  "height_range_m": [
+    20.388855,
+    41.918611
+  ],
+  "sha256": "d9937fca74f53b094c31750088ad2b7ea4acb377a03d081b9c87c5a475cc31d8",
+  "bytes": 11224,
+  "intended_use": "local UI/viewer and artifact-pipeline smoke tests only",
+  "not_production_terrain": true
+}

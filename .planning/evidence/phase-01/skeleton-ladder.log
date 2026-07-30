@@ -1,0 +1,65 @@
+
+> @terrdvm/napplet@0.0.0 test:unit [PROJECT_ROOT]/apps/napplet
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m[PROJECT_ROOT]/apps/napplet[39m
+
+ [32m✓[39m tests/unit/defaults.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/shell-adapter.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 10:47:13
+[2m   Duration [22m 512ms[2m (transform 78ms, setup 0ms, import 262ms, tests 20ms, environment 0ms)[22m
+
+PASS unit
+
+> @terrdvm/napplet@0.0.0 typecheck [PROJECT_ROOT]/apps/napplet
+> tsc --noEmit
+
+PASS typecheck
+
+> terrdvm@ lint [PROJECT_ROOT]
+> eslint --no-error-on-unmatched-pattern apps/napplet/src apps/napplet/tests scripts
+
+PASS lint
+
+> @terrdvm/napplet@0.0.0 build [PROJECT_ROOT]/apps/napplet
+> vite build
+
+vite v8.1.5 building client environment for production...
+
+ WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.
+
+[2K
+transforming...✓ 6 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.43 kB │ gzip: 0.28 kB
+dist/assets/style-hGF9zah1.css  2.33 kB │ gzip: 0.88 kB
+dist/assets/index-BytC_Z2K.js   2.37 kB │ gzip: 0.83 kB
+
+✓ built in 124ms
+PASS build
+verify-dist: PASS (1 file, dist/index.html is self-contained)
+PASS verify-dist
+Report written to ../../.planning/evidence/phase-01/conformance.json
+PASS conformance
+paja-boot: PASS (4 requests; origins {"http://127.0.0.1:5197":4}; cleanup PASS)
+paja-boot-denied: PASS (4 requests; origins {"http://127.0.0.1:5197":4}; cleanup PASS)
+PASS manifest-cases
+verify-shell-boundary: PASS (5 source files scanned; shell is the sole privileged boundary)
+PASS shell-boundary
+map provenance valid: clean-room-fallback
+PASS map-provenance
+SKIP source-policy — scripts/verify-source-policy.mjs does not exist yet
+ledger valid: 2 entries
+PASS ledger
+SKIP local-surface — scripts/verify-no-local-surface.mjs does not exist yet
+approved lock valid: 14 exact direct dependencies across 2 importers
+PASS lock-approved
+PASS secret-scan — gitleaks 8.30.1; 0 findings; preserved semantic-equivalent evidence
+PASS secret-scan
+PASS public-diff
+{"evidence":"truthful-zero-feature-baseline","bbox_tools":"absent","map":"absent","imagery":"absent","empty_state":"No area selected","fixed_defaults_source":"apps/napplet/src/config/defaults.ts","source_row":"Source: — unavailable","claim":"Walking skeleton only; no map or preview functionality claimed"}
