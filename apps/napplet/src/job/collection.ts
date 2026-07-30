@@ -97,6 +97,49 @@ export async function fetchCharacterBytes(
 
 export type CharacterEntry = { name: string; sha256: string; size: number };
 
+/** A model anchored in the terrain: content hash plus geo position. */
+export type Placement = {
+  name: string;
+  sha256: string;
+  lon: number;
+  lat: number;
+  heading: number;
+};
+
+export function isApprovedPlacementsUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin !== collectionOrigin() || url.pathname !== '/placements') return false;
+  return [...url.searchParams.keys()].every((key) => key === 'bbox');
+}
+
+/** Models placed in the terrain — the whole interop story in one list. */
+export async function fetchPlacements(
+  bbox?: readonly number[],
+  signal?: AbortSignal,
+): Promise<Placement[]> {
+  const url = new URL(`${COLLECTION_SERVICE.baseUrl}/placements`);
+  if (bbox) url.searchParams.set('bbox', bbox.map((v) => v.toFixed(6)).join(','));
+  const blob = await loadApprovedBytes(url.toString(), {
+    deadlineMs: 15_000,
+    isAllowed: isApprovedPlacementsUrl,
+    signal,
+  });
+  const parsed = JSON.parse(await blob.text());
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (entry): entry is Placement =>
+      typeof entry?.name === 'string' &&
+      /^[0-9a-f]{64}$/.test(entry?.sha256 ?? '') &&
+      Number.isFinite(entry?.lon) &&
+      Number.isFinite(entry?.lat),
+  );
+}
+
 export function isApprovedCharactersManifestUrl(candidate: string): boolean {
   let url: URL;
   try {

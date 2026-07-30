@@ -17,6 +17,7 @@ import {
 } from './source';
 import { getRegion, viewBoundsTuple, type Region } from '../config/regions';
 import { coverageFor } from '../config/coverage';
+import { fetchPlacements } from '../job/collection';
 import cities from '../config/cities.json';
 import { addCoverageOverlay, type CoverageOverlay } from './coverage-overlay';
 import type { BBox4326 } from '../bbox/validate';
@@ -368,6 +369,23 @@ export function createMapView(
         .addTo(map);
       cityMarkers.push(marker);
     }
+
+    // Placed avatars: every marker is a blob anyone can fetch by hash.
+    void fetchPlacements()
+      .then((placements) => {
+        if (destroyed) return;
+        for (const placement of placements) {
+          const element = document.createElement('div');
+          element.className = 'avatar-marker';
+          element.innerHTML = `<i></i><span>${placement.name}</span>`;
+          element.title = `blossom blob ${placement.sha256.slice(0, 12)}…`;
+          const marker = new maplibregl.Marker({ element, anchor: 'left' })
+            .setLngLat([placement.lon, placement.lat])
+            .addTo(map);
+          cityMarkers.push(marker);
+        }
+      })
+      .catch(() => undefined);
 
     draw.start();
     drawReady = true;

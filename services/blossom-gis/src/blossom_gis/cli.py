@@ -60,6 +60,14 @@ def main(argv: list[str] | None = None) -> int:
         help="store the deterministic demo character in the blob store, print its hash",
     )
 
+    place = sub.add_parser(
+        "place",
+        help="anchor a named character in the terrain at lon,lat",
+    )
+    place.add_argument("--character", required=True)
+    place.add_argument("--at", required=True, help="lon,lat in EPSG:4326")
+    place.add_argument("--heading", type=float, default=0.0, help="degrees clockwise from north")
+
     mirror = sub.add_parser(
         "mirror",
         help="pull a content-addressed blob from another blossom server, verify its hash",
@@ -115,6 +123,42 @@ def main(argv: list[str] | None = None) -> int:
         index.close()
         print(f"character blob: {stored.sha256} ({stored.size:,} bytes)")
         print(f"fetch as: /{stored.sha256}.glb")
+        return 0
+
+    if args.command == "place":
+        import json
+
+        manifest_path = blob_dir.parent / "characters.json"
+        if not manifest_path.is_file():
+            print("no characters.json — mirror some characters first")
+            return 1
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        entry = manifest.get(args.character)
+        if not entry:
+            print(f"unknown character: {args.character} (have: {', '.join(sorted(manifest))})")
+            return 1
+        try:
+            lon, lat = (float(v) for v in args.at.split(","))
+        except ValueError:
+            print("--at must be 'lon,lat'")
+            return 1
+
+        placements_file = blob_dir.parent / "placements.json"
+        placements = []
+        if placements_file.is_file():
+            placements = json.loads(placements_file.read_text(encoding="utf-8"))
+        placements = [p for p in placements if p.get("name") != args.character]
+        placements.append(
+            {
+                "name": args.character,
+                "sha256": entry["sha256"],
+                "lon": lon,
+                "lat": lat,
+                "heading": args.heading,
+            }
+        )
+        placements_file.write_text(json.dumps(placements, indent=1), encoding="utf-8")
+        print(f"placed {args.character} at {lon},{lat} (heading {args.heading}°)")
         return 0
 
     if args.command == "mirror":

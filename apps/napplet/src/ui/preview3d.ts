@@ -221,6 +221,18 @@ export type TerrainViewer = {
     indices: Uint32Array;
   } | null) => void;
   /**
+   * Stand geo-anchored avatars in the scene: meshes in metres with local
+   * positions and headings. Replaces any previous set.
+   */
+  setNpcs: (
+    npcs: {
+      mesh: { positions: Float32Array; normals: Float32Array; indices: Uint32Array };
+      x: number;
+      z: number;
+      theta: number;
+    }[],
+  ) => void;
+  /**
    * Drop a kaiju into the scene: a mesh in metres that stomps back and forth
    * across the selection on its own. Null removes it.
    */
@@ -462,6 +474,7 @@ export function createTerrainViewer(
   let character: Drawable | null = null;
   let kaiju: { drawable: Drawable; x: number; z: number; heading: number; phase: number } | null =
     null;
+  let npcs: { drawable: Drawable; x: number; z: number; theta: number }[] = [];
 
   /** Bilinear terrain height at a point in scaled model space. */
   const groundAt = (x: number, z: number): number => {
@@ -764,6 +777,31 @@ export function createTerrainViewer(
       gl.uniform1f(uTexturedStructure, 0);
     }
 
+    // Geo-anchored avatars stand where their placement record says.
+    if (npcs.length > 0) {
+      gl.uniform1f(uUseOverride, 1);
+      gl.uniform1f(uTexturedStructure, 0);
+      gl.uniform3f(uOverrideColor, ...CHARACTER_COLOR);
+      for (const npc of npcs) {
+        const c = Math.cos(npc.theta);
+        const s = Math.sin(npc.theta);
+        gl.uniformMatrix4fv(
+          uModel,
+          false,
+          new Float32Array([
+            scale * c, 0, -scale * s, 0,
+            0, scale, 0, 0,
+            scale * s, 0, scale * c, 0,
+            npc.x, groundAt(npc.x, npc.z), npc.z, 1,
+          ]),
+        );
+        gl.bindVertexArray(npc.drawable.vao);
+        gl.drawElements(gl.TRIANGLES, npc.drawable.count, gl.UNSIGNED_INT, 0);
+      }
+      gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
+      gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
+    }
+
     // The kaiju stomps across the selection on its own clock, heading for
     // the far side and turning back at the edge.
     if (kaiju) {
@@ -945,6 +983,19 @@ export function createTerrainViewer(
         character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
       }
     },
+    setNpcs: (list) => {
+      if (destroyed) return;
+      for (const npc of npcs) {
+        for (const buffer of npc.drawable.buffers) gl.deleteBuffer(buffer);
+        gl.deleteVertexArray(npc.drawable.vao);
+      }
+      npcs = list.map((npc) => ({
+        drawable: upload(npc.mesh.positions, npc.mesh.normals, npc.mesh.indices),
+        x: npc.x,
+        z: npc.z,
+        theta: npc.theta,
+      }));
+    },
     setKaiju: (kaijuMesh) => {
       if (destroyed) return;
       if (kaiju) {
@@ -1040,6 +1091,7 @@ export function createTerrainViewer(
         waterways,
         character,
         kaiju?.drawable ?? null,
+        ...npcs.map((npc) => npc.drawable),
         ...landcover.map((p) => p.drawable),
       ]) {
         if (!drawable) continue;

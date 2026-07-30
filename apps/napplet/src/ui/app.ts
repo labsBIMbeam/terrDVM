@@ -20,8 +20,10 @@ import { demResolution, runPreflight } from '../job/preflight';
 import {
   fetchCharacterBytes,
   fetchCharacterManifest,
+  fetchPlacements,
   type CharacterEntry,
 } from '../job/collection';
+import { projector } from '../buildings/extrude';
 import { normalizeCharacter, parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
@@ -389,6 +391,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     landcover?: LandcoverMesh;
     waterways?: RoadMesh;
     ortho?: TexImageSource;
+    npcs?: { mesh: ReturnType<typeof parseGlb>; x: number; z: number; theta: number }[];
     featuresFailed: boolean;
   } | null = null;
   let fullViewer: TerrainViewer | undefined;
@@ -574,6 +577,38 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         if (controller.signal.aborted) return;
         setGenProgress(1, COPY.jobFlow.progressMount);
 
+        // Geo-anchored avatars inside this selection: fetch each model by
+        // its content hash and stand it at its placed position — the same
+        // two requests any other app or napplet would make.
+        let npcs: NonNullable<NonNullable<typeof lastScene>['npcs']> = [];
+        try {
+          const placements = await fetchPlacements(bbox, controller.signal);
+          const project = projector(bbox);
+          npcs = (
+            await Promise.all(
+              placements.map(async (placement) => {
+                try {
+                  const meshData = normalizeCharacter(
+                    parseGlb(await fetchCharacterBytes(placement.sha256, controller.signal)),
+                  );
+                  const local = project(placement.lon, placement.lat);
+                  return {
+                    mesh: meshData,
+                    x: local.x,
+                    z: local.z,
+                    theta: Math.PI - (placement.heading * Math.PI) / 180,
+                  };
+                } catch {
+                  return null;
+                }
+              }),
+            )
+          ).filter((npc): npc is NonNullable<typeof npc> => npc !== null);
+        } catch {
+          npcs = [];
+        }
+        if (controller.signal.aborted) return;
+
         // Reveal the preview stage first so the canvas has layout, then mount
         // synchronously — deferring to rAF would never run while the page is
         // backgrounded or not compositing.
@@ -589,6 +624,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           landcover,
           waterways,
           ortho: ortho?.bitmap,
+          npcs,
           featuresFailed: !featuresOk,
         };
         renderJobFlow();
@@ -601,6 +637,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
             waterways,
             ortho: ortho?.bitmap,
           });
+          if (npcs.length > 0) viewer.setNpcs(npcs);
         } catch (error) {
           announce(error instanceof Error ? error.message : 'The 3D preview is unavailable.');
         }
@@ -885,6 +922,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         autoRotate: false,
         intro: true,
       });
+      if (lastScene.npcs && lastScene.npcs.length > 0) fullViewer.setNpcs(lastScene.npcs);
       void populateAvatarChoices();
     } catch (error) {
       closeFullViewer();

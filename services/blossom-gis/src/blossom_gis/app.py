@@ -579,6 +579,50 @@ every bake as a sidecar file.</footer>
     return HTMLResponse(page)
 
 
+# --- Avatar placements --------------------------------------------------------
+
+
+def placements_path() -> Path:
+    return DATA_DIR / "placements.json"
+
+
+@app.get("/placements")
+def placements(
+    bbox: str | None = None,
+    path: Annotated[Path, Depends(placements_path)] = None,  # type: ignore[assignment]
+) -> JSONResponse:
+    """Models placed in the terrain: content hash plus a geo anchor.
+
+    This is the whole interop story in one endpoint — any app that can read
+    this list and fetch a blob by hash can stand the avatar in its own scene.
+    """
+    import json
+
+    if not path.is_file():
+        return JSONResponse([])
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return JSONResponse([])
+    if not isinstance(entries, list):
+        return JSONResponse([])
+
+    if bbox:
+        parts = bbox.split(",")
+        if len(parts) != 4:
+            raise HTTPException(400, "bbox must be 'west,south,east,north'")
+        try:
+            west, south, east, north = (float(p) for p in parts)
+        except ValueError as exc:
+            raise HTTPException(400, "bbox values must be numbers") from exc
+        entries = [
+            e
+            for e in entries
+            if west <= e.get("lon", 999) <= east and south <= e.get("lat", 999) <= north
+        ]
+    return JSONResponse(entries)
+
+
 # --- Cached WFS proxy ---------------------------------------------------------
 
 #: Registered WFS sources — pinned, never an open proxy. Vienna's building-body

@@ -715,6 +715,33 @@ body {
   white-space: nowrap;
 }
 
+.avatar-marker {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+  position: absolute;
+  will-change: transform;
+}
+
+.avatar-marker i {
+  background: var(--c-ember);
+  block-size: 9px;
+  border: 1px solid #111;
+  display: block;
+  inline-size: 9px;
+  transform: rotate(45deg);
+}
+
+.avatar-marker span {
+  color: var(--c-orange-bright);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 3px #000, 0 0 3px #000;
+  white-space: nowrap;
+}
+
 .viewer-avatar-row select {
   background: var(--color-bg);
   border: 1px solid var(--color-border);

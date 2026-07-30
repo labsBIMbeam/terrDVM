@@ -167,3 +167,36 @@ class TestWfsProxy:
             "/wfs", params={"src": "evil", "bbox": "16.35,48.19,16.38,48.21"}
         )
         assert response.status_code == 404
+
+
+class TestPlacements:
+    def test_filters_by_bbox_and_drops_junk(self, tmp_path: Path) -> None:
+        placements = tmp_path / "placements.json"
+        placements.write_text(
+            '[{"name":"flx600","sha256":"'
+            + "a" * 64
+            + '","lon":16.37,"lat":48.21,"heading":200},'
+            '{"name":"far","sha256":"' + "b" * 64 + '","lon":0,"lat":0,"heading":0}]',
+            encoding="utf-8",
+        )
+        app_module.app.dependency_overrides[app_module.placements_path] = lambda: placements
+        try:
+            with TestClient(app_module.app) as client:
+                inside = client.get(
+                    "/placements", params={"bbox": "16.35,48.19,16.39,48.22"}
+                ).json()
+                everything = client.get("/placements").json()
+            assert [p["name"] for p in inside] == ["flx600"]
+            assert len(everything) == 2
+        finally:
+            app_module.app.dependency_overrides.clear()
+
+    def test_missing_file_is_an_empty_list(self, tmp_path: Path) -> None:
+        app_module.app.dependency_overrides[app_module.placements_path] = (
+            lambda: tmp_path / "absent.json"
+        )
+        try:
+            with TestClient(app_module.app) as client:
+                assert client.get("/placements").json() == []
+        finally:
+            app_module.app.dependency_overrides.clear()
