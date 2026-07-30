@@ -134,6 +134,74 @@ describe('glb parser', () => {
     expect(mesh.uvs).toBeNull();
     expect(mesh.texture).toBeNull();
   });
+
+  it('honours accessor byteOffset in interleaved vertex buffers', () => {
+    // One triangle, P(12)+N(12)+UV(8) interleaved, stride 32 — the Meshy
+    // avatar layout that turned skins to noise when byteOffset was dropped.
+    const vertices = [
+      // px py pz   nx ny nz   u v
+      [0, 0, 0, 0, 1, 0, 0.25, 0.75],
+      [1, 0, 0, 0, 1, 0, 0.5, 0.25],
+      [0, 0, -1, 0, 1, 0, 0.75, 0.5],
+    ];
+    const interleaved = new Float32Array(vertices.flat());
+    const indices = new Uint16Array([0, 1, 2, 0]);
+    const bin = new Uint8Array(interleaved.byteLength + indices.byteLength);
+    bin.set(new Uint8Array(interleaved.buffer), 0);
+    bin.set(new Uint8Array(indices.buffer), interleaved.byteLength);
+
+    const json = {
+      asset: { version: '2.0' },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [
+        {
+          primitives: [
+            { attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 3 },
+          ],
+        },
+      ],
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: interleaved.byteLength, byteStride: 32 },
+        { buffer: 0, byteOffset: interleaved.byteLength, byteLength: indices.byteLength },
+      ],
+      accessors: [
+        { bufferView: 0, byteOffset: 0, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 0, byteOffset: 12, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 0, byteOffset: 24, componentType: 5126, count: 3, type: 'VEC2' },
+        { bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR' },
+      ],
+    };
+    let jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+    const padding = (4 - (jsonBytes.length % 4)) % 4;
+    if (padding) {
+      const padded = new Uint8Array(jsonBytes.length + padding).fill(0x20);
+      padded.set(jsonBytes);
+      jsonBytes = padded;
+    }
+    const total = 12 + 8 + jsonBytes.length + 8 + bin.length;
+    const out = new ArrayBuffer(total);
+    const view = new DataView(out);
+    const bytes = new Uint8Array(out);
+    view.setUint32(0, 0x46546c67, true);
+    view.setUint32(4, 2, true);
+    view.setUint32(8, total, true);
+    view.setUint32(12, jsonBytes.length, true);
+    view.setUint32(16, 0x4e4f534a, true);
+    bytes.set(jsonBytes, 20);
+    const binStart = 20 + jsonBytes.length;
+    view.setUint32(binStart, bin.length, true);
+    view.setUint32(binStart + 4, 0x004e4942, true);
+    bytes.set(bin, binStart + 8);
+
+    const mesh = parseGlb(out);
+    expect([...mesh.positions.slice(0, 3)]).toEqual([0, 0, 0]);
+    expect([...mesh.positions.slice(3, 6)]).toEqual([1, 0, 0]);
+    expect(mesh.normals[1]).toBeCloseTo(1);
+    expect([...mesh.uvs!]).toEqual([0.25, 0.75, 0.5, 0.25, 0.75, 0.5]);
+  });
 });
 
 describe('normalizeCharacter', () => {

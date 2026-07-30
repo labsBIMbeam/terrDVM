@@ -26,7 +26,9 @@ import {
 import { projector } from '../buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
 import { buildPlacementEvent, buildPresenceEvent, signAndPublish } from '../nostr/publish';
-import { fetchPresences } from '../nostr/presence';
+import { fetchGlobalPresences, fetchPresences } from '../nostr/presence';
+import { createMatrixGlobe, type MatrixGlobe } from './globe';
+import cities from '../config/cities.json';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
 import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
@@ -122,6 +124,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
         <button class="button" id="place-avatar-button" type="button">${COPY.jobFlow.placeButton}</button>
         <button class="button" id="sound-button" type="button" aria-pressed="true">${COPY.jobFlow.soundButton}</button>
+        <button class="button" id="globe-button" type="button">${COPY.globe.button}</button>
         <button class="button button-danger" id="clear-button" type="button">${COPY.buttons.clearSelection}</button>
       </div>
     </header>
@@ -301,6 +304,22 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </fieldset>
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
+    <div class="globe-console" id="globe-console" hidden>
+      <header class="globe-head">
+        <span class="globe-title">${COPY.globe.title}</span>
+        <button class="button globe-close" id="globe-close" type="button">${COPY.jobFlow.closeButton}</button>
+      </header>
+      <div class="globe-body">
+        <canvas class="globe-canvas" id="globe-canvas"></canvas>
+        <aside class="globe-side">
+          <form id="globe-search-form">
+            <input class="globe-search" id="globe-search" type="search"
+              placeholder="${COPY.globe.searchPlaceholder}" autocomplete="off" spellcheck="false" />
+          </form>
+          <pre class="globe-log" id="globe-log">${COPY.globe.booting}</pre>
+        </aside>
+      </div>
+    </div>
     <div class="start-screen" id="start-screen">
       <video class="start-video" id="start-video" muted autoplay loop playsinline
         src="/intro.mp4" aria-hidden="true"></video>
@@ -389,6 +408,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const soundButton = root.querySelector<HTMLButtonElement>('#sound-button');
   const startScreen = root.querySelector<HTMLDivElement>('#start-screen');
   const startEnter = root.querySelector<HTMLButtonElement>('#start-enter');
+  const globeButton = root.querySelector<HTMLButtonElement>('#globe-button');
+  const globeConsole = root.querySelector<HTMLDivElement>('#globe-console');
+  const globeCanvas = root.querySelector<HTMLCanvasElement>('#globe-canvas');
+  const globeClose = root.querySelector<HTMLButtonElement>('#globe-close');
+  const globeSearchForm = root.querySelector<HTMLFormElement>('#globe-search-form');
+  const globeSearch = root.querySelector<HTMLInputElement>('#globe-search');
+  const globeLog = root.querySelector<HTMLPreElement>('#globe-log');
   const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
   const placePosition = root.querySelector<HTMLElement>('#place-position');
@@ -418,7 +444,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
       !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton ||
-      !startScreen || !startEnter || !placeModal ||
+      !startScreen || !startEnter ||
+      !globeButton || !globeConsole || !globeCanvas || !globeClose ||
+      !globeSearchForm || !globeSearch || !globeLog || !placeModal ||
       !placeCharacter ||
       !placePosition || !placeMessage ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
@@ -1015,6 +1043,66 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // Cinema mode: while the film plays it owns the whole screen — no menu at
   // all. A click anywhere skips into the app.
   startVideo.addEventListener('playing', () => startScreen.classList.add('is-cinema'));
+
+  // The global event console: dot-earth, live events, a locate field.
+  let globe: MatrixGlobe | undefined;
+  const GLOBE_PLACES: { name: string; lon: number; lat: number }[] = [
+    ...(cities as { name: string; lon: number; lat: number }[]),
+    { name: 'Wien Ring', lon: 16.37, lat: 48.205 },
+    { name: 'Funchal', lon: -16.91, lat: 32.65 },
+    { name: 'Bruneck', lon: 11.94, lat: 46.796 },
+    { name: 'Innichen', lon: 12.28, lat: 46.735 },
+  ];
+  const logLine = (line: string): void => {
+    globeLog.textContent = `${globeLog.textContent}\n${line}`.split('\n').slice(-18).join('\n');
+  };
+  const openGlobe = (): void => {
+    globeConsole.hidden = false;
+    globe ??= createMatrixGlobe(globeCanvas);
+    globeLog.textContent = COPY.globe.booting;
+    void Promise.all([
+      fetchPlacements().catch(() => []),
+      fetchGlobalPresences().catch(() => []),
+    ]).then(([placements, presences]) => {
+      if (globeConsole.hidden) return;
+      const events = [
+        ...placements.map((p) => ({
+          name: p.name, lon: p.lon, lat: p.lat, kind: 'placement' as const,
+        })),
+        ...presences.map((p) => ({
+          name: p.name, lon: p.lon, lat: p.lat,
+          kind: 'presence' as const, message: p.message,
+        })),
+      ];
+      globe?.setEvents(events);
+      globeLog.textContent = events.length
+        ? events
+            .map((event) =>
+              `> ${event.kind === 'presence' ? 'STATUS' : 'MODEL '} ${event.name}` +
+              ` @ ${event.lat.toFixed(3)},${event.lon.toFixed(3)}` +
+              ('message' in event && event.message ? ` — ${event.message}` : ''))
+            .join('\n')
+        : COPY.globe.empty;
+    });
+    globeSearch.focus();
+  };
+  globeButton.addEventListener('click', openGlobe);
+  globeClose.addEventListener('click', () => {
+    globeConsole.hidden = true;
+  });
+  globeSearchForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const query = globeSearch.value.trim().toLowerCase();
+    if (!query) return;
+    const hit = GLOBE_PLACES.find((place) => place.name.toLowerCase().includes(query));
+    if (hit) {
+      globe?.flyTo(hit.lon, hit.lat);
+      logLine(COPY.globe.locate(hit.name, hit.lat, hit.lon));
+      sound.tick();
+    } else {
+      logLine(COPY.globe.notFound(globeSearch.value.trim()));
+    }
+  });
 
   // Everyone whose presence status stands in this region appears on the map.
   void fetchPresences([

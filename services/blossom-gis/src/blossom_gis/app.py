@@ -586,6 +586,12 @@ def placements_path() -> Path:
     return DATA_DIR / "placements.json"
 
 
+#: Demo identity: local placements without an explicit owner belong to the
+#: operator's marker npub, so one NIP-07 key signs everything on stage.
+#: npub1su4kplwca3euuyerm9ucq4ecf7ucxegqmxmjq9v5cudw8l8zk6qqejetyp
+DEMO_OWNER_PUBKEY = "872b60fdd8ec73ce1323d9798057384fb9836500d9b7201594c71ae3fce2b680"
+
+
 @app.get("/placements/event")
 def placement_event(
     character: str,
@@ -742,6 +748,7 @@ async def add_placement(
         "lon": float(lon),
         "lat": float(lat),
         "heading": float(body.get("heading", 0.0)),
+        "pubkey": str(body.get("pubkey") or DEMO_OWNER_PUBKEY),
     }
     message = body.get("message")
     if isinstance(message, str) and message.strip():

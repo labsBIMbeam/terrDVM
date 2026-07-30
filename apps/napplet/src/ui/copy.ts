@@ -137,6 +137,16 @@ export const COPY = {
     paymentNote: 'Invoice: 21 sats, flat — lnurl-wallet is the reference. The demo build takes no payment.',
     invoiceButton: 'Create invoice — next step',
   },
+  globe: {
+    button: 'Globe',
+    title: 'TERR//DVM · GLOBAL EVENT CONSOLE',
+    searchPlaceholder: 'locate: wien, funchal, bruneck…',
+    booting: '> scanning relays for terrdvm events…',
+    empty: '> no events on the wire — place an avatar to light the map',
+    locate: (name: string, lat: number, lon: number): string =>
+      `> locate ${name} @ ${lat.toFixed(3)},${lon.toFixed(3)}`,
+    notFound: (query: string): string => `> not found: ${query}`,
+  },
   coverageLegend: {
     covered: (n: CopyValue): string => `${n} cells with 0.25 m/px imagery`,
     gap: (n: CopyValue): string => `${n} land cells with none`,

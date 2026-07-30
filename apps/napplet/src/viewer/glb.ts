@@ -211,7 +211,11 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     if (!componentBytes) {
       throw new Error(`Unsupported accessor component type ${accessor.componentType}.`);
     }
-    const start = bin.byteOffset + (bufferView.byteOffset ?? 0);
+    // Interleaved vertex buffers address each attribute via the accessor's
+    // own byteOffset on top of the view's — dropping it reads position
+    // bytes as UVs.
+    const start =
+      bin.byteOffset + (bufferView.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
     const elementCount = accessor.count * componentCount;
     const tightStride = componentCount * componentBytes;
     const stride = bufferView.byteStride ?? tightStride;

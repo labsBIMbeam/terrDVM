@@ -100,7 +100,7 @@ function toPresence(event: NostrEvent): Presence | null {
 
 function queryRelay(
   relay: string,
-  geohash: string,
+  geohash: string | null,
   timeoutMs: number,
 ): Promise<NostrEvent[]> {
   return new Promise((resolve) => {
@@ -128,7 +128,12 @@ function queryRelay(
         JSON.stringify([
           'REQ',
           subscription,
-          { kinds: [30315], '#g': [geohash], '#t': ['terrdvm-presence'], limit: 64 },
+          {
+            kinds: [30315],
+            '#t': ['terrdvm-presence'],
+            limit: 128,
+            ...(geohash ? { '#g': [geohash] } : {}),
+          },
         ]),
       );
     socket.onmessage = (message) => {
@@ -144,16 +149,10 @@ function queryRelay(
   });
 }
 
-/**
- * Everyone whose latest status stands inside this bbox — newest event per
- * pubkey wins, exactly the replaceable semantics of kind 30315.
- */
-export async function fetchPresences(
-  bbox: BBox4326,
-  timeoutMs = 4000,
+async function collectPresences(
+  geohash: string | null,
+  timeoutMs: number,
 ): Promise<Presence[]> {
-  const [west, south, east, north] = bbox;
-  const geohash = geohashEncode((south + north) / 2, (west + east) / 2, 5);
   const settled = await Promise.allSettled(
     PLACEMENT_RELAYS.map((relay) => queryRelay(relay, geohash, timeoutMs)),
   );
@@ -168,10 +167,28 @@ export async function fetchPresences(
   }
   return [...newest.values()]
     .map(toPresence)
-    .filter((presence): presence is Presence => presence !== null)
-    .filter(
-      (presence) =>
-        west <= presence.lon && presence.lon <= east &&
-        south <= presence.lat && presence.lat <= north,
-    );
+    .filter((presence): presence is Presence => presence !== null);
+}
+
+/**
+ * Everyone whose latest status stands inside this bbox — newest event per
+ * pubkey wins, exactly the replaceable semantics of kind 30315.
+ */
+export async function fetchPresences(
+  bbox: BBox4326,
+  timeoutMs = 4000,
+): Promise<Presence[]> {
+  const [west, south, east, north] = bbox;
+  const geohash = geohashEncode((south + north) / 2, (west + east) / 2, 5);
+  const presences = await collectPresences(geohash, timeoutMs);
+  return presences.filter(
+    (presence) =>
+      west <= presence.lon && presence.lon <= east &&
+      south <= presence.lat && presence.lat <= north,
+  );
+}
+
+/** Every terrdvm presence on the wire, worldwide — the globe console feed. */
+export function fetchGlobalPresences(timeoutMs = 4000): Promise<Presence[]> {
+  return collectPresences(null, timeoutMs);
 }
