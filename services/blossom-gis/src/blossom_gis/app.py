@@ -591,6 +591,7 @@ def placement_event(
     character: str,
     at: str,
     heading: float = 0.0,
+    message: str = "",
 ) -> JSONResponse:
     """Build the unsigned nostr announcement for a placement.
 
@@ -634,11 +635,12 @@ def placement_event(
     ]
     for precision in range(1, 9):
         tags.append(["g", geohash_encode(lat, lon, precision)])
+    where = message.strip()[:280] if message.strip() else f"standing at {lat:.5f}, {lon:.5f}"
     return JSONResponse(
         {
             "kind": 1063,
             "created_at": int(time.time()),
-            "content": f"{character} standing at {lat:.5f}, {lon:.5f} — "
+            "content": f"{character}: {where} — "
             f"fetch the model by hash from any blossom mirror.",
             "tags": tags,
         }
@@ -678,15 +680,17 @@ async def add_placement(
     if path.is_file():
         entries = json.loads(path.read_text(encoding="utf-8"))
     entries = [e for e in entries if e.get("name") != name]
-    entries.append(
-        {
-            "name": name,
-            "sha256": sha,
-            "lon": float(lon),
-            "lat": float(lat),
-            "heading": float(body.get("heading", 0.0)),
-        }
-    )
+    record = {
+        "name": name,
+        "sha256": sha,
+        "lon": float(lon),
+        "lat": float(lat),
+        "heading": float(body.get("heading", 0.0)),
+    }
+    message = body.get("message")
+    if isinstance(message, str) and message.strip():
+        record["message"] = message.strip()[:280]
+    entries.append(record)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(entries, indent=1), encoding="utf-8")
     return JSONResponse({"ok": True, "count": len(entries)})

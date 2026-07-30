@@ -36,13 +36,27 @@ import { fetchFeatures } from '../features/source-osm';
 import { buildLandcoverMesh, type LandcoverMesh } from '../features/landcover';
 import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '../features/ribbon';
 import { WATERWAY_WIDTH_M } from '../features/types';
-import { createTerrainViewer, type TerrainViewer } from './preview3d';
+import { createTerrainViewer, type TerrainViewer, type ViewerModel } from './preview3d';
 
 const AXES = ['west', 'south', 'east', 'north'] as const;
 type Axis = (typeof AXES)[number];
 
 /** Human-facing name for the approved imagery role in the source policy. */
 const IMAGERY_SOURCE_NAME = 'Esri World Imagery';
+
+/** Avatars stand as 21 m giants, visible clear across a selection. */
+const GIANT_HEIGHT_M = 21;
+
+/** Parse a GLB, normalise it to height, and decode its painted skin. */
+async function toViewerModel(bytes: ArrayBuffer, heightM: number): Promise<ViewerModel> {
+  const mesh = normalizeCharacter(parseGlb(bytes), heightM);
+  const texture = mesh.texture
+    ? await createImageBitmap(
+        new Blob([mesh.texture.bytes], { type: mesh.texture.mimeType }),
+      ).catch(() => null)
+    : null;
+  return { ...mesh, texture };
+}
 
 /**
  * Nearest-vertex lookup into the generated heightfield, so a footprint can be
@@ -242,6 +256,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <dl class="job-facts">
           <div class="job-fact"><dt>Position</dt><dd id="place-position">—</dd></div>
         </dl>
+        <label class="viewer-avatar-row"><span>${COPY.jobFlow.placeMessageLabel}</span>
+          <input id="place-message" type="text" maxlength="140"
+            placeholder="${COPY.jobFlow.placeMessagePlaceholder}" />
+        </label>
         <label class="viewer-avatar-row"><span>Heading °</span>
           <input id="place-heading" type="number" value="0" min="0" max="359" step="5" />
         </label>
@@ -351,6 +369,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
   const placePosition = root.querySelector<HTMLElement>('#place-position');
+  const placeMessage = root.querySelector<HTMLInputElement>('#place-message');
   const placeHeading = root.querySelector<HTMLInputElement>('#place-heading');
   const placeStatus = root.querySelector<HTMLElement>('#place-status');
   const placePublish = root.querySelector<HTMLButtonElement>('#place-publish');
@@ -376,7 +395,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
       !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton || !placeModal ||
       !placeCharacter ||
-      !placePosition ||
+      !placePosition || !placeMessage ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
@@ -430,7 +449,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     landcover?: LandcoverMesh;
     waterways?: RoadMesh;
     ortho?: TexImageSource;
-    npcs?: { mesh: ReturnType<typeof parseGlb>; x: number; z: number; theta: number }[];
+    npcs?: { mesh: ViewerModel; x: number; z: number; theta: number }[];
     featuresFailed: boolean;
   } | null = null;
   let fullViewer: TerrainViewer | undefined;
@@ -627,8 +646,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
             await Promise.all(
               placements.map(async (placement) => {
                 try {
-                  const meshData = normalizeCharacter(
-                    parseGlb(await fetchCharacterBytes(placement.sha256, controller.signal)),
+                  const meshData = await toViewerModel(
+                    await fetchCharacterBytes(placement.sha256, controller.signal),
+                    GIANT_HEIGHT_M,
                   );
                   const local = project(placement.lon, placement.lat);
                   return {
@@ -996,8 +1016,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     }
     const label = viewerAvatar.selectedOptions[0]?.textContent ?? choice;
     void fetchCharacterBytes(choice === 'builtin' ? undefined : choice)
-      .then((bytes) => {
-        fullViewer?.setCharacter(normalizeCharacter(parseGlb(bytes)));
+      .then(async (bytes) => {
+        fullViewer?.setCharacter(await toViewerModel(bytes, GIANT_HEIGHT_M));
       })
       .catch(() => {
         // Draco-compressed or missing models fail closed with a name.
@@ -1067,15 +1087,24 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     const frameShas = entry.frames && entry.frames.length > 0 ? entry.frames : [entry.sha256];
     const uniqueShas = [...new Set(frameShas)];
     void Promise.all(uniqueShas.map((sha) => fetchCharacterBytes(sha)))
-      .then((buffers) => {
+      .then(async (buffers) => {
         // Normalise the unique meshes exactly once — duplicated frames share
         // objects, and a second pass would rescale them.
         const uniqueMeshes = normalizeCharacterFrames(
           buffers.map((buffer) => parseGlb(buffer)),
           42,
         );
+        // Every frame deforms the same painted body; decode the skin once.
+        const skin = uniqueMeshes.find((m) => m.texture)?.texture ?? null;
+        const skinBitmap = skin
+          ? await createImageBitmap(
+              new Blob([skin.bytes], { type: skin.mimeType }),
+            ).catch(() => null)
+          : null;
         const bySha = new Map(uniqueShas.map((sha, i) => [sha, uniqueMeshes[i]]));
-        fullViewer?.setKaiju(frameShas.map((sha) => bySha.get(sha)!));
+        fullViewer?.setKaiju(
+          frameShas.map((sha) => ({ ...bySha.get(sha)!, texture: skinBitmap })),
+        );
         crabActive = true;
         viewerCrab.textContent = COPY.jobFlow.crabRemoveButton;
         // The crab is an event: flash, shake, sub-bass.
@@ -1106,6 +1135,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const openPlaceModal = async (lon: number, lat: number): Promise<void> => {
     pendingPlace = { lon, lat };
     placePosition.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    placeMessage.value = '';
     placeStatus.textContent = '';
     if (avatarManifest === null) {
       avatarManifest = await fetchCharacterManifest().catch(() => []);
@@ -1125,9 +1155,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     const name = placeCharacter.value;
     if (!spot || !name) return;
     const heading = Number(placeHeading.value) || 0;
+    const message = placeMessage.value.trim();
     placeStatus.textContent = '…';
     placePublish.disabled = true;
-    void buildPlacementEvent(name, spot.lon, spot.lat, heading)
+    void buildPlacementEvent(name, spot.lon, spot.lat, heading, message)
       .then((event) => signAndPublish(event))
       .then(async ({ accepted }) => {
         const entry = avatarManifest?.find((candidate) => candidate.name === name);
@@ -1142,9 +1173,37 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
               lon: spot.lon,
               lat: spot.lat,
               heading,
+              ...(message ? { message } : {}),
             }),
           }).catch(() => undefined);
           mapView.addAvatarMarker(name, spot.lon, spot.lat, entry.sha256);
+          // Placed from inside the world: the giant appears on the spot,
+          // no regeneration needed.
+          const scene = lastScene;
+          if (fullViewer && scene) {
+            const [west, south, east, north] = scene.bbox;
+            if (west <= spot.lon && spot.lon <= east && south <= spot.lat && spot.lat <= north) {
+              try {
+                const model = await toViewerModel(
+                  await fetchCharacterBytes(entry.sha256),
+                  GIANT_HEIGHT_M,
+                );
+                const local = projector(scene.bbox)(spot.lon, spot.lat);
+                scene.npcs = [
+                  ...(scene.npcs ?? []),
+                  {
+                    mesh: model,
+                    x: local.x,
+                    z: local.z,
+                    theta: Math.PI - (heading * Math.PI) / 180,
+                  },
+                ];
+                fullViewer.setNpcs(scene.npcs);
+              } catch {
+                // The next generation run will pick the placement up anyway.
+              }
+            }
+          }
         }
         placeStatus.textContent = COPY.jobFlow.placePublished(accepted.length);
         setTimeout(() => placeModal.close(), 1600);

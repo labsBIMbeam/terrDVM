@@ -194,6 +194,8 @@ export const COPY = {
     placeHereHint: 'Walk somewhere first — your standing spot becomes the placement.',
     placeHint: 'Click the map to choose where the avatar stands.',
     placeTitle: 'Publish placement',
+    placeMessageLabel: 'Say where you are',
+    placeMessagePlaceholder: 'e.g. On the ridge above Funchal harbour',
     placePublish: 'Sign & publish',
     placePublished: (relays: number): string =>
       `Published to ${relays} relay${relays === 1 ? '' : 's'} ✓`,

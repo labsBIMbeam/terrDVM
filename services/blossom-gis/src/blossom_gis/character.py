@@ -57,13 +57,36 @@ def _node_world_matrices(gltf: dict) -> dict[int, list[list[float]]]:
     return world
 
 
-def transcode_draco_glb(payload: bytes) -> bytes:
-    """Decode a Draco-compressed GLB into a plain-geometry GLB.
+def _basecolor_image(gltf: dict, binary: bytes) -> tuple[bytes, str] | None:
+    """Follow material → texture → image to the embedded baseColor bytes."""
+    materials = gltf.get("materials", [])
+    for mesh in gltf.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            material_index = primitive.get("material")
+            if material_index is None or material_index >= len(materials):
+                continue
+            pbr = materials[material_index].get("pbrMetallicRoughness", {})
+            texture_index = pbr.get("baseColorTexture", {}).get("index")
+            if texture_index is None:
+                continue
+            source = gltf.get("textures", [{}])[texture_index].get("source")
+            if source is None:
+                continue
+            image = gltf.get("images", [])[source]
+            view_index = image.get("bufferView")
+            mime = image.get("mimeType")
+            if view_index is None or not mime:
+                continue
+            view = gltf["bufferViews"][view_index]
+            start = view.get("byteOffset", 0)
+            return binary[start : start + view["byteLength"]], mime
+    return None
 
-    Materials, textures and animations are dropped on purpose — the napplet
-    viewer renders bare geometry and colours it itself. Node transforms are
-    applied so the merged mesh stands the way its author posed it.
-    """
+
+def decode_draco_geometry(
+    payload: bytes,
+) -> tuple[list[float], list[float], list[float] | None, list[int], tuple[bytes, str] | None]:
+    """Decode a Draco GLB into flat arrays: positions, normals, uvs, indices, skin."""
     import DracoPy
 
     magic, version, _total = struct.unpack_from("<III", payload, 0)
@@ -82,7 +105,9 @@ def transcode_draco_glb(payload: bytes) -> bytes:
     world = _node_world_matrices(gltf)
     positions: list[float] = []
     normals: list[float] = []
+    uvs: list[float] = []
     indices: list[int] = []
+    has_all_uvs = True
 
     for node_index, matrix in world.items():
         mesh_index = gltf["nodes"][node_index].get("mesh")
@@ -97,6 +122,10 @@ def transcode_draco_glb(payload: bytes) -> bytes:
             decoded = DracoPy.decode(binary[start : start + view["byteLength"]])
             base = len(positions) // 3
             has_normals = decoded.normals is not None and len(decoded.normals) > 0
+            tex_coord = getattr(decoded, "tex_coord", None)
+            has_uvs = tex_coord is not None and len(tex_coord) > 0
+            if not has_uvs:
+                has_all_uvs = False
             for i, point in enumerate(decoded.points):
                 x, y, z = float(point[0]), float(point[1]), float(point[2])
                 positions.extend(
@@ -115,66 +144,133 @@ def transcode_draco_glb(payload: bytes) -> bytes:
                     normals.extend([tx / length, ty / length, tz / length])
                 else:
                     normals.extend([0.0, 1.0, 0.0])
+                if has_uvs:
+                    uvs.extend([float(tex_coord[i][0]), float(tex_coord[i][1])])
+                else:
+                    uvs.extend([0.0, 0.0])
             for face in decoded.faces:
                 indices.extend([base + int(face[0]), base + int(face[1]), base + int(face[2])])
 
     if not positions:
         raise ValueError("no draco geometry found")
-    return _pack_glb(positions, normals, indices)
+    texture = _basecolor_image(gltf, binary)
+    return (
+        positions,
+        normals,
+        uvs if has_all_uvs and uvs else None,
+        indices,
+        texture,
+    )
 
 
-def _pack_glb(positions: list[float], normals: list[float], indices: list[int]) -> bytes:
-    """Assemble plain geometry into a byte-stable binary glTF."""
+def transcode_draco_glb(payload: bytes) -> bytes:
+    """Decode a Draco-compressed GLB into a plain-geometry GLB.
+
+    Geometry, TEXCOORD_0 and the embedded baseColor image survive the trip;
+    skins and animations do not. Node transforms are applied so the merged
+    mesh stands the way its author posed it.
+    """
+    positions, normals, uvs, indices, texture = decode_draco_geometry(payload)
+    return _pack_glb(positions, normals, indices, uvs=uvs, texture=texture)
+
+
+def _pack_glb(
+    positions: list[float],
+    normals: list[float],
+    indices: list[int],
+    uvs: list[float] | None = None,
+    texture: tuple[bytes, str] | None = None,
+) -> bytes:
+    """Assemble plain geometry — plus an optional painted skin — into a
+    byte-stable binary glTF."""
     position_bytes = struct.pack(f"<{len(positions)}f", *positions)
     normal_bytes = struct.pack(f"<{len(normals)}f", *normals)
     index_bytes = struct.pack(f"<{len(indices)}I", *indices)
-    binary = position_bytes + normal_bytes + index_bytes
 
-    minimum = [min(positions[i::3]) for i in range(3)]
-    maximum = [max(positions[i::3]) for i in range(3)]
+    chunks = [position_bytes, normal_bytes, index_bytes]
+    buffer_views: list[dict] = []
+    offset = 0
+    for chunk in chunks:
+        buffer_views.append({"buffer": 0, "byteLength": len(chunk), "byteOffset": offset})
+        offset += len(chunk)
+
+    accessors: list[dict] = [
+        {
+            "bufferView": 0,
+            "componentType": 5126,
+            "count": len(positions) // 3,
+            "max": [max(positions[i::3]) for i in range(3)],
+            "min": [min(positions[i::3]) for i in range(3)],
+            "type": "VEC3",
+        },
+        {
+            "bufferView": 1,
+            "componentType": 5126,
+            "count": len(normals) // 3,
+            "type": "VEC3",
+        },
+        {
+            "bufferView": 2,
+            "componentType": 5125,
+            "count": len(indices),
+            "type": "SCALAR",
+        },
+    ]
+    attributes = {"NORMAL": 1, "POSITION": 0}
+    primitive: dict = {"attributes": attributes, "indices": 2}
+
+    if uvs:
+        uv_bytes = struct.pack(f"<{len(uvs)}f", *uvs)
+        chunks.append(uv_bytes)
+        buffer_views.append({"buffer": 0, "byteLength": len(uv_bytes), "byteOffset": offset})
+        offset += len(uv_bytes)
+        accessors.append(
+            {
+                "bufferView": len(buffer_views) - 1,
+                "componentType": 5126,
+                "count": len(uvs) // 2,
+                "type": "VEC2",
+            }
+        )
+        attributes["TEXCOORD_0"] = len(accessors) - 1
+
     gltf = {
         "asset": {"generator": "terrdvm-transcode", "version": "2.0"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0}],
-        "meshes": [{"primitives": [{"attributes": {"NORMAL": 1, "POSITION": 0}, "indices": 2}]}],
-        "buffers": [{"byteLength": len(binary)}],
-        "bufferViews": [
-            {"buffer": 0, "byteLength": len(position_bytes), "byteOffset": 0},
-            {
-                "buffer": 0,
-                "byteLength": len(normal_bytes),
-                "byteOffset": len(position_bytes),
-            },
-            {
-                "buffer": 0,
-                "byteLength": len(index_bytes),
-                "byteOffset": len(position_bytes) + len(normal_bytes),
-            },
-        ],
-        "accessors": [
-            {
-                "bufferView": 0,
-                "componentType": 5126,
-                "count": len(positions) // 3,
-                "max": maximum,
-                "min": minimum,
-                "type": "VEC3",
-            },
-            {
-                "bufferView": 1,
-                "componentType": 5126,
-                "count": len(normals) // 3,
-                "type": "VEC3",
-            },
-            {
-                "bufferView": 2,
-                "componentType": 5125,
-                "count": len(indices),
-                "type": "SCALAR",
-            },
-        ],
+        "meshes": [{"primitives": [primitive]}],
     }
+
+    if texture and uvs:
+        image_bytes, mime = texture
+        if offset % 4:
+            padding = b"\x00" * (4 - offset % 4)
+            chunks.append(padding)
+            offset += len(padding)
+        chunks.append(image_bytes)
+        buffer_views.append(
+            {"buffer": 0, "byteLength": len(image_bytes), "byteOffset": offset}
+        )
+        offset += len(image_bytes)
+        gltf["images"] = [{"bufferView": len(buffer_views) - 1, "mimeType": mime}]
+        gltf["samplers"] = [
+            {"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}
+        ]
+        gltf["textures"] = [{"sampler": 0, "source": 0}]
+        gltf["materials"] = [
+            {"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}
+        ]
+        primitive["material"] = 0
+
+    binary = b"".join(chunks)
+    # GLB chunks must be 4-byte aligned; a JPEG tail rarely is.
+    if len(binary) % 4:
+        binary += b"\x00" * (4 - len(binary) % 4)
+    gltf["buffers"] = [{"byteLength": len(binary)}]
+    gltf["bufferViews"] = buffer_views
+    gltf["accessors"] = accessors
+
     payload = json.dumps(gltf, separators=(",", ":"), sort_keys=True).encode("utf-8")
     if len(payload) % 4:
         payload += b" " * (4 - len(payload) % 4)

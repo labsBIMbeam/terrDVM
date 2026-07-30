@@ -60,6 +60,12 @@ def main(argv: list[str] | None = None) -> int:
         help="store the deterministic demo character in the blob store, print its hash",
     )
 
+    crab = sub.add_parser(
+        "crab",
+        help="re-transcode secrab with its painted skin and bake the gait frames",
+    )
+    crab.add_argument("--frames", type=int, default=10)
+
     prewarm = sub.add_parser(
         "prewarm",
         help="warm every cache the demo selections touch, via the running server",
@@ -134,6 +140,82 @@ def main(argv: list[str] | None = None) -> int:
         index.close()
         print(f"character blob: {stored.sha256} ({stored.size:,} bytes)")
         print(f"fetch as: /{stored.sha256}.glb")
+        return 0
+
+    if args.command == "crab":
+        import json
+        import time
+
+        from .character import _pack_glb, decode_draco_geometry
+        from .gait import bake_gait_frames
+
+        manifest_path = blob_dir.parent / "characters.json"
+        if not manifest_path.is_file():
+            print("no characters.json — mirror secrab first")
+            return 1
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        entry = manifest.get("secrab")
+        if not entry:
+            print("secrab is not in characters.json")
+            return 1
+        source_sha = entry.get("transcoded_from") or entry["sha256"]
+        store = BlobStore(blob_dir)
+        payload = store.read(source_sha)
+        if payload is None:
+            print(f"source blob {source_sha} is not in the store")
+            return 1
+
+        print(f"decoding {source_sha[:12]}…")
+        positions, normals, uvs, indices, texture = decode_draco_geometry(payload)
+        skin = "with skin" if texture and uvs else "UNTEXTURED"
+        print(
+            f"  {len(positions) // 3:,} vertices, {len(indices) // 3:,} faces, {skin}"
+        )
+
+        index = BlobIndex(index_path)
+
+        def register(blob_payload: bytes) -> tuple[str, int]:
+            stored = store.put(blob_payload)
+            index.upsert(
+                BlobRecord(
+                    sha256=stored.sha256,
+                    size=stored.size,
+                    media_type="model/gltf-binary",
+                    uploaded_by="cli:crab",
+                    uploaded_at=int(time.time()),
+                    tile_z=None,
+                    tile_x=None,
+                    tile_y=None,
+                    **geo_fields(None),
+                )
+            )
+            return stored.sha256, stored.size
+
+        rest_sha, rest_size = register(
+            _pack_glb(positions, normals, indices, uvs=uvs, texture=texture)
+        )
+        print(f"rest pose: {rest_sha} ({rest_size:,} bytes)")
+
+        frame_shas: list[str] = []
+        for i, frame in enumerate(
+            bake_gait_frames(
+                positions, normals, indices, uvs=uvs, texture=texture,
+                frame_count=args.frames,
+            )
+        ):
+            sha, size = register(frame)
+            frame_shas.append(sha)
+            print(f"frame {i}: {sha[:12]} ({size:,} bytes)")
+        index.close()
+
+        manifest["secrab"] = {
+            "sha256": rest_sha,
+            "size": rest_size,
+            "transcoded_from": source_sha,
+            "frames": frame_shas,
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+        print(f"characters.json updated — secrab now walks with {skin}")
         return 0
 
     if args.command == "prewarm":

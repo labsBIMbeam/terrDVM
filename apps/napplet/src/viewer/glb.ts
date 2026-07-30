@@ -2,15 +2,20 @@
  * Minimal binary-glTF (.glb) parser for the hand-rolled engine.
  *
  * Scope on purpose: static triangle meshes — POSITION, optional NORMAL,
- * optional indices, node TRS transforms. No skins, animations, materials or
- * textures; the viewer colours the mesh itself. Anything outside that scope
- * throws a named error and the caller fails closed.
+ * optional TEXCOORD_0, optional indices, node TRS transforms, plus the one
+ * embedded baseColor image so lore characters keep their painted skin. No
+ * skins or animations; anything outside that scope throws a named error and
+ * the caller fails closed.
  */
 
 export type GlbMesh = {
   positions: Float32Array;
   normals: Float32Array;
   indices: Uint32Array;
+  /** Per-vertex texture coordinates; null when any primitive lacks them. */
+  uvs: Float32Array | null;
+  /** The material's embedded baseColor image, still encoded (JPEG/PNG). */
+  texture: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } | null;
 };
 
 const MAGIC = 0x46546c67; // 'glTF'
@@ -37,12 +42,18 @@ type GltfJson = {
     type: string;
   }[];
   bufferViews?: { byteOffset?: number; byteLength: number; byteStride?: number }[];
+  materials?: {
+    pbrMetallicRoughness?: { baseColorTexture?: { index?: number } };
+  }[];
+  textures?: { source?: number }[];
+  images?: { bufferView?: number; mimeType?: string }[];
 };
 
 type GltfPrimitive = {
   attributes?: Record<string, number>;
   indices?: number;
   mode?: number;
+  material?: number;
 };
 
 type Mat = Float64Array;
@@ -245,8 +256,11 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
 
   const positions: number[] = [];
   const normals: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
   let hasAllNormals = true;
+  let hasAllUVs = true;
+  let textureMaterial: number | null = null;
 
   const appendPrimitive = (primitive: GltfPrimitive, matrix: Mat): void => {
     if (primitive.mode !== undefined && primitive.mode !== 4) return; // triangles only
@@ -256,6 +270,12 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     const normalIndex = primitive.attributes?.NORMAL;
     const normal = normalIndex === undefined ? null : (readAccessor(normalIndex).data as Float32Array);
     if (!normal) hasAllNormals = false;
+    const uvIndex = primitive.attributes?.TEXCOORD_0;
+    const uv = uvIndex === undefined ? null : (readAccessor(uvIndex).data as Float32Array);
+    if (!uv) hasAllUVs = false;
+    if (primitive.material !== undefined && textureMaterial === null) {
+      textureMaterial = primitive.material;
+    }
 
     const base = positions.length / 3;
     for (let i = 0; i < position.length; i += 3) {
@@ -278,6 +298,12 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
         normals.push(tx / length, ty / length, tz / length);
       } else {
         normals.push(0, 0, 0);
+      }
+      if (uv) {
+        const vertex = i / 3;
+        uvs.push(uv[vertex * 2], uv[vertex * 2 + 1]);
+      } else {
+        uvs.push(0, 0);
       }
     }
     if (primitive.indices !== undefined) {
@@ -304,10 +330,40 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
   for (const nodeIndex of sceneNodes) visit(nodeIndex, identity());
   if (positions.length === 0) throw new Error('GLB contains no triangle geometry.');
 
+  // The painted skin: follow material → texture → image to the embedded
+  // baseColor bytes. Anything missing along the chain means an untextured
+  // model, never an error — the viewer tints those itself.
+  let texture: GlbMesh['texture'] = null;
+  const baseColorIndex =
+    textureMaterial === null
+      ? undefined
+      : json.materials?.[textureMaterial]?.pbrMetallicRoughness?.baseColorTexture?.index;
+  const imageIndex =
+    baseColorIndex === undefined ? undefined : json.textures?.[baseColorIndex]?.source;
+  const image = imageIndex === undefined ? undefined : json.images?.[imageIndex];
+  if (image?.bufferView !== undefined && image.mimeType && bin) {
+    const bufferView = json.bufferViews?.[image.bufferView];
+    if (bufferView) {
+      // Copy out of the parse buffer so the image survives it.
+      texture = {
+        bytes: new Uint8Array(
+          new Uint8Array(
+            bin.buffer,
+            bin.byteOffset + (bufferView.byteOffset ?? 0),
+            bufferView.byteLength,
+          ),
+        ),
+        mimeType: image.mimeType,
+      };
+    }
+  }
+
   const result: GlbMesh = {
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
     indices: new Uint32Array(indices),
+    uvs: hasAllUVs && uvs.length > 0 ? new Float32Array(uvs) : null,
+    texture,
   };
 
   if (!hasAllNormals) {

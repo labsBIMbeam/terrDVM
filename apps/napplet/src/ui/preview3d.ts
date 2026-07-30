@@ -14,6 +14,7 @@ import type { TerrainMesh } from '../terrain/mesh';
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
 in vec3 aNormal;
+in vec2 aUV;
 uniform mat4 uModel;
 uniform mat4 uModelView;
 uniform mat4 uProjection;
@@ -22,6 +23,7 @@ uniform vec2 uGroundSize;
 out vec3 vNormal;
 out float vHeight;
 out vec2 vUV;
+out vec2 vModelUV;
 out vec3 vWorld;
 void main() {
   // uModel is identity for the scene; only dynamic props (the character)
@@ -32,6 +34,7 @@ void main() {
   // The terrain grid is centred on the origin with north at -Z, and the
   // orthophoto's first row is north — so no flip is needed on either axis.
   vUV = world.xz / uGroundSize + 0.5;
+  vModelUV = aUV;
   vWorld = world.xyz;
   gl_Position = uProjection * uModelView * world;
 }`;
@@ -41,12 +44,15 @@ precision highp float;
 in vec3 vNormal;
 in float vHeight;
 in vec2 vUV;
+in vec2 vModelUV;
 in vec3 vWorld;
 uniform vec3 uLightDir;
 uniform vec3 uOverrideColor;
 uniform float uUseOverride;
 uniform sampler2D uOrtho;
 uniform float uUseOrtho;
+uniform sampler2D uModelTex;
+uniform float uUseModelTexture;
 uniform float uTexturedStructure;
 uniform float uPosterize;
 uniform float uWindowCol;
@@ -108,6 +114,9 @@ void main() {
     }
   }
   vec3 base = mix(ground, structureColor, uUseOverride);
+  // Models with a painted skin (lore characters) wear it verbatim; the
+  // terrain lighting still shapes them so they sit in the scene.
+  if (uUseModelTexture > 0.5) base = texture(uModelTex, vModelUV).rgb;
   vec3 lit = base * light;
   // Pixel look: a slight saturation lift, then ordered dither and a coarse
   // palette quantised in gamma space — linear quantisation crushes the darks
@@ -203,6 +212,15 @@ export type ViewerLayer = 'ortho' | 'buildings' | 'roads' | 'landcover' | 'water
 
 export type ViewerProjection = 'perspective' | 'isometric';
 
+/** A model handed to the viewer: geometry plus an optional decoded skin. */
+export type ViewerModel = {
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  uvs?: Float32Array | null;
+  texture?: TexImageSource | null;
+};
+
 export type TerrainViewer = {
   setLayerVisible: (layer: ViewerLayer, visible: boolean) => void;
   setProjection: (mode: ViewerProjection) => void;
@@ -213,36 +231,23 @@ export type TerrainViewer = {
   /** Where the walker stands, in local metres — null before any walk. */
   getWalkPosition: () => { x: number; z: number; headingRad: number } | null;
   /**
-   * Give the walker a body: a static mesh in metres, Y-up, facing -Z.
-   * Null removes it. With a body, walking is third person — you see the
-   * avatar walk; without one, first person.
+   * Give the walker a body: a static mesh in metres, Y-up, facing -Z, with
+   * an optional decoded baseColor image. Null removes it. With a body,
+   * walking is third person — you see the avatar walk; without one, first
+   * person. The camera boom and stride adapt to the model's height, so a
+   * 21 m giant is framed like a giant.
    */
-  setCharacter: (mesh: {
-    positions: Float32Array;
-    normals: Float32Array;
-    indices: Uint32Array;
-  } | null) => void;
+  setCharacter: (mesh: ViewerModel | null) => void;
   /**
    * Stand geo-anchored avatars in the scene: meshes in metres with local
    * positions and headings. Replaces any previous set.
    */
-  setNpcs: (
-    npcs: {
-      mesh: { positions: Float32Array; normals: Float32Array; indices: Uint32Array };
-      x: number;
-      z: number;
-      theta: number;
-    }[],
-  ) => void;
+  setNpcs: (npcs: { mesh: ViewerModel; x: number; z: number; theta: number }[]) => void;
   /**
    * Drop a kaiju into the scene: one or more animation frames in metres that
    * stomp back and forth across the selection on their own. Null removes it.
    */
-  setKaiju: (
-    frames:
-      | { positions: Float32Array; normals: Float32Array; indices: Uint32Array }[]
-      | null,
-  ) => void;
+  setKaiju: (frames: ViewerModel[] | null) => void;
   /** Render one high-resolution frame and hand it back as a PNG blob. */
   exportImage: () => Promise<Blob | null>;
   destroy: () => void;
@@ -315,6 +320,9 @@ export function createTerrainViewer(
 
   const positionLocation = gl.getAttribLocation(program, 'aPosition');
   const normalLocation = gl.getAttribLocation(program, 'aNormal');
+  const uvLocation = gl.getAttribLocation(program, 'aUV');
+  // Drawables without a UV buffer read this constant instead.
+  if (uvLocation >= 0) gl.vertexAttrib2f(uvLocation, 0, 0);
 
   type Drawable = {
     vao: WebGLVertexArrayObject | null;
@@ -326,6 +334,7 @@ export function createTerrainViewer(
     positions: Float32Array,
     normals: Float32Array,
     indices: Uint32Array,
+    uvs?: Float32Array | null,
   ): Drawable => {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -342,16 +351,38 @@ export function createTerrainViewer(
     gl.enableVertexAttribArray(normalLocation);
     gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
 
+    const buffers: (WebGLBuffer | null)[] = [positionBuffer, normalBuffer];
+    if (uvs && uvs.length > 0 && uvLocation >= 0) {
+      const uvBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(uvLocation);
+      gl.vertexAttribPointer(uvLocation, 2, gl.FLOAT, false, 0, 0);
+      buffers.push(uvBuffer);
+    }
+
     const indexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    buffers.push(indexBuffer);
 
-    return {
-      vao,
-      count: indices.length,
-      buffers: [positionBuffer, normalBuffer, indexBuffer],
-    };
+    return { vao, count: indices.length, buffers };
+  };
+
+  /** Upload a decoded baseColor image; glTF UVs match GL's un-flipped rows. */
+  const makeModelTexture = (source: TexImageSource): WebGLTexture | null => {
+    const texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.activeTexture(gl.TEXTURE0);
+    return texture;
   };
 
   const terrain = upload(scaled, mesh.normals, mesh.indices);
@@ -413,6 +444,8 @@ export function createTerrainViewer(
   const uWindowCol = gl.getUniformLocation(program, 'uWindowCol');
   const uFloorRow = gl.getUniformLocation(program, 'uFloorRow');
   const uModel = gl.getUniformLocation(program, 'uModel');
+  const uModelTex = gl.getUniformLocation(program, 'uModelTex');
+  const uUseModelTexture = gl.getUniformLocation(program, 'uUseModelTexture');
 
   // WebGL2 has no NPOT restrictions, so the bbox-shaped orthophoto uploads
   // as-is and still gets mipmaps for the oblique viewing angles.
@@ -477,15 +510,31 @@ export function createTerrainViewer(
   let lastFrameTime = 0;
   const keysDown = new Set<string>();
   let character: Drawable | null = null;
+  let characterTexture: WebGLTexture | null = null;
+  /** Model height in metres; boom, stride and clearances all key off it. */
+  let characterHeightM = 1.75;
   let kaiju: {
     drawables: Drawable[];
+    texture: WebGLTexture | null;
     x: number;
     z: number;
     heading: number;
     phase: number;
     lastStomp: number;
   } | null = null;
-  let npcs: { drawable: Drawable; x: number; z: number; theta: number }[] = [];
+  let npcs: {
+    drawable: Drawable;
+    texture: WebGLTexture | null;
+    x: number;
+    z: number;
+    theta: number;
+  }[] = [];
+
+  // A giant reads as a giant through the camera: everything that framed a
+  // 1.75 m human stretches with the model's height.
+  const charFactor = (): number => characterHeightM / 1.75;
+  /** Giants pace slower but cover more ground per stride. */
+  const strideScale = (): number => Math.max(1, characterHeightM / 5);
 
   /** Bilinear terrain height at a point in scaled model space. */
   const groundAt = (x: number, z: number): number => {
@@ -609,16 +658,18 @@ export function createTerrainViewer(
       const forward =
         (keysDown.has('KeyW') ? 1 : 0) - (keysDown.has('KeyS') ? 1 : 0);
       const strafe = (keysDown.has('KeyD') ? 1 : 0) - (keysDown.has('KeyA') ? 1 : 0);
-      const speed =
-        keysDown.has('ShiftLeft') || keysDown.has('ShiftRight') ? WALK_RUN_SPEED : WALK_SPEED;
+      const running = keysDown.has('ShiftLeft') || keysDown.has('ShiftRight');
+      const speed = (running ? WALK_RUN_SPEED : WALK_SPEED) * (character ? strideScale() : 1);
       walkMoving = forward !== 0 || strafe !== 0;
       if (walkMoving) {
-        walkPhase += dt * (speed === WALK_RUN_SPEED ? 15 : 9);
-        // One footfall per half stride.
+        // Giants take slower, heavier strides.
+        walkPhase += (dt * (running ? 15 : 9)) / Math.sqrt(character ? strideScale() : 1);
+        // One footfall per half stride; a giant's footfall is a stomp.
         const beat = Math.floor(walkPhase / Math.PI);
         if (beat !== walkStepBeat) {
           walkStepBeat = beat;
-          options.audio?.step?.();
+          if (character && characterHeightM > 8) options.audio?.stomp?.();
+          else options.audio?.step?.();
         }
       }
       walkX += (Math.sin(walkYaw) * forward + Math.cos(walkYaw) * strafe) * speed * dt;
@@ -636,7 +687,10 @@ export function createTerrainViewer(
         // Third person: the camera hangs on a boom behind the avatar. The
         // wheel zooms the boom, mouse pitch tilts it, and a WoW-style
         // collision march zooms in past any terrain that would swallow it.
-        const targetY = groundY + 1.3 * 1.5 * scale;
+        // Every length scales with the model's height, so the same code
+        // frames a human and a 21 m giant.
+        const f = charFactor();
+        const targetY = groundY + 1.3 * f * 1.5 * scale;
         const back = walkBoom * scale * Math.cos(walkPitch * 0.6);
         const up = (walkBoom * 0.52 - Math.sin(walkPitch) * walkBoom * 0.44) * 1.5 * scale;
         const desired: Vec3 = [walkX - lookXh * back, groundY + up, walkZ - lookZh * back];
@@ -646,7 +700,7 @@ export function createTerrainViewer(
           const sx = walkX + (desired[0] - walkX) * t;
           const sy = targetY + (desired[1] - targetY) * t;
           const sz = walkZ + (desired[2] - walkZ) * t;
-          if (sy < groundAt(sx, sz) + 0.5 * 1.5 * scale) {
+          if (sy < groundAt(sx, sz) + 0.5 * f * 1.5 * scale) {
             clear = Math.max(0.12, t - 1 / 12);
             break;
           }
@@ -655,7 +709,7 @@ export function createTerrainViewer(
         const eyeZ = walkZ + (desired[2] - walkZ) * clear;
         const eyeY = Math.max(
           targetY + (desired[1] - targetY) * clear,
-          groundAt(eyeX, eyeZ) + 0.4 * 1.5 * scale,
+          groundAt(eyeX, eyeZ) + 0.4 * f * 1.5 * scale,
         );
         walkView = lookAt([eyeX, eyeY, eyeZ], [walkX, targetY, walkZ], [0, 1, 0]);
       } else {
@@ -744,6 +798,8 @@ export function createTerrainViewer(
     gl.uniform1f(uWindowCol, Math.max(1e-6, 3.0 * scale));
     gl.uniform1f(uFloorRow, Math.max(1e-6, 4.5 * scale));
     gl.uniform1i(uOrtho, 0);
+    gl.uniform1i(uModelTex, 1);
+    gl.uniform1f(uUseModelTexture, 0);
     gl.uniform1f(uUseOrtho, orthoTexture && layerVisible.ortho ? 1 : 0);
     if (orthoTexture) {
       gl.activeTexture(gl.TEXTURE0);
@@ -814,8 +870,15 @@ export function createTerrainViewer(
             npc.x, groundAt(npc.x, npc.z), npc.z, 1,
           ]),
         );
+        if (npc.texture) {
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, npc.texture);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.uniform1f(uUseModelTexture, 1);
+        }
         gl.bindVertexArray(npc.drawable.vao);
         gl.drawElements(gl.TRIANGLES, npc.drawable.count, gl.UNSIGNED_INT, 0);
+        gl.uniform1f(uUseModelTexture, 0);
       }
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
       gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
@@ -858,12 +921,19 @@ export function createTerrainViewer(
       gl.uniform1f(uUseOverride, 1);
       gl.uniform1f(uTexturedStructure, 0);
       gl.uniform3f(uOverrideColor, 0.82, 0.32, 0.2);
+      if (kaiju.texture) {
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, kaiju.texture);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1f(uUseModelTexture, 1);
+      }
       const frameIndex =
         Math.floor(((kaiju.phase / (Math.PI * 2)) % 1) * kaiju.drawables.length) %
         kaiju.drawables.length;
       const frame = kaiju.drawables[frameIndex];
       gl.bindVertexArray(frame.vao);
       gl.drawElements(gl.TRIANGLES, frame.count, gl.UNSIGNED_INT, 0);
+      gl.uniform1f(uUseModelTexture, 0);
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
       gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
     }
@@ -879,7 +949,10 @@ export function createTerrainViewer(
       const theta = Math.PI - walkYaw + sway;
       const cosYaw = Math.cos(theta);
       const sinYaw = Math.sin(theta);
-      const bob = walkMode && walkMoving ? Math.abs(Math.sin(walkPhase)) * 0.1 * 1.5 * scale : 0;
+      const bob =
+        walkMode && walkMoving
+          ? Math.abs(Math.sin(walkPhase)) * 0.1 * charFactor() * 1.5 * scale
+          : 0;
       const groundY = groundAt(walkX, walkZ) + bob;
       // Column-major translate(walk position) · rotateY(theta) · scale.
       gl.uniformMatrix4fv(
@@ -894,8 +967,15 @@ export function createTerrainViewer(
       );
       gl.uniform1f(uUseOverride, 1);
       gl.uniform3f(uOverrideColor, ...CHARACTER_COLOR);
+      if (characterTexture) {
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, characterTexture);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1f(uUseModelTexture, 1);
+      }
       gl.bindVertexArray(character.vao);
       gl.drawElements(gl.TRIANGLES, character.count, gl.UNSIGNED_INT, 0);
+      gl.uniform1f(uUseModelTexture, 0);
       gl.uniform3f(uOverrideColor, ...BUILDING_COLOR);
       gl.uniformMatrix4fv(uModel, false, IDENTITY_MODEL);
     }
@@ -947,8 +1027,13 @@ export function createTerrainViewer(
   const onWheel = (event: WheelEvent): void => {
     event.preventDefault();
     if (walkMode) {
-      // WoW-style: the wheel zooms the third-person boom.
-      walkBoom = Math.min(14, Math.max(2, walkBoom + Math.sign(event.deltaY) * 0.8));
+      // WoW-style: the wheel zooms the third-person boom, in strides of the
+      // avatar's own size so a giant zooms in giant steps.
+      const f = charFactor();
+      walkBoom = Math.min(
+        14 * f,
+        Math.max(2 * f, walkBoom + Math.sign(event.deltaY) * 0.8 * f),
+      );
       return;
     }
     autoRotate = false;
@@ -1013,8 +1098,27 @@ export function createTerrainViewer(
         gl.deleteVertexArray(character.vao);
         character = null;
       }
+      if (characterTexture) {
+        gl.deleteTexture(characterTexture);
+        characterTexture = null;
+      }
+      characterHeightM = 1.75;
       if (characterMesh) {
-        character = upload(characterMesh.positions, characterMesh.normals, characterMesh.indices);
+        character = upload(
+          characterMesh.positions,
+          characterMesh.normals,
+          characterMesh.indices,
+          characterMesh.uvs,
+        );
+        characterTexture = characterMesh.texture ? makeModelTexture(characterMesh.texture) : null;
+        // The mesh arrives normalised with feet at y = 0, so its top IS its
+        // height in metres — the camera scales itself from this one number.
+        let top = 0;
+        for (let i = 1; i < characterMesh.positions.length; i += 3) {
+          top = Math.max(top, characterMesh.positions[i]);
+        }
+        characterHeightM = Math.max(0.5, top || 1.75);
+        walkBoom = characterHeightM * 2.85;
       }
     },
     setNpcs: (list) => {
@@ -1022,9 +1126,11 @@ export function createTerrainViewer(
       for (const npc of npcs) {
         for (const buffer of npc.drawable.buffers) gl.deleteBuffer(buffer);
         gl.deleteVertexArray(npc.drawable.vao);
+        if (npc.texture) gl.deleteTexture(npc.texture);
       }
       npcs = list.map((npc) => ({
-        drawable: upload(npc.mesh.positions, npc.mesh.normals, npc.mesh.indices),
+        drawable: upload(npc.mesh.positions, npc.mesh.normals, npc.mesh.indices, npc.mesh.uvs),
+        texture: npc.mesh.texture ? makeModelTexture(npc.mesh.texture) : null,
         x: npc.x,
         z: npc.z,
         theta: npc.theta,
@@ -1037,13 +1143,17 @@ export function createTerrainViewer(
           for (const buffer of drawable.buffers) gl.deleteBuffer(buffer);
           gl.deleteVertexArray(drawable.vao);
         }
+        if (kaiju.texture) gl.deleteTexture(kaiju.texture);
         kaiju = null;
       }
       if (frames && frames.length > 0) {
+        // One shared skin: every gait frame deforms the same painted body.
+        const skin = frames.find((frame) => frame.texture)?.texture ?? null;
         kaiju = {
           drawables: frames.map((frame) =>
-            upload(frame.positions, frame.normals, frame.indices),
+            upload(frame.positions, frame.normals, frame.indices, frame.uvs),
           ),
+          texture: skin ? makeModelTexture(skin) : null,
           // Enter from a corner, heading across the middle of town.
           x: -mesh.stats.widthM * scale * 0.4,
           z: mesh.stats.depthM * scale * 0.4,
@@ -1138,6 +1248,9 @@ export function createTerrainViewer(
         gl.deleteVertexArray(drawable.vao);
       }
       if (orthoTexture) gl.deleteTexture(orthoTexture);
+      if (characterTexture) gl.deleteTexture(characterTexture);
+      if (kaiju?.texture) gl.deleteTexture(kaiju.texture);
+      for (const npc of npcs) if (npc.texture) gl.deleteTexture(npc.texture);
       gl.deleteProgram(program);
     },
   };

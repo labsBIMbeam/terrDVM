@@ -45,7 +45,7 @@ export function isApprovedPlacementEventUrl(candidate: string): boolean {
   }
   if (url.origin !== collectionOrigin() || url.pathname !== '/placements/event') return false;
   return [...url.searchParams.keys()].every(
-    (key) => key === 'character' || key === 'at' || key === 'heading',
+    (key) => key === 'character' || key === 'at' || key === 'heading' || key === 'message',
   );
 }
 
@@ -55,11 +55,13 @@ export async function buildPlacementEvent(
   lon: number,
   lat: number,
   heading = 0,
+  message = '',
 ): Promise<UnsignedEvent> {
   const url = new URL(`${COLLECTION_SERVICE.baseUrl}/placements/event`);
   url.searchParams.set('character', character);
   url.searchParams.set('at', `${lon.toFixed(6)},${lat.toFixed(6)}`);
   url.searchParams.set('heading', String(heading));
+  if (message) url.searchParams.set('message', message);
   const blob = await loadApprovedBytes(url.toString(), {
     deadlineMs: 15_000,
     isAllowed: isApprovedPlacementEventUrl,
