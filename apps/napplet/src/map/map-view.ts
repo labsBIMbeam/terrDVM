@@ -17,6 +17,7 @@ import {
 } from './source';
 import { getRegion, viewBoundsTuple, type Region } from '../config/regions';
 import { coverageFor } from '../config/coverage';
+import cities from '../config/cities.json';
 import { addCoverageOverlay, type CoverageOverlay } from './coverage-overlay';
 import type { BBox4326 } from '../bbox/validate';
 
@@ -169,6 +170,7 @@ export function createMapView(
   let pendingSelection: BBox4326 | null = null;
   let editingNotified = false;
   let coverage: CoverageOverlay | null = null;
+  const cityMarkers: maplibregl.Marker[] = [];
 
   maplibregl.addProtocol(PROTOCOL, (params, abortController) =>
     loadRoleTile(params.url, abortController),
@@ -347,6 +349,26 @@ export function createMapView(
       }
     }
 
+    // Orientation dots: HTML markers need no glyph server, so labels work in
+    // any shell. Only cities inside the region's view bounds are added.
+    for (const city of cities as { name: string; lon: number; lat: number }[]) {
+      if (
+        city.lon < region.viewBounds.west ||
+        city.lon > region.viewBounds.east ||
+        city.lat < region.viewBounds.south ||
+        city.lat > region.viewBounds.north
+      ) {
+        continue;
+      }
+      const element = document.createElement('div');
+      element.className = 'city-marker';
+      element.innerHTML = `<i></i><span>${city.name}</span>`;
+      const marker = new maplibregl.Marker({ element, anchor: 'left' })
+        .setLngLat([city.lon, city.lat])
+        .addTo(map);
+      cityMarkers.push(marker);
+    }
+
     draw.start();
     drawReady = true;
     draw.setMode(pendingMode);
@@ -416,6 +438,8 @@ export function createMapView(
       window.removeEventListener('resize', resize);
       coverage?.destroy();
       coverage = null;
+      for (const marker of cityMarkers) marker.remove();
+      cityMarkers.length = 0;
       try {
         if (drawReady) draw.stop();
       } finally {

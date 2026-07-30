@@ -687,6 +687,34 @@ body {
   color: var(--color-text-muted);
 }
 
+.city-marker {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+  /* The app ships no maplibre-gl.css, so the marker positioning that
+     normally comes from there must live here. */
+  position: absolute;
+  will-change: transform;
+}
+
+.city-marker i {
+  background: #f5efe2;
+  border: 1px solid #111;
+  border-radius: 50%;
+  block-size: 6px;
+  display: block;
+  inline-size: 6px;
+}
+
+.city-marker span {
+  color: #f5efe2;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 3px #000, 0 0 3px #000;
+  white-space: nowrap;
+}
+
 .viewer-avatar-row select {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
