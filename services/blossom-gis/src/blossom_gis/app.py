@@ -647,6 +647,62 @@ def placement_event(
     )
 
 
+@app.get("/presence/event")
+def presence_event(
+    character: str,
+    at: str,
+    message: str = "",
+) -> JSONResponse:
+    """Build the unsigned NIP-38 user status (kind 30315) for "I am here".
+
+    Replaceable by design: publishing from a new spot overwrites the old
+    status on the relays — exactly the semantics presence needs. Clients
+    subscribe to kind 30315 plus a `g` prefix of their area and render every
+    hit as an avatar. The caller signs with their own NIP-07 signer; this
+    server never holds a key.
+    """
+    import json
+    import time
+
+    from .geo import geohash_encode
+
+    manifest_path = DATA_DIR / "characters.json"
+    if not manifest_path.is_file():
+        raise HTTPException(404, "no characters mirrored yet")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = manifest.get(character)
+    if not entry:
+        raise HTTPException(404, f"unknown character: {character}")
+    parts = at.split(",")
+    if len(parts) != 2:
+        raise HTTPException(400, "at must be 'lon,lat'")
+    try:
+        lon, lat = float(parts[0]), float(parts[1])
+    except ValueError as exc:
+        raise HTTPException(400, "at values must be numbers") from exc
+    if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+        raise HTTPException(400, "at is outside the world")
+
+    tags = [
+        ["d", "terrdvm"],
+        ["name", character],
+        ["x", entry["sha256"]],
+        ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
+        ["t", "terrdvm-presence"],
+    ]
+    for precision in range(1, 9):
+        tags.append(["g", geohash_encode(lat, lon, precision)])
+    status = message.strip()[:280] or f"exploring {lat:.4f}, {lon:.4f}"
+    return JSONResponse(
+        {
+            "kind": 30315,
+            "created_at": int(time.time()),
+            "content": status,
+            "tags": tags,
+        }
+    )
+
+
 @app.post("/placements")
 async def add_placement(
     request: Request,

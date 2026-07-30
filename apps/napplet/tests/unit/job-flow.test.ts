@@ -106,7 +106,8 @@ describe('job flow state machine', () => {
 
 describe('job flow copy contract', () => {
   it('names the demo stages without promising a payment', () => {
-    expect(COPY.jobFlow.startButton).toBe('Start generating');
+    // 21 sats is the flat headline price; the demo build still takes nothing.
+    expect(COPY.jobFlow.startButton).toBe('Pay 21 sats · Start generating');
     expect(COPY.jobFlow.readyTitle).toBe('Generate terrain');
     expect(COPY.jobFlow.generatingTitle).toBe('Preparing your terrain job…');
     expect(COPY.jobFlow.previewTitle).toBe('Terrain preview');

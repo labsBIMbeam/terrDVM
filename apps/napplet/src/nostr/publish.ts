@@ -49,6 +49,46 @@ export function isApprovedPlacementEventUrl(candidate: string): boolean {
   );
 }
 
+export function isApprovedPresenceEventUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin !== collectionOrigin() || url.pathname !== '/presence/event') return false;
+  return [...url.searchParams.keys()].every(
+    (key) => key === 'character' || key === 'at' || key === 'message',
+  );
+}
+
+/**
+ * Ask the server for the unsigned NIP-38 status (kind 30315): replaceable,
+ * so publishing from a new spot overwrites the old one — presence semantics
+ * for free, on an existing kind.
+ */
+export async function buildPresenceEvent(
+  character: string,
+  lon: number,
+  lat: number,
+  message = '',
+): Promise<UnsignedEvent> {
+  const url = new URL(`${COLLECTION_SERVICE.baseUrl}/presence/event`);
+  url.searchParams.set('character', character);
+  url.searchParams.set('at', `${lon.toFixed(6)},${lat.toFixed(6)}`);
+  if (message) url.searchParams.set('message', message);
+  const blob = await loadApprovedBytes(url.toString(), {
+    deadlineMs: 15_000,
+    isAllowed: isApprovedPresenceEventUrl,
+    signal: undefined,
+  });
+  const event = JSON.parse(await blob.text()) as UnsignedEvent;
+  if (event.kind !== 30315 || !Array.isArray(event.tags)) {
+    throw new Error('Server returned an unexpected status shape.');
+  }
+  return event;
+}
+
 /** Ask the server for the unsigned announcement of this placement. */
 export async function buildPlacementEvent(
   character: string,

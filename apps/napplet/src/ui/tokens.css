@@ -776,6 +776,37 @@ body {
 /* City and avatar labels now live inside the map as symbol layers
    (map-view.ts bakes them into icons), so no marker CSS is needed. */
 
+/* One number for the whole preview: the data score with its traffic light. */
+.job-score {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-block: 10px;
+}
+
+.job-score-dot {
+  background: var(--color-text-muted);
+  block-size: 14px;
+  border: 1px solid #111;
+  border-radius: 50%;
+  display: inline-block;
+  inline-size: 14px;
+}
+
+.job-score-dot--green { background: #3fbf6f; box-shadow: 0 0 10px #3fbf6f66; }
+.job-score-dot--amber { background: var(--c-orange-bright); box-shadow: 0 0 10px #ffa73366; }
+.job-score-dot--red { background: var(--c-ember); box-shadow: 0 0 10px #ff6a0066; }
+
+.job-score-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.job-score-caption {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
 /* --- Start screen ---------------------------------------------------------
    One deliberate click opens the app; the gesture doubles as the browser's
    audio unlock, so the world arrives with its chime. */
@@ -791,6 +822,31 @@ body {
   overflow: hidden;
   position: fixed;
   z-index: 60;
+}
+
+/* The intro film plays muted under the title; a click skips into the app. */
+.start-video {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  opacity: 0.6;
+  position: absolute;
+}
+
+.start-screen > :not(.start-video) {
+  position: relative;
+  transition: opacity 0.8s ease;
+  z-index: 1;
+}
+
+/* Cinema mode: the film runs, the menu steps aside until the user stirs. */
+.start-screen.is-cinema {
+  cursor: pointer;
+}
+
+.start-screen.is-cinema > :not(.start-video) {
+  opacity: 0;
 }
 
 /* A slow drift of scanlines: the vending machine is humming. */

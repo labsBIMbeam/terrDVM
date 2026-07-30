@@ -134,7 +134,7 @@ export const COPY = {
   requestGate: {
     title: 'Request ready',
     body: 'Your terrain selection is valid. Review the fixed request values before creating an invoice.',
-    paymentNote: 'Payment is not connected in this demo. No invoice or terrain artifact is created here.',
+    paymentNote: 'Invoice: 21 sats, flat — lnurl-wallet is the reference. The demo build takes no payment.',
     invoiceButton: 'Create invoice — next step',
   },
   coverageLegend: {
@@ -151,8 +151,10 @@ export const COPY = {
   jobFlow: {
     readyTitle: 'Generate terrain',
     readyBody:
-      'Review the request below, then start generating. Payment is skipped in this demo build.',
-    startButton: 'Start generating',
+      'Review the request below, then start generating. The 21-sat invoice is static in this demo build.',
+    startButton: 'Pay 21 sats · Start generating',
+    demoRun: (place: string): string => `Demo: ${place}`,
+    scoreCaption: 'data score for this selection',
     cancelButton: 'Cancel',
     generatingTitle: 'Preparing your terrain job…',
     generatingBody: 'Fetching elevation tiles and building the mesh for the selected area.',

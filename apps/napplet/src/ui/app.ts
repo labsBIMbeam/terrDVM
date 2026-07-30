@@ -25,7 +25,8 @@ import {
 } from '../job/collection';
 import { projector } from '../buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
-import { buildPlacementEvent, signAndPublish } from '../nostr/publish';
+import { buildPlacementEvent, buildPresenceEvent, signAndPublish } from '../nostr/publish';
+import { fetchPresences } from '../nostr/presence';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
 import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
@@ -115,6 +116,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </div>
       <div class="toolbar" role="toolbar" aria-label="${COPY.boot.toolbarLabel}">
         <button class="button button-primary" id="draw-button" type="button">${COPY.buttons.drawBoundingBox}</button>
+        <button class="button" id="demo-button" type="button" hidden></button>
         <button class="button" id="stop-drawing-button" type="button" hidden>${COPY.buttons.stopDrawing}</button>
         <button class="button" id="coordinates-button" type="button" aria-expanded="false" aria-controls="coordinates-panel">${COPY.buttons.enterCoordinates}</button>
         <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
@@ -194,6 +196,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           <div class="job-fact"><dt>${COPY.requestPanel.resolutionLabel}</dt><dd>${RES_M} m/px</dd></div>
           <div class="job-fact"><dt>${COPY.requestPanel.outputLabel}</dt><dd>${OUTPUT_MIME}</dd></div>
         </dl>
+        <div class="job-score" id="job-score">
+          <span class="job-score-dot" id="job-score-dot" aria-hidden="true"></span>
+          <span class="job-score-value" id="job-score-value">—</span>
+          <span class="job-score-caption">${COPY.jobFlow.scoreCaption}</span>
+        </div>
         <h3 class="job-field-label">${COPY.jobFlow.availabilityTitle}</h3>
         <dl class="job-facts">
           <div class="job-fact"><dt>Terrain</dt><dd id="job-avail-terrain">—</dd></div>
@@ -295,6 +302,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       <button class="button viewer-modal-close" id="viewer-close" type="button">${COPY.jobFlow.viewerCloseButton}</button>
     </dialog>
     <div class="start-screen" id="start-screen">
+      <video class="start-video" id="start-video" muted autoplay loop playsinline
+        src="/intro.mp4" aria-hidden="true"></video>
       <p class="start-kicker">${COPY.boot.startKicker}</p>
       <h1 class="start-title">${COPY.boot.appTitle}</h1>
       <button class="button button-primary start-enter" id="start-enter" type="button" autofocus>
@@ -332,6 +341,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     FAILED: root.querySelector<HTMLElement>('#job-stage-failed'),
   };
   const jobArea = root.querySelector<HTMLElement>('#job-area');
+  const demoButton = root.querySelector<HTMLButtonElement>('#demo-button');
+  const jobScoreDot = root.querySelector<HTMLElement>('#job-score-dot');
+  const jobScoreValue = root.querySelector<HTMLElement>('#job-score-value');
+  const startVideo = root.querySelector<HTMLVideoElement>('#start-video');
   const jobAvailTerrain = root.querySelector<HTMLElement>('#job-avail-terrain');
   const jobAvailOrtho = root.querySelector<HTMLElement>('#job-avail-ortho');
   const jobAvailStreets = root.querySelector<HTMLElement>('#job-avail-streets');
@@ -392,7 +405,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !stopDrawingButton || !clearButton || !coverageButton || !restoreButton || !toast || !requestAction ||
       !continueRequestButton || !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
-      !jobArea || !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
+      !jobArea || !demoButton || !jobScoreDot || !jobScoreValue || !startVideo ||
+      !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
       !jobProgress || !jobProgressFill || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
       !jobBuildingsAttribution ||
@@ -652,6 +666,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         let npcs: NonNullable<NonNullable<typeof lastScene>['npcs']> = [];
         try {
           const placements = await fetchPlacements(bbox, controller.signal);
+          // Live presence from the relays joins the locally mirrored
+          // placements — other users appear in the scene, newest spot wins.
+          const presences = await fetchPresences(bbox).catch(() => []);
+          for (const presence of presences) {
+            const existing = placements.findIndex((p) => p.name === presence.name);
+            const record = {
+              name: presence.name,
+              sha256: presence.sha256,
+              lon: presence.lon,
+              lat: presence.lat,
+              heading: 180,
+            };
+            if (existing >= 0) placements[existing] = record;
+            else placements.push(record);
+          }
           const project = projector(bbox);
           npcs = (
             await Promise.all(
@@ -914,6 +943,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     jobAvailOrtho.textContent = COPY.jobFlow.availChecking;
     jobAvailStreets.textContent = COPY.jobFlow.availChecking;
     jobAvailWater.textContent = COPY.jobFlow.availChecking;
+    jobScoreValue.textContent = '…';
+    jobScoreDot.className = 'job-score-dot';
 
     runPreflight(region.id, bbox, { signal: controller.signal }).then((report) => {
       if (controller.signal.aborted) return;
@@ -931,6 +962,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         : report.waterways === 0
           ? COPY.jobFlow.availNone
           : COPY.jobFlow.availWays(report.waterways);
+
+      // One number to rule the panel: everything below is the breakdown.
+      let score = 15; // Mapzen terrain answers everywhere
+      if (report.ortho) {
+        const resolution = report.ortho.mPerPx;
+        score += resolution <= 0.3 ? 40 : resolution <= 1 ? 32 : resolution <= 2.5 ? 22 : 12;
+      }
+      if (report.streets) {
+        score += report.streets >= 1000 ? 30 : report.streets >= 100 ? 22 : 12;
+      }
+      if (report.waterways) score += report.waterways >= 100 ? 15 : 8;
+      score = Math.min(100, score);
+      const grade = score >= 75 ? 'green' : score >= 45 ? 'amber' : 'red';
+      jobScoreValue.textContent = `${score}/100`;
+      jobScoreDot.className = `job-score-dot job-score-dot--${grade}`;
     });
   };
 
@@ -940,6 +986,59 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     showPreflight(state.bbox);
     announce(COPY.jobFlow.readyTitle);
   };
+
+  // The demo path: one click, a curated prewarmed selection, straight into
+  // generation — the map path with a drawn bbox stays untouched next to it.
+  const DEMO_SELECTIONS: Record<string, { label: string; bbox: BBox4326 }> = {
+    vienna: { label: 'Wien Ring', bbox: [16.355, 48.195, 16.385, 48.215] },
+    madeira: { label: 'Funchal', bbox: [-16.92, 32.64, -16.9, 32.66] },
+    'south-tyrol': { label: 'Bruneck', bbox: [11.925, 46.788, 11.955, 46.805] },
+  };
+  const demoSelection = DEMO_SELECTIONS[region.id];
+  if (demoSelection) {
+    demoButton.hidden = false;
+    demoButton.textContent = COPY.jobFlow.demoRun(demoSelection.label);
+    demoButton.addEventListener('click', () => {
+      state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: demoSelection.bbox });
+      alert('');
+      updateView();
+      mapView.setSelection(demoSelection.bbox);
+      openJobFlow();
+      startTerrainJob();
+    });
+  }
+
+  // The intro film runs muted behind the start screen; if the asset is not
+  // served (production napplet build), the animated start screen stands alone.
+  startVideo.addEventListener('error', () => startVideo.remove());
+
+  // Cinema mode: while the film plays, the menu bows out after a moment of
+  // stillness; any movement brings it back, and a click still enters the app.
+  let cinemaTimer: ReturnType<typeof setTimeout> | undefined;
+  const armCinema = (): void => {
+    clearTimeout(cinemaTimer);
+    startScreen.classList.remove('is-cinema');
+    cinemaTimer = setTimeout(() => startScreen.classList.add('is-cinema'), 2500);
+  };
+  startVideo.addEventListener('playing', armCinema);
+  startScreen.addEventListener('pointermove', () => {
+    if (!startVideo.isConnected || startVideo.paused) return;
+    armCinema();
+  });
+
+  // Everyone whose presence status stands in this region appears on the map.
+  void fetchPresences([
+    region.viewBounds.west,
+    region.viewBounds.south,
+    region.viewBounds.east,
+    region.viewBounds.north,
+  ])
+    .then((presences) => {
+      for (const presence of presences) {
+        mapView.addAvatarMarker(presence.name, presence.lon, presence.lat, presence.sha256);
+      }
+    })
+    .catch(() => undefined);
 
   continueRequestButton.addEventListener('click', openJobFlow);
   jobCancel.addEventListener('click', closeJobFlow);
@@ -1156,6 +1255,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // gesture is what unlocks the AudioContext, so the chime lands with it.
   const enterApp = (): void => {
     if (startScreen.classList.contains('is-leaving')) return;
+    clearTimeout(cinemaTimer);
     sound.chime();
     startScreen.classList.add('is-leaving');
     root.querySelector('.app-header')?.classList.add('is-arriving');
@@ -1203,6 +1303,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     void buildPlacementEvent(name, spot.lon, spot.lat, heading, message)
       .then((event) => signAndPublish(event))
       .then(async ({ accepted }) => {
+        // Presence rides along: kind 30315 is replaceable, so this status
+        // simply supersedes wherever the user stood before.
+        await buildPresenceEvent(name, spot.lon, spot.lat, message)
+          .then((event) => signAndPublish(event))
+          .catch(() => undefined);
         const entry = avatarManifest?.find((candidate) => candidate.name === name);
         if (entry) {
           // Local sync is dev convenience; the signed event is the truth.
