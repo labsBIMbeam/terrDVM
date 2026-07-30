@@ -200,3 +200,45 @@ class TestPlacements:
                 assert client.get("/placements").json() == []
         finally:
             app_module.app.dependency_overrides.clear()
+
+
+class TestPlacementEvent:
+    def test_builds_unsigned_nip94_announcement(self, tmp_path: Path, monkeypatch) -> None:
+        manifest = tmp_path / "characters.json"
+        manifest.write_text(
+            '{"flx600": {"sha256": "' + "a" * 64 + '", "size": 11636080}}',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+        with TestClient(app_module.app) as client:
+            event = client.get(
+                "/placements/event",
+                params={"character": "flx600", "at": "16.3725,48.2085", "heading": 200},
+            ).json()
+        assert event["kind"] == 1063
+        tags = {t[0]: t[1] for t in event["tags"] if t[0] != "g"}
+        assert tags["x"] == "a" * 64
+        assert tags["x"] in tags["url"]
+        assert tags["m"] == "model/gltf-binary"
+        assert tags["name"] == "flx600"
+        geohashes = [t[1] for t in event["tags"] if t[0] == "g"]
+        assert len(geohashes) == 8
+        assert all(geohashes[i + 1].startswith(geohashes[i]) for i in range(7))
+        # Unsigned on purpose: the server never holds a key.
+        assert "sig" not in event and "pubkey" not in event
+
+    def test_post_records_a_local_placement(self, tmp_path: Path) -> None:
+        placements = tmp_path / "placements.json"
+        app_module.app.dependency_overrides[app_module.placements_path] = lambda: placements
+        try:
+            with TestClient(app_module.app) as client:
+                ok = client.post(
+                    "/placements",
+                    json={"name": "gigi", "sha256": "b" * 64, "lon": 16.31, "lat": 48.18},
+                )
+                bad = client.post("/placements", json={"name": "x", "sha256": "junk"})
+            assert ok.status_code == 200
+            assert bad.status_code == 400
+            assert "gigi" in placements.read_text(encoding="utf-8")
+        finally:
+            app_module.app.dependency_overrides.clear()

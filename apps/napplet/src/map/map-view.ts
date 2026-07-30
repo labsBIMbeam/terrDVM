@@ -36,6 +36,8 @@ const MARKER_DATA_URL =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"%3E%3Ccircle cx="4" cy="4" r="3" fill="%23F7931A" stroke="%23000000" stroke-width="1"/%3E%3C/svg%3E';
 
 type MapViewCallbacks = {
+  /** Fired when the user picks a spot in place-avatar mode. */
+  onPlacePick?: (lon: number, lat: number) => void;
   onDrawComplete: (bbox: BBox4326) => void;
   onEditStart: () => void;
   onEditComplete: (bbox: BBox4326) => void;
@@ -49,6 +51,10 @@ export type MapView = {
   coverageSummary: () => { covered: number; gap: number; sea: number; land: number } | null;
   armDrawing: () => void;
   stopDrawing: () => void;
+  /** Next map click reports a position instead of starting a selection. */
+  armPlacing: () => void;
+  /** Show a placed avatar immediately, without waiting for a refetch. */
+  addAvatarMarker: (name: string, lon: number, lat: number, sha256: string) => void;
   setSelection: (bbox: BBox4326) => void;
   clearSelection: () => void;
   destroy: () => void;
@@ -171,7 +177,18 @@ export function createMapView(
   let pendingSelection: BBox4326 | null = null;
   let editingNotified = false;
   let coverage: CoverageOverlay | null = null;
+  let placing = false;
   const cityMarkers: maplibregl.Marker[] = [];
+
+  const avatarMarker = (name: string, lon: number, lat: number, sha256: string): void => {
+    const element = document.createElement('div');
+    element.className = 'avatar-marker';
+    element.innerHTML = `<i></i><span>${name}</span>`;
+    element.title = `blossom blob ${sha256.slice(0, 12)}…`;
+    cityMarkers.push(
+      new maplibregl.Marker({ element, anchor: 'left' }).setLngLat([lon, lat]).addTo(map),
+    );
+  };
 
   maplibregl.addProtocol(PROTOCOL, (params, abortController) =>
     loadRoleTile(params.url, abortController),
@@ -375,17 +392,17 @@ export function createMapView(
       .then((placements) => {
         if (destroyed) return;
         for (const placement of placements) {
-          const element = document.createElement('div');
-          element.className = 'avatar-marker';
-          element.innerHTML = `<i></i><span>${placement.name}</span>`;
-          element.title = `blossom blob ${placement.sha256.slice(0, 12)}…`;
-          const marker = new maplibregl.Marker({ element, anchor: 'left' })
-            .setLngLat([placement.lon, placement.lat])
-            .addTo(map);
-          cityMarkers.push(marker);
+          avatarMarker(placement.name, placement.lon, placement.lat, placement.sha256);
         }
       })
       .catch(() => undefined);
+
+    map.on('click', (event) => {
+      if (!placing) return;
+      placing = false;
+      map.getCanvas().style.cursor = '';
+      callbacks.onPlacePick?.(event.lngLat.lng, event.lngLat.lat);
+    });
 
     draw.start();
     drawReady = true;
@@ -432,6 +449,15 @@ export function createMapView(
       pendingMode = 'select';
       if (drawReady) draw.setMode('select');
       editingNotified = false;
+    },
+    armPlacing: () => {
+      if (destroyed) return;
+      placing = true;
+      map.getCanvas().style.cursor = 'crosshair';
+    },
+    addAvatarMarker: (name, lon, lat, sha256) => {
+      if (destroyed) return;
+      avatarMarker(name, lon, lat, sha256);
     },
     setSelection: (bbox) => {
       if (destroyed) return;

@@ -188,6 +188,12 @@ export const COPY = {
     avatarFailed: (name: string): string => `${name}: model format unsupported`,
     crabButton: 'Spawn crab',
     crabRemoveButton: 'Remove crab',
+    placeButton: 'Place avatar',
+    placeHint: 'Click the map to choose where the avatar stands.',
+    placeTitle: 'Publish placement',
+    placePublish: 'Sign & publish',
+    placePublished: (relays: number): string =>
+      `Published to ${relays} relay${relays === 1 ? '' : 's'} ✓`,
     exportMapButton: 'Export map (PNG)',
     layersLabel: 'Layers',
     landcoverLabel: 'Land cover',

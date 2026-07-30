@@ -24,6 +24,8 @@ import {
   type CharacterEntry,
 } from '../job/collection';
 import { projector } from '../buildings/extrude';
+import { COLLECTION_SERVICE } from '../job/collection';
+import { buildPlacementEvent, signAndPublish } from '../nostr/publish';
 import { normalizeCharacter, parseGlb } from '../viewer/glb';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '../terrain/mesh';
@@ -101,6 +103,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <button class="button" id="stop-drawing-button" type="button" hidden>${COPY.buttons.stopDrawing}</button>
         <button class="button" id="coordinates-button" type="button" aria-expanded="false" aria-controls="coordinates-panel">${COPY.buttons.enterCoordinates}</button>
         <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
+        <button class="button" id="place-avatar-button" type="button">${COPY.jobFlow.placeButton}</button>
         <button class="button button-danger" id="clear-button" type="button">${COPY.buttons.clearSelection}</button>
       </div>
     </header>
@@ -228,6 +231,25 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         </div>
       </section>
     </dialog>
+    <dialog class="job-modal" id="place-modal" aria-label="${COPY.jobFlow.placeTitle}">
+      <section class="job-stage">
+        <h2 class="job-title">${COPY.jobFlow.placeTitle}</h2>
+        <label class="viewer-avatar-row"><span>${COPY.jobFlow.avatarLabel}</span>
+          <select id="place-character"></select>
+        </label>
+        <dl class="job-facts">
+          <div class="job-fact"><dt>Position</dt><dd id="place-position">—</dd></div>
+        </dl>
+        <label class="viewer-avatar-row"><span>Heading °</span>
+          <input id="place-heading" type="number" value="0" min="0" max="359" step="5" />
+        </label>
+        <p class="job-field-label" id="place-status"></p>
+        <div class="job-actions">
+          <button class="button button-primary button-wide" id="place-publish" type="button">${COPY.jobFlow.placePublish}</button>
+          <button class="button button-wide" id="place-cancel" type="button">${COPY.jobFlow.cancelButton}</button>
+        </div>
+      </section>
+    </dialog>
     <dialog class="viewer-modal" id="viewer-modal" aria-label="${COPY.jobFlow.previewTitle}">
       <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
       <fieldset class="viewer-layers" id="viewer-layers">
@@ -320,6 +342,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const viewerAvatar = root.querySelector<HTMLSelectElement>('#viewer-avatar');
   const viewerExport = root.querySelector<HTMLButtonElement>('#viewer-export');
   const viewerCrab = root.querySelector<HTMLButtonElement>('#viewer-crab');
+  const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
+  const placeModal = root.querySelector<HTMLDialogElement>('#place-modal');
+  const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
+  const placePosition = root.querySelector<HTMLElement>('#place-position');
+  const placeHeading = root.querySelector<HTMLInputElement>('#place-heading');
+  const placeStatus = root.querySelector<HTMLElement>('#place-status');
+  const placePublish = root.querySelector<HTMLButtonElement>('#place-publish');
+  const placeCancel = root.querySelector<HTMLButtonElement>('#place-cancel');
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
@@ -339,7 +369,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerLandcover || !viewerLayerLandcoverLabel ||
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
-      !viewerCrab) {
+      !viewerCrab || !placeButton || !placeModal || !placeCharacter || !placePosition ||
+      !placeHeading || !placeStatus || !placePublish || !placeCancel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
 
@@ -1028,6 +1059,68 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       .catch(() => announce(COPY.jobFlow.avatarFailed('secrab')));
   });
 
+  // Place-avatar flow: map click → unsigned event from the server → NIP-07
+  // signature → relays → local sync. The app never sees a key.
+  let pendingPlace: { lon: number; lat: number } | null = null;
+  placeButton.addEventListener('click', () => {
+    mapView.armPlacing();
+    announce(COPY.jobFlow.placeHint);
+  });
+  const openPlaceModal = async (lon: number, lat: number): Promise<void> => {
+    pendingPlace = { lon, lat };
+    placePosition.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    placeStatus.textContent = '';
+    if (avatarManifest === null) {
+      avatarManifest = await fetchCharacterManifest().catch(() => []);
+    }
+    placeCharacter.innerHTML = '';
+    for (const entry of avatarManifest) {
+      const option = document.createElement('option');
+      option.value = entry.name;
+      option.textContent = entry.name;
+      placeCharacter.append(option);
+    }
+    placeModal.showModal();
+  };
+  placeCancel.addEventListener('click', () => placeModal.close());
+  placePublish.addEventListener('click', () => {
+    const spot = pendingPlace;
+    const name = placeCharacter.value;
+    if (!spot || !name) return;
+    const heading = Number(placeHeading.value) || 0;
+    placeStatus.textContent = '…';
+    placePublish.disabled = true;
+    void buildPlacementEvent(name, spot.lon, spot.lat, heading)
+      .then((event) => signAndPublish(event))
+      .then(async ({ accepted }) => {
+        const entry = avatarManifest?.find((candidate) => candidate.name === name);
+        if (entry) {
+          // Local sync is dev convenience; the signed event is the truth.
+          await fetch(`${COLLECTION_SERVICE.baseUrl}/placements`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              sha256: entry.sha256,
+              lon: spot.lon,
+              lat: spot.lat,
+              heading,
+            }),
+          }).catch(() => undefined);
+          mapView.addAvatarMarker(name, spot.lon, spot.lat, entry.sha256);
+        }
+        placeStatus.textContent = COPY.jobFlow.placePublished(accepted.length);
+        setTimeout(() => placeModal.close(), 1600);
+      })
+      .catch((error: unknown) => {
+        placeStatus.textContent =
+          error instanceof Error ? error.message : 'Publishing failed.';
+      })
+      .finally(() => {
+        placePublish.disabled = false;
+      });
+  });
+
   viewerClose.addEventListener('click', () => viewerModal.close());
   // Covers Escape as well: the native close event is the single teardown path.
   viewerModal.addEventListener('close', () => {
@@ -1056,6 +1149,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
 
   try {
     mapView = createMapView(mapCanvas, {
+      onPlacePick: (lon, lat) => {
+        void openPlaceModal(lon, lat);
+      },
       onDrawComplete: (bbox) => {
         state = selectionReducer(state, { type: 'DRAW_COMPLETE', bbox });
         alert('');
@@ -1090,6 +1186,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       coverageSummary: () => null,
       armDrawing: () => undefined,
       stopDrawing: () => undefined,
+      armPlacing: () => undefined,
+      addAvatarMarker: () => undefined,
       setSelection: () => undefined,
       clearSelection: () => undefined,
       destroy: () => undefined,

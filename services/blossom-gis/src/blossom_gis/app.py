@@ -52,7 +52,7 @@ app = FastAPI(title="blossom-gis", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "HEAD", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Geo-BBox", "X-Geo-Tile"],
     expose_headers=["Content-Length", "Content-Range", "Accept-Ranges"],
 )
@@ -584,6 +584,112 @@ every bake as a sidecar file.</footer>
 
 def placements_path() -> Path:
     return DATA_DIR / "placements.json"
+
+
+@app.get("/placements/event")
+def placement_event(
+    character: str,
+    at: str,
+    heading: float = 0.0,
+) -> JSONResponse:
+    """Build the unsigned nostr announcement for a placement.
+
+    NIP-94 (kind 1063): the blob's hash, its URL, mime and size, plus the
+    exact position as a bbox tag and one `g` tag per geohash precision so
+    generic relays can serve coarse geo queries. The caller signs with their
+    own signer — this server never holds a key.
+    """
+    import json
+    import time
+
+    from .geo import geohash_encode
+
+    manifest_path = DATA_DIR / "characters.json"
+    if not manifest_path.is_file():
+        raise HTTPException(404, "no characters mirrored yet")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = manifest.get(character)
+    if not entry:
+        raise HTTPException(404, f"unknown character: {character}")
+    parts = at.split(",")
+    if len(parts) != 2:
+        raise HTTPException(400, "at must be 'lon,lat'")
+    try:
+        lon, lat = float(parts[0]), float(parts[1])
+    except ValueError as exc:
+        raise HTTPException(400, "at values must be numbers") from exc
+    if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+        raise HTTPException(400, "at is outside the world")
+
+    sha = entry["sha256"]
+    tags = [
+        ["x", sha],
+        ["url", f"{BASE_URL}/{sha}.glb"],
+        ["m", "model/gltf-binary"],
+        ["size", str(entry.get("size", 0))],
+        ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
+        ["heading", f"{heading:.1f}"],
+        ["t", "terrdvm-avatar"],
+        ["name", character],
+    ]
+    for precision in range(1, 9):
+        tags.append(["g", geohash_encode(lat, lon, precision)])
+    return JSONResponse(
+        {
+            "kind": 1063,
+            "created_at": int(time.time()),
+            "content": f"{character} standing at {lat:.5f}, {lon:.5f} — "
+            f"fetch the model by hash from any blossom mirror.",
+            "tags": tags,
+        }
+    )
+
+
+@app.post("/placements")
+async def add_placement(
+    request: Request,
+    path: Annotated[Path, Depends(placements_path)] = None,  # type: ignore[assignment]
+) -> JSONResponse:
+    """Record a placement locally so the demo map stays in sync.
+
+    The nostr event is the network's source of truth; this file is only the
+    local mirror the map reads.
+    """
+    import json
+
+    try:
+        body = json.loads(await request.body())
+    except ValueError as exc:
+        raise HTTPException(400, "body must be JSON") from exc
+    name = body.get("name")
+    sha = str(body.get("sha256", ""))
+    lon = body.get("lon")
+    lat = body.get("lat")
+    if (
+        not isinstance(name, str)
+        or not is_valid_sha256(sha)
+        or not isinstance(lon, (int, float))
+        or not isinstance(lat, (int, float))
+        or not (-180 <= lon <= 180 and -90 <= lat <= 90)
+    ):
+        raise HTTPException(400, "placement needs name, sha256, lon, lat")
+
+    entries = []
+    if path.is_file():
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    entries = [e for e in entries if e.get("name") != name]
+    entries.append(
+        {
+            "name": name,
+            "sha256": sha,
+            "lon": float(lon),
+            "lat": float(lat),
+            "heading": float(body.get("heading", 0.0)),
+        }
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(entries, indent=1), encoding="utf-8")
+    return JSONResponse({"ok": True, "count": len(entries)})
 
 
 @app.get("/placements")
