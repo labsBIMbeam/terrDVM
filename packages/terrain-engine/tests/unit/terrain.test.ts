@@ -76,6 +76,18 @@ describe('slippy tile math', () => {
 });
 
 describe('DEM tile planning', () => {
+  // Locked deliberately: z12 is the last zoom carrying 1-arcsec source
+  // information, z14 costs 16x the corpus bytes for interpolation, and the
+  // 40 GB hosting gate turns on this constant. See the note in dem.ts.
+  it('caps the DEM at z13', () => {
+    expect(DEM_SOURCE.maxZoom).toBe(13);
+  });
+
+  it('clamps a tiny selection to the cap instead of over-zooming', () => {
+    // 0.005 deg of longitude wants z16; the cap must hold it at 13.
+    expect(chooseDemZoom([-16.905, 32.75, -16.9, 32.755], 192)).toBe(DEM_SOURCE.maxZoom);
+  });
+
   it('keeps the chosen zoom inside the approved range', () => {
     expect(chooseDemZoom(MADEIRA, 192)).toBeGreaterThanOrEqual(DEM_SOURCE.minZoom);
     expect(chooseDemZoom(MADEIRA, 192)).toBeLessThanOrEqual(DEM_SOURCE.maxZoom);

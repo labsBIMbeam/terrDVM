@@ -23,7 +23,36 @@ export const DEM_SOURCE = {
   timeoutMs: 15_000,
   tileSize: 256,
   minZoom: 8,
-  maxZoom: 14,
+  /**
+   * Capped at 13 on purpose — do not raise it back without redoing this
+   * derivation, because it is a corpus-size decision, not a quality knob.
+   *
+   * Terrarium over every region this project targets (Madeira, South Tyrol,
+   * Austria) is SRTM/GMTED2010 at 1-arcsec posting. A Web Mercator pixel is
+   * 360/(256*2^z) degrees of longitude, so it equals the 1-arcsec source grid
+   * at z = log2(1296000/256) = 12.31 on the longitude axis (latitude
+   * independent) and at z = 12.31 + log2(cos lat) on the latitude axis —
+   * 12.06 at Madeira (32.6N), 11.75 at 47N. Read as ground distance the same
+   * result is 32.2 m/px at z12/32.6N and 26.1 m/px at z12/47N against ~30 m
+   * posting. Either way z12 is the last zoom that carries source information:
+   * z13 oversamples 1.6-2.4x per axis and z14 oversamples 3.2-4.8x, so a z14
+   * tile is 16x the bytes of a z12 tile for zero new elevation data (measured:
+   * 11.19 MB vs 0.75 MB over Madeira, a 14.8x ratio — under 16x only because
+   * finer tiles hold less relief and compress better). The residual cost of
+   * dropping z14 is 0.683 m RMS against Mapzen's own resampling of the same
+   * source, on terrain with 1400 m of relief.
+   *
+   * 13 rather than 12 keeps one level of headroom: the cap is global and
+   * Terrarium does splice in 8-10 m national sources elsewhere (3DEP, Norway,
+   * NZ), for which z13's 13.0 m/px at 47N is roughly native.
+   *
+   * Nothing downstream needs z14: `chooseDemZoom` clamps here, and
+   * `sampleHeightfield` already resamples bilinearly onto an arbitrary grid,
+   * so the mesh is unchanged in shape. The cap only binds for selections
+   * narrower than ~3.1 km, where the 192-wide mesh grid is finer than the DEM
+   * at any zoom anyway.
+   */
+  maxZoom: 13,
 } as const;
 
 /** Hard ceiling on tiles per job: this demo requests visible extent only, never bulk. */

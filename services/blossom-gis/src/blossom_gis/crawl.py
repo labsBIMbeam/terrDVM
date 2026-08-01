@@ -253,9 +253,16 @@ class RateLimiter:
 
 
 def overpass_query(bounds: BBox, limit: int) -> str:
+    """Union query for one bbox, capped at `limit` elements.
+
+    Note that `out geom <limit>` is a *silent* hard cap upstream — see
+    `fetch_tile`, which is where the cap is checked and refused.
+    """
     area = f"{bounds.south},{bounds.west},{bounds.north},{bounds.east}"
     return (
-        "[out:json][timeout:60];("
+        # 180 s server-side: a dense z14 tile is ~9k ways, which does not
+        # complete inside the old 60 s budget.
+        "[out:json][timeout:180];("
         f'way["building"]({area});'
         f'way["highway"]({area});'
         f'way["landuse"]({area});'
@@ -364,7 +371,29 @@ def fetch_raster(tile: Tile, timeout_s: float = 45) -> bytes:
     return payload
 
 
-def fetch_tile(tile: Tile, limit: int = 5000, timeout_s: float = 90) -> FeatureTile:
+class TileTruncatedError(RuntimeError):
+    """The upstream `out <n>` cap was reached, so this answer is incomplete.
+
+    Raised instead of returning, because a partial tile is indistinguishable
+    from a complete one once it is encoded: the same z/x/y, a plausible size, a
+    valid TFT2 blob. Marked done, it would be served forever as the truth about
+    that place.
+    """
+
+
+def fetch_tile(tile: Tile, limit: int = 20000, timeout_s: float = 180) -> FeatureTile:
+    """Fetch one tile's OSM ways, or raise if the upstream cap truncated them.
+
+    Overpass's `out <n>` is a **hard cap, not a warning**: it returns exactly
+    `n` elements and no `remark`, so truncation is invisible in the payload.
+    Measured on 14/7422/6618 (Funchal), the old default of 5000 silently
+    discarded 3,830 of 8,830 ways — 43% of the tile — and the crawler then
+    marked it done.
+
+    So we fail closed: reaching the cap is a failure, retried and surfaced,
+    never a completed tile. `limit` stays as a runaway guard against a query
+    that would otherwise return a whole city.
+    """
     bounds = tile_bbox(tile.z, tile.x, tile.y)
     body = urllib.parse.urlencode({"data": overpass_query(bounds, limit)}).encode()
     request = urllib.request.Request(
@@ -374,6 +403,13 @@ def fetch_tile(tile: Tile, limit: int = 5000, timeout_s: float = 90) -> FeatureT
     )
     with urllib.request.urlopen(request, timeout=timeout_s) as response:
         payload = json.loads(response.read().decode("utf-8"))
+
+    elements = payload.get("elements") or []
+    if len(elements) >= limit:
+        raise TileTruncatedError(
+            f"overpass returned {len(elements)} elements at the {limit} cap for "
+            f"{tile.z}/{tile.x}/{tile.y} — the tile is incomplete, refusing to store it"
+        )
     return parse_overpass(payload, tile)
 
 

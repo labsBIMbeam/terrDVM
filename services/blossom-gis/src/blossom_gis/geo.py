@@ -4,9 +4,9 @@ Two indexing strategies coexist on purpose:
 
 * **Bounding box columns** drive this server's own spatial queries. They give an
   exact overlap test, which geohash prefixes alone cannot.
-* **Geohash prefixes** exist for Nostr. Relays only match tags exactly, so a
-  blob is announced with one `g` tag per precision level, letting a client
-  query a coarse or fine cell without the relay understanding geometry.
+* **Geohash cells** exist for Nostr. Relays only match tags exactly, so a blob
+  is announced with a `g` tag naming the cell it sits in, letting a client query
+  an area without the relay understanding geometry.
 """
 
 from __future__ import annotations
@@ -57,7 +57,13 @@ class BBox:
 
 
 def geohash_encode(lat: float, lon: float, precision: int = MAX_GEOHASH_PRECISION) -> str:
-    """Encode a point as a geohash string."""
+    """Encode a point as a geohash string.
+
+    Cells are half-open `[min, max)`, so a value exactly on a division belongs to
+    the upper half — hence `>=`, not `>`. This matters: precision-4 longitude
+    boundaries coincide with z14 tile boundaries every sixteen tiles, so the
+    other convention would disagree with the TypeScript encoder systematically.
+    """
     if not 1 <= precision <= MAX_GEOHASH_PRECISION:
         raise ValueError(f"precision must be 1..{MAX_GEOHASH_PRECISION}")
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
@@ -73,7 +79,7 @@ def geohash_encode(lat: float, lon: float, precision: int = MAX_GEOHASH_PRECISIO
     while len(result) < precision:
         if even:
             mid = (lon_range[0] + lon_range[1]) / 2
-            if lon > mid:
+            if lon >= mid:
                 bits = (bits << 1) | 1
                 lon_range[0] = mid
             else:
@@ -81,7 +87,7 @@ def geohash_encode(lat: float, lon: float, precision: int = MAX_GEOHASH_PRECISIO
                 lon_range[1] = mid
         else:
             mid = (lat_range[0] + lat_range[1]) / 2
-            if lat > mid:
+            if lat >= mid:
                 bits = (bits << 1) | 1
                 lat_range[0] = mid
             else:

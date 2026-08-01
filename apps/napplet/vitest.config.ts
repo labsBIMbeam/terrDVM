@@ -20,6 +20,10 @@ export default defineConfig({
         'src/job/**',
         'src/ui/copy.ts',
         'src/ui/selection.ts',
+        // The verification layer is pure and is the thing standing between a
+        // hostile relay or blob server and the renderer; it belongs under the
+        // gate, not beside it.
+        'src/verify/**',
       ],
       thresholds: {
         statements: 85,

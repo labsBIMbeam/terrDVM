@@ -6,6 +6,14 @@
  * embedded baseColor image so lore characters keep their painted skin. No
  * skins or animations; anything outside that scope throws a named error and
  * the caller fails closed.
+ *
+ * HOSTILE INPUT IS THE NORMAL CASE. Avatars are fetched by content hash from a
+ * public corpus, so every number in the JSON chunk — node children, accessor
+ * counts, buffer-view lengths and strides, vertex indices — is attacker-chosen
+ * and is bounded before it is used. Nothing here is allowed to allocate or
+ * recurse on a declared size it has not first checked against the bytes that
+ * actually arrived, and nothing is allowed to paper over a bad file with a
+ * fabricated mesh: it throws, and the caller shows the failure.
  */
 
 export type GlbMesh = {
@@ -21,6 +29,33 @@ export type GlbMesh = {
 const MAGIC = 0x46546c67; // 'glTF'
 const CHUNK_JSON = 0x4e4f534a;
 const CHUNK_BIN = 0x004e4942;
+
+/**
+ * How many distinct nodes one scene traversal may enter.
+ *
+ * The node graph is the cheapest thing in a GLB to make expensive: glTF lets a
+ * node be named by several parents and the byte format does not forbid a
+ * cycle, so thirty nodes that each name their successor TWICE describe 2^30
+ * visits in about six hundred bytes of JSON. Avatars here arrive by hash from
+ * a public corpus, so that is reachable input, not a hypothetical. The budget
+ * plus the visited set below turn it into a named error.
+ */
+export const MAX_GLB_NODES = 4096;
+
+/**
+ * The node budget bounds how many nodes are *visited*; it does not bound how
+ * much geometry they emit. Each node may name a mesh whose accessor spans the
+ * whole binary chunk, and every accessor passes its own bounds check because it
+ * reads real bytes — so 4096 distinct nodes pointing at one full-chunk mesh is
+ * legal on every per-item rule and still expands without limit.
+ *
+ * Measured against this parser: 38 kB in produced 56 MB out, a 1427x
+ * amplification, on the UI thread. Bounding the product is the missing rule.
+ *
+ * 500k vertices is ~13x the 192-grid terrain mesh (~37k) and comfortably above
+ * the ~14 MB character avatars, so no legitimate model here comes close.
+ */
+export const MAX_GLB_VERTICES = 500_000;
 
 type GltfJson = {
   scenes?: { nodes?: number[] }[];
@@ -190,6 +225,12 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     const chunkLength = view.getUint32(offset, true);
     const chunkType = view.getUint32(offset + 4, true);
     const start = offset + 8;
+    // A declared length is not a real one. Unchecked, an oversized chunk
+    // header turns into a raw RangeError out of the TypedArray constructor
+    // instead of a named parse failure.
+    if (start + chunkLength > buffer.byteLength) {
+      throw new Error('GLB chunk runs past the end of the container.');
+    }
     if (chunkType === CHUNK_JSON) {
       json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, start, chunkLength)));
     } else if (chunkType === CHUNK_BIN) {
@@ -214,11 +255,37 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     // Interleaved vertex buffers address each attribute via the accessor's
     // own byteOffset on top of the view's — dropping it reads position
     // bytes as UVs.
-    const start =
-      bin.byteOffset + (bufferView.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    const viewOffset = bufferView.byteOffset ?? 0;
+    const accessorOffset = accessor.byteOffset ?? 0;
+    const start = bin.byteOffset + viewOffset + accessorOffset;
     const elementCount = accessor.count * componentCount;
     const tightStride = componentCount * componentBytes;
     const stride = bufferView.byteStride ?? tightStride;
+
+    // THE SECOND UNBOUNDED LOOP. `count` and `byteStride` are attacker-chosen
+    // numbers in the JSON chunk, and the interleaved branch below allocates
+    // `elementCount` BEFORE it reads anything: a `count` of 1e9 in a hundred
+    // bytes of JSON is a four-gigabyte allocation. Everything the accessor
+    // will touch is bounded against the binary chunk here, once, so both
+    // branches are safe by the time they run.
+    if (!Number.isInteger(accessor.count) || accessor.count < 0) {
+      throw new Error(`Accessor ${index} declares a non-integral count.`);
+    }
+    if (!Number.isInteger(stride) || stride < tightStride) {
+      throw new Error(`Accessor ${index} sits in a buffer view with an unusable byteStride.`);
+    }
+    if (!Number.isInteger(viewOffset) || viewOffset < 0 || accessorOffset < 0) {
+      throw new Error(`Accessor ${index} declares a negative offset.`);
+    }
+    const spanBytes = accessor.count === 0 ? 0 : (accessor.count - 1) * stride + tightStride;
+    if (viewOffset + accessorOffset + spanBytes > bin.byteLength) {
+      throw new Error(`Accessor ${index} reads past the end of the binary chunk.`);
+    }
+    // A misaligned start is a RangeError from the TypedArray constructor on
+    // the tight path; name it here rather than let it escape unlabelled.
+    if (start % componentBytes !== 0) {
+      throw new Error(`Accessor ${index} is not aligned to its component size.`);
+    }
 
     if (stride === tightStride) {
       if (accessor.componentType === 5126) {
@@ -271,17 +338,28 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     const positionIndex = primitive.attributes?.POSITION;
     if (positionIndex === undefined) return;
     const position = readAccessor(positionIndex).data as Float32Array;
+    const vertexCount = Math.floor(position.length / 3);
+    // A NORMAL or TEXCOORD_0 accessor SHORTER than POSITION reads undefined
+    // off its own end and bakes NaN into the mesh, which renders as a hole
+    // rather than as a failure. A mismatched attribute counts as absent, so
+    // the existing fallbacks (flat normals, untextured) take over.
     const normalIndex = primitive.attributes?.NORMAL;
-    const normal = normalIndex === undefined ? null : (readAccessor(normalIndex).data as Float32Array);
+    const rawNormal =
+      normalIndex === undefined ? null : (readAccessor(normalIndex).data as Float32Array);
+    const normal = rawNormal && rawNormal.length >= position.length ? rawNormal : null;
     if (!normal) hasAllNormals = false;
     const uvIndex = primitive.attributes?.TEXCOORD_0;
-    const uv = uvIndex === undefined ? null : (readAccessor(uvIndex).data as Float32Array);
+    const rawUv = uvIndex === undefined ? null : (readAccessor(uvIndex).data as Float32Array);
+    const uv = rawUv && rawUv.length >= vertexCount * 2 ? rawUv : null;
     if (!uv) hasAllUVs = false;
     if (primitive.material !== undefined && textureMaterial === null) {
       textureMaterial = primitive.material;
     }
 
     const base = positions.length / 3;
+    if (base + position.length / 3 > MAX_GLB_VERTICES) {
+      throw new Error(`GLB exceeds the ${MAX_GLB_VERTICES}-vertex budget.`);
+    }
     for (let i = 0; i < position.length; i += 3) {
       const x = position[i];
       const y = position[i + 1];
@@ -312,15 +390,44 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
     }
     if (primitive.indices !== undefined) {
       const primitiveIndices = readAccessor(primitive.indices).data;
-      for (let i = 0; i < primitiveIndices.length; i += 1) indices.push(base + primitiveIndices[i]);
+      for (let i = 0; i < primitiveIndices.length; i += 1) {
+        const vertex = primitiveIndices[i];
+        // An index past this primitive's own vertices is not a triangle. Left
+        // alone it reads undefined out of `positions` in the flat-normal pass
+        // and writes NaN back — a fabricated result, which is exactly what
+        // this parser is not allowed to produce.
+        if (!(vertex >= 0 && vertex < vertexCount)) {
+          throw new Error('GLB primitive indexes a vertex it does not have.');
+        }
+        indices.push(base + vertex);
+      }
     } else {
-      for (let i = 0; i < position.length / 3; i += 1) indices.push(base + i);
+      for (let i = 0; i < vertexCount; i += 1) indices.push(base + i);
     }
   };
+
+  /** Every node already drawn, anywhere in the traversal. */
+  const seen = new Set<number>();
+  /** The nodes on the path from a scene root to the node being visited. */
+  const path = new Set<number>();
 
   const visit = (nodeIndex: number, parent: Mat): void => {
     const node = json?.nodes?.[nodeIndex];
     if (!node) return;
+    // A node that is its own ancestor is not a scene. This is the difference
+    // between a cycle and a diamond, and the two need different answers.
+    if (path.has(nodeIndex)) {
+      throw new Error(`GLB node graph contains a cycle at node ${nodeIndex}.`);
+    }
+    // A diamond — one node named by two parents — is legal glTF and is drawn
+    // ONCE, at the first transform that reached it. Drawing it per path is
+    // what makes the exponential blow-up possible.
+    if (seen.has(nodeIndex)) return;
+    if (seen.size >= MAX_GLB_NODES) {
+      throw new Error(`GLB node graph exceeds the ${MAX_GLB_NODES}-node budget.`);
+    }
+    seen.add(nodeIndex);
+    path.add(nodeIndex);
     const matrix = multiply(parent, nodeMatrix(node));
     if (node.mesh !== undefined) {
       for (const primitive of json?.meshes?.[node.mesh]?.primitives ?? []) {
@@ -328,6 +435,7 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
       }
     }
     for (const child of node.children ?? []) visit(child, matrix);
+    path.delete(nodeIndex);
   };
 
   const sceneNodes = json.scenes?.[json.scene ?? 0]?.nodes ?? [];
@@ -348,14 +456,24 @@ export function parseGlb(buffer: ArrayBuffer): GlbMesh {
   if (image?.bufferView !== undefined && image.mimeType && bin) {
     const bufferView = json.bufferViews?.[image.bufferView];
     if (bufferView) {
+      // A MISSING texture is not an error, but an out-of-range one is not
+      // missing — it is a declared length the file cannot back, and honouring
+      // it would read whatever else shares the buffer.
+      const imageOffset = bufferView.byteOffset ?? 0;
+      const imageLength = bufferView.byteLength;
+      if (
+        !Number.isInteger(imageOffset) ||
+        !Number.isInteger(imageLength) ||
+        imageOffset < 0 ||
+        imageLength < 0 ||
+        imageOffset + imageLength > bin.byteLength
+      ) {
+        throw new Error('GLB baseColor image runs past the end of the binary chunk.');
+      }
       // Copy out of the parse buffer so the image survives it.
       texture = {
         bytes: new Uint8Array(
-          new Uint8Array(
-            bin.buffer,
-            bin.byteOffset + (bufferView.byteOffset ?? 0),
-            bufferView.byteLength,
-          ),
+          new Uint8Array(bin.buffer, bin.byteOffset + imageOffset, imageLength),
         ),
         mimeType: image.mimeType,
       };

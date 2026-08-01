@@ -1,4 +1,5 @@
 import { loadApprovedBytes, type LoadApprovedBytesOptions } from '../shell/resource-client';
+import { verifyBlob } from '../verify';
 
 /**
  * The local collection server: per-extent orthophoto bakes plus a request
@@ -81,7 +82,16 @@ export function isApprovedCharacterUrl(candidate: string): boolean {
   );
 }
 
-/** Fetch a character blob by hash; a missing blob is a normal, named failure. */
+/**
+ * Fetch a character blob by hash; a missing blob is a normal, named failure.
+ *
+ * The URL names a SHA-256, which asks the server for those bytes and obliges
+ * it to nothing. `verifyBlob` is what turns the request into content
+ * addressing: the geometry that reaches the parser is the geometry whose hash
+ * the placement event named, or the call throws and nothing is rendered. This
+ * is also the only reason the README's interop claim means anything — "fetch
+ * the avatar by hash" is a guarantee exactly as far as somebody recomputes it.
+ */
 export async function fetchCharacterBytes(
   sha256: string = CHARACTER_SHA,
   signal?: AbortSignal,
@@ -92,7 +102,9 @@ export async function fetchCharacterBytes(
     isAllowed: isApprovedCharacterUrl,
     signal,
   });
-  return blob.arrayBuffer();
+  const bytes = await blob.arrayBuffer();
+  await verifyBlob(bytes, sha256);
+  return bytes;
 }
 
 export type CharacterEntry = {

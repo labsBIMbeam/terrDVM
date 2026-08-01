@@ -14,6 +14,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoots = [
   { root: join(repositoryRoot, 'apps', 'napplet', 'src'), shell: 'shell' },
   { root: join(repositoryRoot, 'packages', 'terrain-engine', 'src'), shell: null },
+  { root: join(repositoryRoot, 'packages', 'geo-protocol', 'src'), shell: null },
 ];
 const findings = [];
 

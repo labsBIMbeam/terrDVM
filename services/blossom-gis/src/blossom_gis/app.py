@@ -49,6 +49,14 @@ def _settings() -> tuple[Path, str, int]:
 DATA_DIR, BASE_URL, MAX_UPLOAD_BYTES = _settings()
 
 app = FastAPI(title="blossom-gis", version="0.1.0")
+
+# WARNING — S2, stored XSS. DO NOT EXPOSE THIS SERVER PUBLICLY.
+# `allow_origins=["*"]` plus the verbatim client `Content-Type` echoed back by
+# `PUT /upload` (see the WARNING there) and no `X-Content-Type-Options: nosniff`
+# on blob responses is a complete stored-cross-site-scripting chain: upload
+# HTML, declare it `text/html`, serve it same-origin from this host.
+# Not hardened on purpose — blob storage is moving to hzrd149/blossom-server,
+# which does not echo client content types. Bind to localhost until then.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -171,6 +179,15 @@ async def upload(
     blobs: Annotated[BlobStore, Depends(store)] = None,  # type: ignore[assignment]
     db: Annotated[BlobIndex, Depends(index)] = None,  # type: ignore[assignment]
 ) -> JSONResponse:
+    """Store a blob.
+
+    WARNING — S1, no uploader allowlist. DO NOT EXPOSE THIS SERVER PUBLICLY.
+    `authorize()` below proves only that *some* valid nostr key signed the
+    request; it does not check that key against an allowlist. Any keypair — and
+    anyone can mint one offline in a millisecond — can therefore fill this disk.
+    Not hardened on purpose: blob storage is moving to hzrd149/blossom-server,
+    which ships uploader auth. Bind to localhost until that migration lands.
+    """
     body = await request.body()
     if not body:
         raise HTTPException(400, "empty upload")
@@ -200,6 +217,11 @@ async def upload(
     record = BlobRecord(
         sha256=stored.sha256,
         size=stored.size,
+        # WARNING — S2, stored XSS. The client's declared Content-Type is stored
+        # verbatim and replayed on GET /<sha256> (see `_blob_response`), with
+        # `allow_origins=["*"]` and no nosniff header. Upload `text/html` and it
+        # executes same-origin. Not hardened on purpose — hzrd149/blossom-server
+        # derives the type from the bytes. Bind to localhost until then.
         media_type=request.headers.get("content-type", "application/octet-stream"),
         uploaded_by=result.pubkey or "",
         uploaded_at=int(time.time()),
@@ -586,9 +608,12 @@ def placements_path() -> Path:
     return DATA_DIR / "placements.json"
 
 
-#: Demo identity: local placements without an explicit owner belong to the
-#: operator's marker npub, so one NIP-07 key signs everything on stage.
+#: The operator's marker npub, kept for display and provenance only.
 #: npub1su4kplwca3euuyerm9ucq4ecf7ucxegqmxmjq9v5cudw8l8zk6qqejetyp
+#:
+#: It used to be the *fallback* owner for an unauthenticated POST /placements,
+#: which let any caller publish under the operator's identity. Placements now
+#: carry the pubkey of the verified kind-24242 signer and nothing else.
 DEMO_OWNER_PUBKEY = "872b60fdd8ec73ce1323d9798057384fb9836500d9b7201594c71ae3fce2b680"
 
 
@@ -605,11 +630,17 @@ def placement_event(
     exact position as a bbox tag and one `g` tag per geohash precision so
     generic relays can serve coarse geo queries. The caller signs with their
     own signer — this server never holds a key.
+
+    1063 is a social kind (CONTRACT.md section 13), so it carries the LADDER,
+    not the single precision-4 tag the dataset kinds 30550/30551 use. Relay tag
+    filters are exact string matches: a viewport client querying a two- or
+    five-character cell can never match a lone four-character tag.
     """
     import json
     import time
 
-    from .geo import geohash_encode
+    from .geo import geohash_prefixes
+    from .nostr_geo import DEFAULT_GEOHASH_PRECISIONS
 
     manifest_path = DATA_DIR / "characters.json"
     if not manifest_path.is_file():
@@ -639,8 +670,7 @@ def placement_event(
         ["t", "terrdvm-avatar"],
         ["name", character],
     ]
-    for precision in range(1, 9):
-        tags.append(["g", geohash_encode(lat, lon, precision)])
+    tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
     where = message.strip()[:280] if message.strip() else f"standing at {lat:.5f}, {lon:.5f}"
     return JSONResponse(
         {
@@ -666,11 +696,17 @@ def presence_event(
     subscribe to kind 30315 plus a `g` prefix of their area and render every
     hit as an avatar. The caller signs with their own NIP-07 signer; this
     server never holds a key.
+
+    30315 is a social kind (CONTRACT.md section 13) and carries the LADDER.
+    `apps/napplet/src/nostr/presence.ts` queries precision 5 for a point and
+    precisions 2/3/4 by viewport span; a lone precision-4 tag matches none of
+    the others, which is exactly how live presence went dark.
     """
     import json
     import time
 
-    from .geo import geohash_encode
+    from .geo import geohash_prefixes
+    from .nostr_geo import DEFAULT_GEOHASH_PRECISIONS
 
     manifest_path = DATA_DIR / "characters.json"
     if not manifest_path.is_file():
@@ -696,8 +732,7 @@ def presence_event(
         ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
         ["t", "terrdvm-presence"],
     ]
-    for precision in range(1, 9):
-        tags.append(["g", geohash_encode(lat, lon, precision)])
+    tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
     status = message.strip()[:280] or f"exploring {lat:.4f}, {lon:.4f}"
     return JSONResponse(
         {
@@ -723,10 +758,14 @@ def calendar_event(
     position as bbox and one `g` tag per geohash precision so geo clients
     find it. The caller signs with their own NIP-07 signer — this server
     never holds a key.
+
+    31923 is a social kind (CONTRACT.md section 13) and carries the LADDER; a
+    calendar client searching a region queries a coarse prefix.
     """
     import time
 
-    from .geo import geohash_encode
+    from .geo import geohash_encode, geohash_prefixes
+    from .nostr_geo import DEFAULT_GEOHASH_PRECISIONS
 
     parts = at.split(",")
     if len(parts) != 2:
@@ -751,8 +790,7 @@ def calendar_event(
         ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
         ["t", "terrdvm-event"],
     ]
-    for precision in range(1, 9):
-        tags.append(["g", geohash_encode(lat, lon, precision)])
+    tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
     return JSONResponse(
         {
             "kind": 31923,
@@ -766,12 +804,27 @@ def calendar_event(
 @app.post("/placements")
 async def add_placement(
     request: Request,
+    authorization: Annotated[str | None, Header()] = None,
     path: Annotated[Path, Depends(placements_path)] = None,  # type: ignore[assignment]
 ) -> JSONResponse:
     """Record a placement locally so the demo map stays in sync.
 
     The nostr event is the network's source of truth; this file is only the
     local mirror the map reads.
+
+    Authenticated with the same kind-24242 event as `PUT /upload`, bound to the
+    placed blob's hash by its `x` tag. Three things depend on that, and all
+    three were exploitable while this route was open:
+
+    1. **Identity.** The stored `pubkey` comes from the *verified* signer, never
+       from the request body — otherwise anyone could publish under the
+       operator's stage npub.
+    2. **Eviction.** The dedup key is (pubkey, name), not `name` alone. A bare
+       `name` filter let one publisher delete another's placement just by
+       re-posting the same character name.
+    3. **Content.** The `x` tag pins the authorization to the exact sha256 being
+       placed, so an arbitrary hash cannot be smuggled in for the napplet to
+       fetch and decode under a replayed or unrelated signature.
     """
     import json
 
@@ -792,17 +845,25 @@ async def add_placement(
     ):
         raise HTTPException(400, "placement needs name, sha256, lon, lat")
 
+    event = parse_auth_header(authorization)
+    result = authorize(event, verb="upload", now=int(time.time()), blob_sha256=sha)
+    if not result.ok:
+        raise HTTPException(401, result.reason or "unauthorized")
+    owner = result.pubkey or ""
+
     entries = []
     if path.is_file():
         entries = json.loads(path.read_text(encoding="utf-8"))
-    entries = [e for e in entries if e.get("name") != name]
+    # Namespaced dedup: a publisher replaces only their own placement of this
+    # name. Legacy rows carry no pubkey and belong to nobody, so they survive.
+    entries = [e for e in entries if not (e.get("name") == name and e.get("pubkey") == owner)]
     record = {
         "name": name,
         "sha256": sha,
         "lon": float(lon),
         "lat": float(lat),
         "heading": float(body.get("heading", 0.0)),
-        "pubkey": str(body.get("pubkey") or DEMO_OWNER_PUBKEY),
+        "pubkey": owner,
     }
     message = body.get("message")
     if isinstance(message, str) and message.strip():
