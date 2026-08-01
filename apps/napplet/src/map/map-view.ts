@@ -14,13 +14,13 @@ import {
   tileUrlFor,
   validateSourceRequest,
   type SourceRole,
-} from './source';
-import { getRegion, viewBoundsTuple, type Region } from '../config/regions';
-import { coverageFor } from '../config/coverage';
+} from '@terrdvm/terrain-engine/map/source';
+import { getRegion, viewBoundsTuple, type Region } from '@terrdvm/terrain-engine/config/regions';
+import { coverageFor } from '@terrdvm/terrain-engine/config/coverage';
 import { fetchPlacements } from '../job/collection';
-import cities from '../config/cities.json';
-import { addCoverageOverlay, type CoverageOverlay } from './coverage-overlay';
-import type { BBox4326 } from '../bbox/validate';
+import cities from '@terrdvm/terrain-engine/config/cities.json';
+import { addCoverageOverlay, type CoverageOverlay } from '@terrdvm/terrain-engine/map/coverage-overlay';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 
 const PROTOCOL = 'terrdvm';
 const TILE_PATH = /^\/(\d+)\/(\d+)\/(\d+)\/?$/;

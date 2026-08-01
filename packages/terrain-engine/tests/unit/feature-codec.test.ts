@@ -54,6 +54,88 @@ function sampleTile(): FeatureTile {
   };
 }
 
+/**
+ * The other half of the cross-language pin.
+ *
+ * `services/blossom-gis/tests/test_featuretile.py` asserts that Python
+ * reproduces GOLDEN_HEX, and its docstring says those bytes came from this
+ * encoder — but nothing here ever checked that claim, so TypeScript could
+ * drift freely and every test in the repo would still pass. The tile hash is
+ * the storage key, so a one-byte disagreement silently splits one logical tile
+ * into two blobs and stops deduplication.
+ *
+ * Same tile, same points, same expected bytes as the Python side. No new
+ * golden value is invented here.
+ */
+const REF_Z = 14;
+const REF_X = 8698;
+const REF_Y = 5915;
+
+const GOLDEN_HEX =
+  '325446540efa2100001b17000000100204b406b406c60200009803c502007f03b426d827ea03' +
+  '50f501be043202030300b41680205280208e050207801000a4018040020400e62cb4068010a4' +
+  '01f501f411e50ca30103049a03e62c9a13a4019903dc0e';
+
+function refPoint(fx: number, fy: number): [number, number] {
+  const west = tileXToLon(REF_X, REF_Z);
+  const north = tileYToLat(REF_Y, REF_Z);
+  return [
+    west + (tileXToLon(REF_X + 1, REF_Z) - west) * fx,
+    north - (north - tileYToLat(REF_Y + 1, REF_Z)) * fy,
+  ];
+}
+
+function referenceTile(): FeatureTile {
+  return {
+    z: REF_Z,
+    x: REF_X,
+    y: REF_Y,
+    buildings: [
+      {
+        ring: [refPoint(0.10, 0.10), refPoint(0.14, 0.10), refPoint(0.14, 0.15), refPoint(0.10, 0.15)],
+        heightM: 12.7,
+      },
+      { ring: [refPoint(0.60, 0.62), refPoint(0.66, 0.63), refPoint(0.63, 0.70)], heightM: 5 },
+    ],
+    roads: [
+      { line: [refPoint(0.0, 0.35), refPoint(0.5, 0.36), refPoint(1.0, 0.44)], roadClass: 'secondary' },
+      { line: [refPoint(0.25, 0.0), refPoint(0.27, 1.0)], roadClass: 'track' },
+    ],
+    landuse: [
+      {
+        ring: [refPoint(0.70, 0.10), refPoint(0.95, 0.12), refPoint(0.92, 0.40), refPoint(0.72, 0.38)],
+        landuseClass: 'forest',
+      },
+      {
+        ring: [refPoint(0.05, 0.70), refPoint(0.35, 0.72), refPoint(0.30, 0.95)],
+        landuseClass: 'vineyard',
+      },
+    ],
+  };
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+describe('cross-language conformance', () => {
+  it('encodes the reference tile byte-for-byte like the Python implementation', () => {
+    expect(toHex(encodeFeatureTile(referenceTile()))).toBe(GOLDEN_HEX);
+  });
+
+  it('decodes the bytes the Python implementation produces', () => {
+    const bytes = Uint8Array.from(
+      GOLDEN_HEX.match(/../g)!.map((pair) => Number.parseInt(pair, 16)),
+    );
+    const tile = decodeFeatureTile(bytes);
+
+    expect([tile.z, tile.x, tile.y]).toEqual([REF_Z, REF_X, REF_Y]);
+    expect(tile.buildings.map((b) => b.heightM)).toEqual([12.7, 5]);
+    expect(tile.roads.map((r) => r.roadClass)).toEqual(['secondary', 'track']);
+    expect(tile.landuse.map((l) => l.landuseClass)).toEqual(['forest', 'vineyard']);
+  });
+});
+
 describe('feature tile codec', () => {
   it('round-trips geometry within one quantisation step', () => {
     const tile = sampleTile();

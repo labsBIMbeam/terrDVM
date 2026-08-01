@@ -9,15 +9,15 @@ export default defineConfig({
       reporter: ['text-summary', 'json-summary'],
       // Only the pure logic is unit-testable here: rendering, the map view and
       // the shell adapter need a browser and are covered by the Paja smoke run.
+      //
+      // The pure terrain, bbox, config and codec modules now live in
+      // @terrdvm/terrain-engine and are measured by that package's own config.
+      // What remains here is the shell-touching half: the collection client,
+      // the OSM sources and the job flow.
       include: [
-        'src/bbox/**',
         'src/buildings/**',
-        'src/config/**',
         'src/features/**',
         'src/job/**',
-        'src/terrain/dem.ts',
-        'src/terrain/heightfield.ts',
-        'src/terrain/mesh.ts',
         'src/ui/copy.ts',
         'src/ui/selection.ts',
       ],

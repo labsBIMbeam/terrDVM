@@ -1,6 +1,6 @@
 import type { TerrainProgress } from '../terrain/generate';
-import type { TerrainMesh } from '../terrain/mesh';
-import type { BBox4326 } from '../bbox/validate';
+import type { TerrainMesh } from '@terrdvm/terrain-engine/terrain/mesh';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 
 /**
  * Demo job gate: selection → terrain generation → 3D preview.

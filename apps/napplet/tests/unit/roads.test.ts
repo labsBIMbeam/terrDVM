@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { ROAD_DRAPE_OFFSET_M, buildRibbonMesh, buildRoadMesh } from '../../src/features/ribbon';
-import { ROAD_WIDTH_M, WATERWAY_WIDTH_M, type RoadFeature } from '../../src/features/types';
+import { ROAD_DRAPE_OFFSET_M, buildRibbonMesh, buildRoadMesh } from '@terrdvm/terrain-engine/features/ribbon';
+import { ROAD_WIDTH_M, WATERWAY_WIDTH_M, type RoadFeature } from '@terrdvm/terrain-engine/features/types';
 import { featuresQuery, parseFeatures, roadClassFor } from '../../src/features/source-osm';
-import type { BBox4326 } from '../../src/bbox/validate';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 
 const BBOX: BBox4326 = [-16.93, 32.64, -16.90, 32.66];
 const FLAT = () => 0;

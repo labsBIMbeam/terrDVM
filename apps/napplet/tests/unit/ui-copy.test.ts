@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_AREA_KM2, OUTPUT_MIME, RES_M, TIMEOUT_S } from '../../src/config/defaults';
+import { MAX_AREA_KM2, OUTPUT_MIME, RES_M, TIMEOUT_S } from '@terrdvm/terrain-engine/config/defaults';
 import { COPY, errorCopyFor } from '../../src/ui/copy';
 
 describe('Phase 1 UI copy contract', () => {

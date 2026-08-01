@@ -3,8 +3,8 @@ import {
   OUTPUT_MIME,
   RES_M,
   TIMEOUT_S,
-} from '../config/defaults';
-import type { BBoxErrorCode } from '../bbox/validate';
+} from '@terrdvm/terrain-engine/config/defaults';
+import type { BBoxErrorCode } from '@terrdvm/terrain-engine/bbox/validate';
 
 type CopyValue = number | string;
 
@@ -46,7 +46,9 @@ export const COPY = {
     appTitle: 'terrDVM',
     mapRegionLabel: 'Map region',
     startKicker: 'terrain data vending machine',
-    startEnter: 'Click to enter',
+    startWithSound: 'Play with sound',
+    startNoSound: 'Play muted',
+    startSkip: 'Skip intro',
   },
   buttons: {
     drawBoundingBox: 'Draw bounding box',
@@ -212,6 +214,9 @@ export const COPY = {
     placeTitle: 'Publish placement',
     placeMessageLabel: 'Say where you are',
     placeMessagePlaceholder: 'e.g. On the ridge above Funchal harbour',
+    placeVenueLabel: 'Event · where',
+    placeVenuePlaceholder: 'Name it to post a meetup (NIP-52)',
+    placeWhenLabel: 'Event · when',
     placePublish: 'Sign & publish',
     placePublished: (relays: number): string =>
       `Published to ${relays} relay${relays === 1 ? '' : 's'} ✓`,

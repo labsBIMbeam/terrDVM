@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extrudeFootprints, triangulate, type Footprint } from '../../src/buildings/extrude';
+import { extrudeFootprints, triangulate, type Footprint } from '@terrdvm/terrain-engine/buildings/extrude';
 import {
   DEFAULT_BUILDING_HEIGHT_M,
   METRES_PER_LEVEL,
@@ -10,7 +10,7 @@ import {
   overpassQuery,
   parseOverpass,
 } from '../../src/buildings/source-osm';
-import type { BBox4326 } from '../../src/bbox/validate';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 
 const BBOX: BBox4326 = [-16.93, 32.64, -16.90, 32.66];
 const FLAT = () => 0;

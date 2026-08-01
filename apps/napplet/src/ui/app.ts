@@ -1,6 +1,6 @@
-import { geodesicAreaKm2, validateBBox } from '../bbox/area';
-import { buildRequestPreview, type RequestPreviewDTO } from '../bbox/request-preview';
-import type { BBox4326 } from '../bbox/validate';
+import { geodesicAreaKm2, validateBBox } from '@terrdvm/terrain-engine/bbox/area';
+import { buildRequestPreview, type RequestPreviewDTO } from '@terrdvm/terrain-engine/bbox/request-preview';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 import { errorCopyFor, COPY } from './copy';
 import {
   createInitialSelectionState,
@@ -8,8 +8,8 @@ import {
   type SelectionState,
 } from './selection';
 import { createMapView, mapAttribution, type MapView } from '../map/map-view';
-import { OUTPUT_MIME, RES_M } from '../config/defaults';
-import { getRegion, isWithinRegion, type Region } from '../config/regions';
+import { OUTPUT_MIME, RES_M } from '@terrdvm/terrain-engine/config/defaults';
+import { getRegion, isWithinRegion, type Region } from '@terrdvm/terrain-engine/config/regions';
 import {
   createInitialJobFlowState,
   jobFlowReducer,
@@ -23,23 +23,28 @@ import {
   fetchPlacements,
   type CharacterEntry,
 } from '../job/collection';
-import { projector } from '../buildings/extrude';
+import { projector } from '@terrdvm/terrain-engine/buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
-import { buildPlacementEvent, buildPresenceEvent, signAndPublish } from '../nostr/publish';
+import {
+  buildCalendarEvent,
+  buildPlacementEvent,
+  buildPresenceEvent,
+  signAndPublish,
+} from '../nostr/publish';
 import { fetchGeoNotes, fetchGlobalPresences, fetchPresences } from '../nostr/presence';
 import { createMatrixGlobe, type MatrixGlobe } from './globe';
-import cities from '../config/cities.json';
-import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '../viewer/glb';
+import cities from '@terrdvm/terrain-engine/config/cities.json';
+import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrdvm/terrain-engine/viewer/glb';
 import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
-import type { TerrainMesh } from '../terrain/mesh';
-import { extrudeFootprints, type BuildingMesh, type Footprint } from '../buildings/extrude';
+import type { TerrainMesh } from '@terrdvm/terrain-engine/terrain/mesh';
+import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrdvm/terrain-engine/buildings/extrude';
 import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '../buildings/source-wien';
 import { fetchFeatures } from '../features/source-osm';
-import { buildLandcoverMesh, type LandcoverMesh } from '../features/landcover';
-import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '../features/ribbon';
-import { WATERWAY_WIDTH_M } from '../features/types';
-import { createTerrainViewer, type TerrainViewer, type ViewerModel } from './preview3d';
+import { buildLandcoverMesh, type LandcoverMesh } from '@terrdvm/terrain-engine/features/landcover';
+import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '@terrdvm/terrain-engine/features/ribbon';
+import { WATERWAY_WIDTH_M } from '@terrdvm/terrain-engine/features/types';
+import { createTerrainViewer, type TerrainViewer, type ViewerModel } from '@terrdvm/terrain-engine/render/preview3d';
 
 const AXES = ['west', 'south', 'east', 'north'] as const;
 type Axis = (typeof AXES)[number];
@@ -270,6 +275,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
           <input id="place-message" type="text" maxlength="140"
             placeholder="${COPY.jobFlow.placeMessagePlaceholder}" />
         </label>
+        <label class="viewer-avatar-row"><span>${COPY.jobFlow.placeVenueLabel}</span>
+          <input id="place-venue" type="text" maxlength="120"
+            placeholder="${COPY.jobFlow.placeVenuePlaceholder}" />
+        </label>
+        <label class="viewer-avatar-row"><span>${COPY.jobFlow.placeWhenLabel}</span>
+          <input id="place-when" type="datetime-local" step="300" />
+        </label>
         <label class="viewer-avatar-row"><span>Heading °</span>
           <input id="place-heading" type="number" value="0" min="0" max="359" step="5" />
         </label>
@@ -328,13 +340,22 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </div>
     </div>
     <div class="start-screen" id="start-screen">
-      <video class="start-video" id="start-video" muted autoplay loop playsinline
+      <video class="start-video" id="start-video" loop playsinline preload="auto"
         src="/intro.mp4" aria-hidden="true"></video>
+      <img class="start-poster" src="/start-poster.png" alt="SEC brandmark" />
       <p class="start-kicker">${COPY.boot.startKicker}</p>
       <h1 class="start-title">${COPY.boot.appTitle}</h1>
-      <button class="button button-primary start-enter" id="start-enter" type="button" autofocus>
-        ${COPY.boot.startEnter}
-      </button>
+      <div class="start-actions">
+        <button class="button button-primary start-enter" id="start-sound-on" type="button" autofocus>
+          ${COPY.boot.startWithSound}
+        </button>
+        <button class="button start-enter" id="start-sound-off" type="button">
+          ${COPY.boot.startNoSound}
+        </button>
+        <button class="button start-skip" id="start-skip" type="button">
+          ${COPY.boot.startSkip}
+        </button>
+      </div>
       <span class="start-crab" aria-hidden="true">🦀</span>
     </div>
   `;
@@ -414,7 +435,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
   const soundButton = root.querySelector<HTMLButtonElement>('#sound-button');
   const startScreen = root.querySelector<HTMLDivElement>('#start-screen');
-  const startEnter = root.querySelector<HTMLButtonElement>('#start-enter');
+  const startSoundOn = root.querySelector<HTMLButtonElement>('#start-sound-on');
+  const startSoundOff = root.querySelector<HTMLButtonElement>('#start-sound-off');
+  const startSkip = root.querySelector<HTMLButtonElement>('#start-skip');
   const globeButton = root.querySelector<HTMLButtonElement>('#globe-button');
   const globeConsole = root.querySelector<HTMLDivElement>('#globe-console');
   const globeCanvas = root.querySelector<HTMLCanvasElement>('#globe-canvas');
@@ -426,6 +449,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const placeCharacter = root.querySelector<HTMLSelectElement>('#place-character');
   const placePosition = root.querySelector<HTMLElement>('#place-position');
   const placeMessage = root.querySelector<HTMLInputElement>('#place-message');
+  const placeVenue = root.querySelector<HTMLInputElement>('#place-venue');
+  const placeWhen = root.querySelector<HTMLInputElement>('#place-when');
   const placeHeading = root.querySelector<HTMLInputElement>('#place-heading');
   const placeStatus = root.querySelector<HTMLElement>('#place-status');
   const placePublish = root.querySelector<HTMLButtonElement>('#place-publish');
@@ -451,11 +476,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !viewerLayerWaterways || !viewerLayerWaterwaysLabel ||
       !viewerIsometric || !viewerPixel || !viewerWalk || !viewerAvatar || !viewerExport ||
       !viewerCrab || !viewerPlaceHere || !placeButton || !soundButton ||
-      !startScreen || !startEnter ||
+      !startScreen || !startSoundOn || !startSoundOff || !startSkip ||
       !globeButton || !globeConsole || !globeCanvas || !globeClose ||
       !globeSearchForm || !globeSearch || !globeLog || !placeModal ||
       !placeCharacter ||
-      !placePosition || !placeMessage ||
+      !placePosition || !placeMessage || !placeVenue || !placeWhen ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
     throw new Error('Incomplete terrDVM UI scaffold.');
   }
@@ -1062,9 +1087,17 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     demoButton.addEventListener('click', () => runCurated(demoSelection));
   }
 
-  // The intro film runs muted behind the start screen; if the asset is not
-  // served (production napplet build), the animated start screen stands alone.
+  // The intro film waits behind the poster; if the asset is not served
+  // (production napplet build), the animated start screen stands alone.
   startVideo.addEventListener('error', () => startVideo.remove());
+  // Chrome may retro-pause audible playback it decides lacked a gesture —
+  // fall back to muted so the film never stalls mid-intro.
+  startVideo.addEventListener('pause', () => {
+    if (!startScreen.classList.contains('is-cinema')) return;
+    if (startScreen.classList.contains('is-leaving') || startVideo.ended) return;
+    startVideo.muted = true;
+    void startVideo.play().catch(() => {});
+  });
 
   // Cinema mode: while the film plays it owns the whole screen — no menu at
   // all. A click anywhere skips into the app.
@@ -1439,6 +1472,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const enterApp = (): void => {
     if (startScreen.classList.contains('is-leaving')) return;
     markEntered();
+    startVideo.muted = true;
     sound.chime();
     startScreen.classList.add('is-leaving');
     root.querySelector('.app-header')?.classList.add('is-arriving');
@@ -1448,8 +1482,32 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     if (goTarget) runCurated(goTarget);
     else openGlobe();
   };
-  startScreen.addEventListener('click', enterApp);
-  startEnter.addEventListener('click', (event) => {
+  // The poster is a deliberate gate: picking a sound option is the user
+  // gesture browsers require before audible playback; skip goes straight in.
+  // Once the film rolls (cinema mode) any click enters the app.
+  const startFilm = (audible: boolean): void => {
+    if (!startVideo.isConnected) {
+      enterApp();
+      return;
+    }
+    startVideo.muted = !audible;
+    void startVideo.play().catch(() => {
+      startVideo.muted = true;
+      void startVideo.play().catch(() => enterApp());
+    });
+  };
+  startScreen.addEventListener('click', () => {
+    if (startScreen.classList.contains('is-cinema')) enterApp();
+  });
+  startSoundOn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    startFilm(true);
+  });
+  startSoundOff.addEventListener('click', (event) => {
+    event.stopPropagation();
+    startFilm(false);
+  });
+  startSkip.addEventListener('click', (event) => {
     event.stopPropagation();
     enterApp();
   });
@@ -1464,6 +1522,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     pendingPlace = { lon, lat };
     placePosition.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     placeMessage.value = '';
+    placeVenue.value = '';
+    // Meetups default to the next half hour, in local wall-clock time.
+    const soon = new Date(Date.now() + 30 * 60 * 1000);
+    soon.setMinutes(soon.getMinutes() - (soon.getMinutes() % 30), 0, 0);
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    placeWhen.value =
+      `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}` +
+      `T${pad(soon.getHours())}:${pad(soon.getMinutes())}`;
     placeStatus.textContent = '';
     if (avatarManifest === null) {
       avatarManifest = await fetchCharacterManifest().catch(() => []);
@@ -1494,6 +1560,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         await buildPresenceEvent(name, spot.lon, spot.lat, message)
           .then((event) => signAndPublish(event))
           .catch(() => undefined);
+        // A named venue upgrades the message to a NIP-52 meetup with a
+        // start time; the description is the map message itself.
+        const venue = placeVenue.value.trim();
+        const startsAt = Math.floor(new Date(placeWhen.value).getTime() / 1000);
+        if (venue && Number.isFinite(startsAt) && startsAt > 0) {
+          await buildCalendarEvent(venue, spot.lon, spot.lat, startsAt, message)
+            .then((event) => signAndPublish(event))
+            .then(() => {
+              const when = new Date(startsAt * 1000);
+              const label = `📅 ${venue} ${String(when.getHours()).padStart(2, '0')}:` +
+                `${String(when.getMinutes()).padStart(2, '0')}`;
+              mapView.addNoteMarker(`meetup:${startsAt}:${venue}`, label, spot.lon, spot.lat);
+            })
+            .catch(() => undefined);
+        }
         const entry = avatarManifest?.find((candidate) => candidate.name === name);
         if (entry) {
           // Local sync is dev convenience; the signed event is the truth.

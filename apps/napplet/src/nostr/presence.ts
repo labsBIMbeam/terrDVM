@@ -1,5 +1,5 @@
 import { PLACEMENT_RELAYS } from './publish';
-import type { BBox4326 } from '../bbox/validate';
+import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
 
 /**
  * Live presence: who is standing in this area right now.
@@ -248,6 +248,18 @@ function cellsFor(bbox: BBox4326, cap = 48): string[] {
   return [...cells];
 }
 
+/** A NIP-52 meetup renders as calendar glyph + title + local start time. */
+function meetupLabel(event: NostrEvent): string {
+  const tag = (name: string): string =>
+    event.tags.find((entry) => entry[0] === name && typeof entry[1] === 'string')?.[1] ?? '';
+  const title = tag('title') || tag('location') || 'meetup';
+  const starts = Number(tag('start'));
+  if (!Number.isFinite(starts) || starts <= 0) return `📅 ${title}`;
+  const when = new Date(starts * 1000);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `📅 ${title} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+}
+
 /** Fresh geo-tagged notes (kind 1) inside the bbox — the wider network on
  * the map, newest first. */
 export async function fetchGeoNotes(
@@ -256,8 +268,9 @@ export async function fetchGeoNotes(
 ): Promise<GeoNote[]> {
   const [west, south, east, north] = bbox;
   const filter: RelayFilter = {
-    // Plain notes plus model announcements — anything geo-tagged and fresh.
-    kinds: [1, 1063],
+    // Plain notes, model announcements and NIP-52 meetups — anything
+    // geo-tagged and fresh.
+    kinds: [1, 1063, 31923],
     '#g': cellsFor(bbox),
     since: Math.floor(Date.now() / 1000) - 48 * 3600,
     limit: 100,
@@ -269,7 +282,9 @@ export async function fetchGeoNotes(
   for (const result of settled) {
     if (result.status !== 'fulfilled') continue;
     for (const event of result.value) {
-      if (event.kind === 1 || event.kind === 1063) byId.set(event.id, event);
+      if (event.kind === 1 || event.kind === 1063 || event.kind === 31923) {
+        byId.set(event.id, event);
+      }
     }
   }
   const notes: GeoNote[] = [];
@@ -285,7 +300,7 @@ export async function fetchGeoNotes(
     notes.push({
       id: event.id,
       pubkey: event.pubkey,
-      content: event.content,
+      content: event.kind === 31923 ? meetupLabel(event) : event.content,
       lon: spot.lon,
       lat: spot.lat,
       createdAt: event.created_at,

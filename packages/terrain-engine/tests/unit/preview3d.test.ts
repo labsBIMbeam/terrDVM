@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { orthographic } from '../../src/ui/preview3d';
+import { orthographic } from '../../src/render/preview3d';
 
 describe('orthographic projection', () => {
   it('maps the half extents onto clip space with no perspective term', () => {

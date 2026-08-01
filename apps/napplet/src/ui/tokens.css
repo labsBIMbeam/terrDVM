@@ -948,13 +948,39 @@ body {
   z-index: 60;
 }
 
-/* The intro film plays muted, full screen; a click skips into the app. */
+/* The film stays hidden behind the poster until the user picks an option. */
 .start-video {
   block-size: 100%;
   inline-size: 100%;
   inset: 0;
   object-fit: cover;
+  opacity: 0;
   position: absolute;
+  transition: opacity 0.4s ease;
+}
+
+.start-screen.is-cinema .start-video {
+  opacity: 1;
+}
+
+.start-poster {
+  animation: start-fade 0.9s ease-out both;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--color-accent) 25%, transparent);
+  max-block-size: 38vh;
+  max-inline-size: 70vw;
+}
+
+.start-actions {
+  animation: start-fade 0.9s ease-out both 0.45s;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.start-skip {
+  opacity: 0.75;
 }
 
 .start-screen > :not(.start-video) {
@@ -1013,10 +1039,13 @@ body {
 }
 
 .start-enter {
-  animation: start-fade 0.9s ease-out both 0.45s, start-pulse 2.4s ease-in-out infinite 1.4s;
   font-size: 1.05rem;
   padding-block: 12px;
   padding-inline: 34px;
+}
+
+.button-primary.start-enter {
+  animation: start-pulse 2.4s ease-in-out infinite 1.4s;
 }
 
 @keyframes start-rise {
@@ -1070,6 +1099,8 @@ body {
   .start-screen::before,
   .start-kicker,
   .start-title,
+  .start-poster,
+  .start-actions,
   .start-enter,
   .start-crab {
     animation: none;

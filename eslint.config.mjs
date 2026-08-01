@@ -3,8 +3,10 @@ import tseslint from 'typescript-eslint';
 
 const scriptFiles = ['scripts/**/*.mjs'];
 const typescriptFiles = [
-  'apps/napplet/src/**/*.ts',
-  'apps/napplet/tests/**/*.ts',
+  'apps/*/src/**/*.ts',
+  'apps/*/tests/**/*.ts',
+  'packages/*/src/**/*.ts',
+  'packages/*/tests/**/*.ts',
   'scripts/**/*.ts',
 ];
 

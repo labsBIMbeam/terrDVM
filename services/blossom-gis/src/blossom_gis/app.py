@@ -709,6 +709,60 @@ def presence_event(
     )
 
 
+@app.get("/calendar/event")
+def calendar_event(
+    title: str,
+    at: str,
+    starts: int,
+    location: str = "",
+    description: str = "",
+) -> JSONResponse:
+    """Build the unsigned NIP-52 time-based calendar event (kind 31923).
+
+    A map message grown into a meetup: title, venue, start time, plus the
+    position as bbox and one `g` tag per geohash precision so geo clients
+    find it. The caller signs with their own NIP-07 signer — this server
+    never holds a key.
+    """
+    import time
+
+    from .geo import geohash_encode
+
+    parts = at.split(",")
+    if len(parts) != 2:
+        raise HTTPException(400, "at must be 'lon,lat'")
+    try:
+        lon, lat = float(parts[0]), float(parts[1])
+    except ValueError as exc:
+        raise HTTPException(400, "at values must be numbers") from exc
+    if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+        raise HTTPException(400, "at is outside the world")
+    name = title.strip()[:120]
+    if not name:
+        raise HTTPException(400, "title must not be empty")
+    if starts <= 0:
+        raise HTTPException(400, "starts must be a unix timestamp")
+
+    tags = [
+        ["d", f"terrdvm-{starts}-{geohash_encode(lat, lon, 8)}"],
+        ["title", name],
+        ["start", str(starts)],
+        ["location", location.strip()[:160] or name],
+        ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
+        ["t", "terrdvm-event"],
+    ]
+    for precision in range(1, 9):
+        tags.append(["g", geohash_encode(lat, lon, precision)])
+    return JSONResponse(
+        {
+            "kind": 31923,
+            "created_at": int(time.time()),
+            "content": description.strip()[:1000],
+            "tags": tags,
+        }
+    )
+
+
 @app.post("/placements")
 async def add_placement(
     request: Request,

@@ -227,6 +227,43 @@ class TestPlacementEvent:
         # Unsigned on purpose: the server never holds a key.
         assert "sig" not in event and "pubkey" not in event
 
+    def test_calendar_event_is_an_unsigned_nip52_meetup(self) -> None:
+        with TestClient(app_module.app) as client:
+            event = client.get(
+                "/calendar/event",
+                params={
+                    "title": "SEC demo night",
+                    "at": "16.372500,48.208500",
+                    "starts": 1785500000,
+                    "description": "terrain DVM live",
+                },
+            ).json()
+        assert event["kind"] == 31923
+        tags = {t[0]: t[1] for t in event["tags"] if t[0] != "g"}
+        assert tags["title"] == "SEC demo night"
+        assert tags["start"] == "1785500000"
+        # Location falls back to the title when the caller sends none.
+        assert tags["location"] == "SEC demo night"
+        assert tags["d"].startswith("terrdvm-1785500000-")
+        assert event["content"] == "terrain DVM live"
+        geohashes = [t[1] for t in event["tags"] if t[0] == "g"]
+        assert len(geohashes) == 8
+        assert all(geohashes[i + 1].startswith(geohashes[i]) for i in range(7))
+        assert "sig" not in event and "pubkey" not in event
+
+    def test_calendar_event_rejects_blank_title_and_bad_time(self) -> None:
+        with TestClient(app_module.app) as client:
+            blank = client.get(
+                "/calendar/event",
+                params={"title": "  ", "at": "16.37,48.2", "starts": 1785500000},
+            )
+            bad_time = client.get(
+                "/calendar/event",
+                params={"title": "x", "at": "16.37,48.2", "starts": 0},
+            )
+        assert blank.status_code == 400
+        assert bad_time.status_code == 400
+
     def test_post_records_a_local_placement(self, tmp_path: Path) -> None:
         placements = tmp_path / "placements.json"
         app_module.app.dependency_overrides[app_module.placements_path] = lambda: placements

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@napplet/sdk": "0.25.0",
+    "@terrdvm/terrain-engine": "workspace:*",
     "@turf/area": "7.3.5",
     "maplibre-gl": "5.24.0",
     "terra-draw": "1.32.2",
