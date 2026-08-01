@@ -6,7 +6,7 @@
 
 ## Recommendation in One Sentence
 
-Build terrDVM as a small ports-and-adapters system whose only mutable authority is a deterministic, durable DVM job state machine: the sandboxed Napplet requests capabilities through the shell, the DVM verifies signed requests and Lightning settlement, the processor is invoked only after payment, and verified artifact bytes are stored locally before optional Blossom replication.
+Build terrCVM as a small ports-and-adapters system whose only mutable authority is a deterministic, durable DVM job state machine: the sandboxed Napplet requests capabilities through the shell, the DVM verifies signed requests and Lightning settlement, the processor is invoked only after payment, and verified artifact bytes are stored locally before optional Blossom replication.
 
 ## Non-Negotiable Build Order
 
@@ -487,7 +487,7 @@ The architecture is accepted by executable evidence in this order:
 
 These are unresolved inputs, not reasons to weaken the boundaries above:
 
-- Select and document the exact request kind in `5000–5999`, matching result convention, and the minimal terrDVM event profile. NIP-90's draft/unrecommended status makes this a versioned adapter decision.
+- Select and document the exact request kind in `5000–5999`, matching result convention, and the minimal terrCVM event profile. NIP-90's draft/unrecommended status makes this a versioned adapter decision.
 - Verify the installed Napplet SDK/shell versions and exact available resource, relay, signing, storage, and payment-related capability surfaces. Current evidence found no generic Lightning payment domain.
 - Prove whether ortho preview can use a shell resource domain directly in the production CSP; otherwise define the narrow backend preview adapter and its allowlist/cache policy.
 - Confirm 21maps source, exact version, license, and provenance before reuse.
@@ -515,8 +515,8 @@ Evidence below was already collected in the prior research trace; no additional 
 - MapLibre GL JS documentation, researched repository HEAD `ca1684351dc154bd5da000863afd081bc78c8972` — CSP/worker/bundler considerations for map rendering. **Confidence: MEDIUM**
 - Khronos glTF 2.0 specification and official glTF Validator, researched specification HEAD `77b44be7bef26e01fb0b140e3d5bb1716421c5e9` and validator HEAD `434283be08a668a8fb4e437145630ddbf93b0686` — GLB structure/media type and validation. **Confidence: MEDIUM**
 - strfry current source, researched HEAD `104a0846920bce188de52b5cc891746a924e04bf` — local filesystem-backed Nostr relay deployment. **Confidence: MEDIUM**
-- terrDVM `.planning/PROJECT.md`, `docs/PROJECT-BRIEF.md`, and `AGENTS.md` — project invariants, scope, fallbacks, acceptance gates, and required execution order. **Confidence: HIGH (project authority)**
+- terrCVM `.planning/PROJECT.md`, `docs/PROJECT-BRIEF.md`, and `AGENTS.md` — project invariants, scope, fallbacks, acceptance gates, and required execution order. **Confidence: HIGH (project authority)**
 
 ---
-*Architecture research for: terrDVM*
+*Architecture research for: terrCVM*
 *Researched: 2026-07-26*

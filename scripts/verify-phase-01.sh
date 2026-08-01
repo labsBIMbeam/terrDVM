@@ -87,13 +87,13 @@ for (const entry of manifest.cases) {
 NODE
 }
 
-run_step unit pnpm --filter @terrdvm/napplet test:unit
-run_step typecheck pnpm --filter @terrdvm/napplet typecheck
+run_step unit pnpm --filter @terrcvm/napplet test:unit
+run_step typecheck pnpm --filter @terrcvm/napplet typecheck
 run_step lint pnpm lint
 
 build_ran=false
 if [[ -f apps/napplet/vite.config.ts ]]; then
-  run_step build pnpm --filter @terrdvm/napplet build
+  run_step build pnpm --filter @terrcvm/napplet build
   build_ran=true
 else
   skip build 'apps/napplet/vite.config.ts does not exist yet'
@@ -111,7 +111,7 @@ else
 fi
 
 if [[ -f apps/napplet/vite.config.ts ]]; then
-  run_step conformance pnpm --filter @terrdvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json
+  run_step conformance pnpm --filter @terrcvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json
 else
   skip conformance 'apps/napplet/vite.config.ts does not exist yet'
 fi

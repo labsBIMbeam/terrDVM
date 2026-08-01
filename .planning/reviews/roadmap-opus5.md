@@ -1,6 +1,6 @@
 VERDICT: REVISE
 
-Independent fail-closed roadmap review of terrDVM (read-only). Reviewed the actual files: `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, `.planning/research/SUMMARY.md`, `.planning/reviews/requirements-fable5.md`, `.planning/reviews/requirements-opus5-final.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/config.json`, `$HOME/.hermes/agents/gsd-roadmapper.md`, and `$HOME/.hermes/gsd-core/templates/roadmap.md`. The Fable self-report (`.planning/reviews/roadmap-fable5.md`) was deliberately not consulted.
+Independent fail-closed roadmap review of terrCVM (read-only). Reviewed the actual files: `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, `.planning/research/SUMMARY.md`, `.planning/reviews/requirements-fable5.md`, `.planning/reviews/requirements-opus5-final.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/config.json`, `$HOME/.hermes/agents/gsd-roadmapper.md`, and `$HOME/.hermes/gsd-core/templates/roadmap.md`. The Fable self-report (`.planning/reviews/roadmap-fable5.md`) was deliberately not consulted.
 
 The roadmap's structure is sound: four phases, correct immutable order, 67/67 requirements mapped exactly once, DUM-04 as the sole Phase 3 opener, approval checkpoints inside phases, compound requirements expanded into named tests, and STATE.md routing correctly to Phase 1. Two blocking defects remain, both narrow and both fixable without moving requirement ownership or changing phase structure.
 

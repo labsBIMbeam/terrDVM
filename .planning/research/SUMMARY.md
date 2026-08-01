@@ -1,15 +1,15 @@
 # Project Research Summary
 
-**Project:** terrDVM
+**Project:** terrCVM
 **Domain:** Local-first paid Nostr terrain/GIS Data Vending Machine with a sandboxed single-file Napplet, real Lightning payment gate, bounded raster processing, and content-addressed artifact delivery
 **Researched:** 2026-07-26
 **Confidence:** MEDIUM
 
 ## Executive Summary
 
-terrDVM is not primarily a terrain-mesh project; it is a paid, verifiable data-delivery product whose core proof is a signed terrain request followed by a real invoice, independently confirmed Lightning settlement, and retrieval of structurally valid artifact bytes. Experts should build it as a small ports-and-adapters system: an unprivileged Napplet handles bbox selection, preview, payment presentation, status, and viewing; a deterministic DVM core owns durable job truth; Nostr, Lightning, raster, local serving, and Blossom remain replaceable adapters. The authoritative implementation order is therefore fixed: **bbox/ortho UI → paid DVM dummy delivery → terrain processor → Blossom/viewer**.
+terrCVM is not primarily a terrain-mesh project; it is a paid, verifiable data-delivery product whose core proof is a signed terrain request followed by a real invoice, independently confirmed Lightning settlement, and retrieval of structurally valid artifact bytes. Experts should build it as a small ports-and-adapters system: an unprivileged Napplet handles bbox selection, preview, payment presentation, status, and viewing; a deterministic DVM core owns durable job truth; Nostr, Lightning, raster, local serving, and Blossom remain replaceable adapters. The authoritative implementation order is therefore fixed: **bbox/ortho UI → paid DVM dummy delivery → terrain processor → Blossom/viewer**.
 
-The recommended implementation is a Node 24/pnpm TypeScript monorepo for the Napplet, protocol package, and DVM, plus an isolated Python 3.13/`uv` processor introduced only after the paid dummy-delivery gate passes. Store and hash exact artifact bytes locally before any optional Blossom replication. Treat NIP-90 as a draft carrier around a strict, versioned terrDVM micro-profile rather than as a complete business contract, and keep the production Napplet inside its opaque-origin CSP boundary with shell/backend mediation for signing, relay, resource retrieval, payment administration, and upload.
+The recommended implementation is a Node 24/pnpm TypeScript monorepo for the Napplet, protocol package, and DVM, plus an isolated Python 3.13/`uv` processor introduced only after the paid dummy-delivery gate passes. Store and hash exact artifact bytes locally before any optional Blossom replication. Treat NIP-90 as a draft carrier around a strict, versioned terrCVM micro-profile rather than as a complete business contract, and keep the production Napplet inside its opaque-origin CSP boundary with shell/backend mediation for signing, relay, resource retrieval, payment administration, and upload.
 
 The principal risks are false payment or delivery state, duplicate processing from relay/callback replay, sandbox behavior that differs from the development server, CRS/axis and raster-budget errors, artifact leakage before payment, and schedule loss to mesh or external-service integration. Mitigate these with a pure fail-closed reducer and durable idempotency, trusted wallet settlement readback, job-specific validated GLB bytes, exact-byte SHA-256 readback, built-artifact browser verification from Phase 1 onward, bounded provider adapters, and strict timeboxes. Every blocker over 30 minutes must take its documented fallback; mesh work stops after three hours and becomes an honestly labeled displacement result.
 
@@ -110,7 +110,7 @@ Adopt a functional-core/imperative-shell design. `packages/protocol` owns versio
 
 ### Critical Pitfalls
 
-1. **Treating draft NIP-90 as the executable paid-job contract** — freeze one request/result pair and a strict versioned terrDVM schema in Phase 2; reject ambiguity instead of inferring fields.
+1. **Treating draft NIP-90 as the executable paid-job contract** — freeze one request/result pair and a strict versioned terrCVM schema in Phase 2; reject ambiguity instead of inferring fields.
 2. **Incomplete signature validation or relay acceptance as trust** — independently verify canonical event ID, Schnorr signature, kind, timestamp, tags, and application limits before job or invoice creation.
 3. **Duplicate jobs, invoices, or results from at-least-once delivery** — deduplicate by verified request event ID and use durable compare-and-set transitions plus an idempotent inbox/outbox.
 4. **False payment confirmation and sat/msat races** — use unit-suffixed values, bind exact invoice identity and expiry to the request, and advance only after trusted wallet readback; callbacks merely trigger reconciliation.
@@ -146,7 +146,7 @@ The roadmap should use exactly four implementation phases matching the authorita
 **Rationale:** This is the product's core proof and must precede all terrain processing. It establishes protocol truth, durable state, real payment, authorization, and artifact integrity while the producer remains deliberately simple.
 
 **Delivers:**
-- `packages/protocol` strict terrDVM event/profile schemas, canonical request/job IDs, and pure exhaustive reducer.
+- `packages/protocol` strict terrCVM event/profile schemas, canonical request/job IDs, and pure exhaustive reducer.
 - Durable DVM state, idempotent inbox/outbox, Nostr verification/correlation, and one request/result kind mapping.
 - LNbits/Phoenixd invoice adapter with explicit sat/msat conversion, expiry, callback verification, reconciliation polling, and monotonic payment facts.
 - User-visible requested/invoiced/paid/processing/delivered/failed/rejected/local-fallback states.
@@ -211,7 +211,7 @@ The roadmap should use exactly four implementation phases matching the authorita
 **Targeted phase research is required; no new broad domain survey is warranted.**
 
 - **Phase 1 — research during planning:** verify exact 21maps v0 source/license/provenance and inherited MapLibre pin; choose the orthophoto source and policy; exercise installed Napplet shell resource domains, opaque-origin CSP, workers/styles/images, and no-capability degradation; define antimeridian policy.
-- **Phase 2 — research during planning:** select the exact terrDVM request/result kinds and schema; inspect installed `nostr-tools`, Zod, SQLite driver, signer/relay capabilities, deployed LNbits/Phoenixd versions and least-privileged credentials; decide invoice replacement/expiry/late-payment behavior and kind-7000 versus BOLT11/LNURL UX.
+- **Phase 2 — research during planning:** select the exact terrCVM request/result kinds and schema; inspect installed `nostr-tools`, Zod, SQLite driver, signer/relay capabilities, deployed LNbits/Phoenixd versions and least-privileged credentials; decide invoice replacement/expiry/late-payment behavior and kind-7000 versus BOLT11/LNURL UX.
 - **Phase 3 — research only after Phase 2 passes:** pin the WCS endpoint/version/coverage/CRS/axis/format/nodata/license contract, resource budgets, GDAL driver isolation, and bounded fixtures; decide `trimesh`/`pygltflib` versus displacement-only inside the fixed mesh timebox.
 - **Phase 4 — research during planning:** verify the target Blossom server's BUD subset, auth, retention, redirects, CORS, shell upload/resource path, exact three.js/glTF validator versions, and target-hardware artifact limits.
 - **Conference gate:** document which services are truly local. Local `strfry` and local artifact serving do not remove Lightning routing or live WCS dependencies; total WCS outage and real settlement without connectivity remain unresolved and may not be replaced with fake success.

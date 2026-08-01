@@ -174,7 +174,7 @@ class TestWhichKindsCarryTheLadder:
             y=5677,
             sha256="fedcba9876543210" * 4,
             url="https://blossom.example/x.tft2",
-            mime_type="application/vnd.terrdvm.tft2",
+            mime_type="application/vnd.terrcvm.tft2",
             size=65536,
             datetime="2026-01-01T00:00:00Z",
             created_at=1767225600,

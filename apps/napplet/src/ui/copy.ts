@@ -3,8 +3,8 @@ import {
   OUTPUT_MIME,
   RES_M,
   TIMEOUT_S,
-} from '@terrdvm/terrain-engine/config/defaults';
-import type { BBoxErrorCode } from '@terrdvm/terrain-engine/bbox/validate';
+} from '@terrcvm/terrain-engine/config/defaults';
+import type { BBoxErrorCode } from '@terrcvm/terrain-engine/bbox/validate';
 
 type CopyValue = number | string;
 
@@ -43,7 +43,7 @@ export const COPY = {
   boot: {
     skipToRequestPanel: 'Skip to request panel',
     toolbarLabel: 'Toolbar',
-    appTitle: 'terrDVM',
+    appTitle: 'terrCVM',
     mapRegionLabel: 'Map region',
     startKicker: 'terrain data vending machine',
     startWithSound: 'Play with sound',
@@ -142,9 +142,9 @@ export const COPY = {
   globe: {
     button: 'Globe',
     enter: 'Enter map ▸',
-    title: 'TERR//DVM · GLOBAL EVENT CONSOLE',
+    title: 'TERR//CVM · GLOBAL EVENT CONSOLE',
     searchPlaceholder: 'locate: wien, funchal, bruneck…',
-    booting: '> scanning relays for terrdvm events…',
+    booting: '> scanning relays for terrcvm events…',
     continentsHint: '> continent maps — set your presence anywhere:',
     empty: '> no events on the wire — place an avatar to light the map',
     locate: (name: string, lat: number, lon: number): string =>

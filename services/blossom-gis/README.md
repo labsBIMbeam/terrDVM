@@ -190,8 +190,8 @@ Nothing here needs a long-running process. Run it on a timer:
 **Windows Task Scheduler**
 
 ```powershell
-schtasks /Create /TN "terrdvm-crawl-madeira" /SC MINUTE /MO 10 ^
-  /TR "G:\Github\terrDVM\services\blossom-gis\.venv\Scripts\python.exe -m blossom_gis.cli run --region madeira --max-tiles 5"
+schtasks /Create /TN "terrcvm-crawl-madeira" /SC MINUTE /MO 10 ^
+  /TR "G:\Github\terrCVM\services\blossom-gis\.venv\Scripts\python.exe -m blossom_gis.cli run --region madeira --max-tiles 5"
 ```
 
 **cron**

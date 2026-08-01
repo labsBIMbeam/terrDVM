@@ -11,7 +11,7 @@ export default defineConfig({
       // the shell adapter need a browser and are covered by the Paja smoke run.
       //
       // The pure terrain, bbox, config and codec modules now live in
-      // @terrdvm/terrain-engine and are measured by that package's own config.
+      // @terrcvm/terrain-engine and are measured by that package's own config.
       // What remains here is the shell-touching half: the collection client,
       // the OSM sources and the job flow.
       include: [

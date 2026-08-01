@@ -235,7 +235,7 @@ def _pack_glb(
         attributes["TEXCOORD_0"] = len(accessors) - 1
 
     gltf = {
-        "asset": {"generator": "terrdvm-transcode", "version": "2.0"},
+        "asset": {"generator": "terrcvm-transcode", "version": "2.0"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0}],
@@ -348,7 +348,7 @@ def build_character_glb() -> bytes:
     minimum = [min(positions[i::3]) for i in range(3)]
     maximum = [max(positions[i::3]) for i in range(3)]
     gltf = {
-        "asset": {"generator": "terrdvm-character", "version": "2.0"},
+        "asset": {"generator": "terrcvm-character", "version": "2.0"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0}],

@@ -26,10 +26,10 @@ importers:
       '@noble/curves':
         specifier: 2.0.1
         version: 2.0.1
-      '@terrdvm/geo-protocol':
+      '@terrcvm/geo-protocol':
         specifier: workspace:*
         version: link:../../packages/geo-protocol
-      '@terrdvm/terrain-engine':
+      '@terrcvm/terrain-engine':
         specifier: workspace:*
         version: link:../../packages/terrain-engine
       '@turf/area':

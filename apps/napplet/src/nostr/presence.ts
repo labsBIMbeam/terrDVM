@@ -3,9 +3,9 @@ import {
   encode as geohashEncode,
   coverCellCount,
   coverCells,
-} from '@terrdvm/geo-protocol/geohash';
-import { SOCIAL_GEOHASH_PRECISIONS } from '@terrdvm/geo-protocol/kinds';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+} from '@terrcvm/geo-protocol/geohash';
+import { SOCIAL_GEOHASH_PRECISIONS } from '@terrcvm/geo-protocol/kinds';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 import { isVerifiedEvent } from '../verify';
 
 /**
@@ -52,7 +52,7 @@ const GEOHASH_BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 /**
  * Standard geohash — matches the server's encoder tag for tag.
  *
- * The implementation now lives in `@terrdvm/geo-protocol`, which is the lower
+ * The implementation now lives in `@terrcvm/geo-protocol`, which is the lower
  * layer that also owns the kinds and the covering algorithm. Re-exported here
  * so this module's existing callers keep their import.
  */
@@ -294,7 +294,7 @@ function inSegments(segments: readonly BBox4326[], lon: number, lat: number): bo
  * no signal, which over continental Europe was 48 of the 43,617 cells needed,
  * or 0.1% of the viewport reported as if it were all of it.
  *
- * The cover itself is exact integer index arithmetic in `@terrdvm/geo-protocol`
+ * The cover itself is exact integer index arithmetic in `@terrcvm/geo-protocol`
  * — interior cells included by construction, no float stepping, no sampling.
  */
 export function coverageFor(bbox: BBox4326, maxCells = MAX_GEOHASH_CELLS): GeohashCoverage {
@@ -360,7 +360,7 @@ function queryRelay(
       resolve(events);
     };
     const deadline = setTimeout(finish, timeoutMs);
-    const subscription = `terrdvm-presence-${Math.floor(Math.random() * 1e9)}`;
+    const subscription = `terrcvm-presence-${Math.floor(Math.random() * 1e9)}`;
     socket.onopen = () =>
       socket.send(JSON.stringify(['REQ', subscription, filter]));
     socket.onmessage = (message) => {
@@ -385,7 +385,7 @@ async function collectPresences(
 ): Promise<Presence[]> {
   const filter: RelayFilter = {
     kinds: [30315],
-    '#t': ['terrdvm-presence'],
+    '#t': ['terrcvm-presence'],
     limit: 128,
     ...(cells && cells.length > 0 ? { '#g': [...cells] } : {}),
   };
@@ -431,7 +431,7 @@ export async function fetchPresences(
   );
 }
 
-/** Every terrdvm presence on the wire, worldwide — the globe console feed. */
+/** Every terrcvm presence on the wire, worldwide — the globe console feed. */
 export function fetchGlobalPresences(timeoutMs = 4000): Promise<Presence[]> {
   return collectPresences(null, timeoutMs);
 }

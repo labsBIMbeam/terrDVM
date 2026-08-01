@@ -1,4 +1,4 @@
-# terrDVM — Authoritative Project Brief
+# terrCVM — Authoritative Project Brief
 
 ## Product promise
 
@@ -108,7 +108,7 @@ Reference post: <https://x.com/i/status/2081066595527348507>
 
 Repository: <https://github.com/opengeos/geolibre>
 
-GeoLibre may be inspected for open-source GIS UX, MapLibre patterns, browser-side raster handling, and layer/tool architecture. It is **not** the terrDVM repository, runtime, backend, or mandatory dependency. Reuse requires exact license and source-version verification.
+GeoLibre may be inspected for open-source GIS UX, MapLibre patterns, browser-side raster handling, and layer/tool architecture. It is **not** the terrCVM repository, runtime, backend, or mandatory dependency. Reuse requires exact license and source-version verification.
 
 ## Acceptance gates
 

@@ -46,7 +46,7 @@ def _sample_elevation(lat: float, lon: float, zoom: int = 11, *, fetcher=None) -
         if fetcher is not None:
             payload = fetcher(url, 30)
         else:
-            request = _request.Request(url, headers={"User-Agent": "terrDVM-coverage/0.1"})
+            request = _request.Request(url, headers={"User-Agent": "terrCVM-coverage/0.1"})
             with _request.urlopen(request, timeout=30) as response:
                 payload = response.read()
         image = _Image.open(_io.BytesIO(payload)).convert("RGB")

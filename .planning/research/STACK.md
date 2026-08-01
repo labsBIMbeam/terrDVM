@@ -147,7 +147,7 @@ Do not install unresolved DVM/viewer packages with floating ranges. Resolve and 
 | Bulk OSM tile scraping/prefetch or a custom tile server | Violates project scope and upstream policy | Licensed bounded 21maps/OSM-compatible base with attribution and caching |
 | A general GIS workbench or GeoLibre runtime dependency | Expands the product and creates provenance/architecture risk | Narrow bbox, preview, status, payment, and artifact UI; GeoLibre as reference only |
 | Automatic “paid” or “delivered” state from UI action | Creates false state and can leak unpaid artifacts | Verified Lightning settlement and cryptographic byte/hash readback |
-| FIPS, Freenet, bridges, or Palace coupling | Explicitly out of scope | Standalone terrDVM package |
+| FIPS, Freenet, bridges, or Palace coupling | Explicitly out of scope | Standalone terrCVM package |
 
 ## Compatibility and Acceptance Matrix
 
@@ -185,5 +185,5 @@ Do not install unresolved DVM/viewer packages with floating ranges. Resolve and 
 - LNbits docs/source and local project evidence — invoice/status adapter direction; current deployment/version was not verified. **LOW–MEDIUM confidence.**
 
 ---
-*Stack research for: terrDVM*
+*Stack research for: terrCVM*
 *Materialized from the completed 2026-07-26 research trace; no new research performed.*

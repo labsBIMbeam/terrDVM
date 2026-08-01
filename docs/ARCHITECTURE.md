@@ -1,4 +1,4 @@
-# terrDVM architecture
+# terrCVM architecture
 
 Two halves that never share a process:
 

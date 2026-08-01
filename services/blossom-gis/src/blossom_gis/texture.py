@@ -26,7 +26,7 @@ from PIL import Image
 
 from .geo import BBox
 
-USER_AGENT = "terrDVM-texture/0.1 (+https://github.com/labsBIMbeam/terrDVM)"
+USER_AGENT = "terrCVM-texture/0.1 (+https://github.com/labsBIMbeam/terrCVM)"
 EARTH_CIRCUMFERENCE_M = 40_075_016.686
 TILE_PX = 256
 

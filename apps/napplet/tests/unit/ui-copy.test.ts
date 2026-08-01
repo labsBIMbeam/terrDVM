@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_AREA_KM2, OUTPUT_MIME, RES_M, TIMEOUT_S } from '@terrdvm/terrain-engine/config/defaults';
+import { MAX_AREA_KM2, OUTPUT_MIME, RES_M, TIMEOUT_S } from '@terrcvm/terrain-engine/config/defaults';
 import { COPY, errorCopyFor } from '../../src/ui/copy';
 
 describe('Phase 1 UI copy contract', () => {
@@ -125,7 +125,7 @@ describe('Phase 1 UI copy contract', () => {
 
     expect(COPY.boot.skipToRequestPanel).toBe('Skip to request panel');
     expect(COPY.boot.toolbarLabel).toBe('Toolbar');
-    expect(COPY.boot.appTitle).toBe('terrDVM');
+    expect(COPY.boot.appTitle).toBe('terrCVM');
     expect(COPY.boot.mapRegionLabel).toBe('Map region');
     expect(COPY.requestPanel.emptyBbox).toBe('—, —, —, —');
     expect(COPY.requestPanel.crsLabel).toBe('CRS');

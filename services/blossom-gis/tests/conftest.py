@@ -89,7 +89,7 @@ def make_auth_event(keypair):
             "created_at": created_at if created_at is not None else now,
             "kind": kind,
             "tags": tags,
-            "content": "terrDVM blossom-gis test",
+            "content": "terrCVM blossom-gis test",
         }
         serialized = json.dumps(
             [

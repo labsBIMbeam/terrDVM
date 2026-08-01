@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageFilter
 
-USER_AGENT = "terrDVM-source-check/0.1 (+https://github.com/labsBIMbeam/terrDVM)"
+USER_AGENT = "terrCVM-source-check/0.1 (+https://github.com/labsBIMbeam/terrCVM)"
 
 #: Two independent gates, because either alone produces false passes.
 #:

@@ -61,7 +61,7 @@ const GOOD = signEvent({
   kind: 30315,
   created_at: 1_767_225_600,
   content: 'here: felix',
-  tags: [['name', 'felix'], ['t', 'terrdvm-presence']],
+  tags: [['name', 'felix'], ['t', 'terrcvm-presence']],
 });
 
 describe('sha256', () => {

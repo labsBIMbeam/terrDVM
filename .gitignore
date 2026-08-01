@@ -46,7 +46,7 @@ artifacts/
 !apps/napplet/tests/fixtures/**/*.glb
 
 # GSD clean-checkout and local scratch
-.terrdvm-worktree*/
+.terrcvm-worktree*/
 .scratch/
 tmp/
 .scratch/**/*.log

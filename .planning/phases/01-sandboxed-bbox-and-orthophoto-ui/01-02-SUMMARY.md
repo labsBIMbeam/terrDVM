@@ -106,7 +106,7 @@ status: complete
 
 # Phase 01 Plan 02: Workspace and Verification Bootstrap Summary
 
-**terrDVM now has its only approved Phase 1 dependency graph, a real launch-smoked Chromium, and repeatable fail-closed verification infrastructure without implementing map or sandbox product behavior early.**
+**terrCVM now has its only approved Phase 1 dependency graph, a real launch-smoked Chromium, and repeatable fail-closed verification infrastructure without implementing map or sandbox product behavior early.**
 
 ## Performance
 
@@ -118,7 +118,7 @@ status: complete
 
 ## Accomplishments
 
-- Created the root and `@terrdvm/napplet` workspace with exactly 14 direct dependency pins and one committed `pnpm-lock.yaml` mutation.
+- Created the root and `@terrcvm/napplet` workspace with exactly 14 direct dependency pins and one committed `pnpm-lock.yaml` mutation.
 - Provisioned Playwright Chromium revision 1217 via the explicitly approved Ubuntu 24.04 host override, then proved executable presence and a real closed headless launch against deterministic local content.
 - Added an ordered Phase 1 runner with real unit/typecheck/lint/provenance/ledger/lock/secret/public-diff gates and honest SKIPs for gates whose implementation belongs to later plans.
 - Added Gitleaks 8.30.1 scanning over a detached tracked/untracked/dist inventory with redacted zero-finding evidence and no raw `.git` object traversal.
@@ -166,9 +166,9 @@ Follow-up verification fix:
 - `node scripts/verify-lock-approved.mjs` → 14 exact approved dependencies across two importers
 - Frozen install → lock SHA-256 remained `e831efb57189778994a6531110581285f25e4e636866940ef4e2918f033e392e`
 - Chromium revision 1217 / browser `147.0.7727.15` → executable and real headless launch smoke PASS under approved override
-- `pnpm --filter @terrdvm/napplet typecheck` → PASS
+- `pnpm --filter @terrcvm/napplet typecheck` → PASS
 - `pnpm lint` → PASS
-- `pnpm --filter @terrdvm/napplet test:unit` → PASS with honest no-test baseline
+- `pnpm --filter @terrcvm/napplet test:unit` → PASS with honest no-test baseline
 - `bash scripts/verify-phase-01.sh` → unit, typecheck, lint, manifest, provenance, ledger, lock, secret-scan, and public-diff PASS; six future gates honestly SKIP
 - Missing-case negative control → exit 1 with named case; manifest restored byte-identically
 - `bash scripts/scan-secrets.sh` → Gitleaks 8.30.1, zero findings; three consecutive executions retained identical evidence SHA-256

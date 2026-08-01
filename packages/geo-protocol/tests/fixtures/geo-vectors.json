@@ -1,9 +1,9 @@
 {
-  "$id": "terrdvm/geo-protocol/geo-vectors",
+  "$id": "terrcvm/geo-protocol/geo-vectors",
   "version": 3,
   "contract": "../../CONTRACT.md",
   "readme": [
-    "DIFFERENTIAL vector suite for terrDVM's nostr geospatial protocol.",
+    "DIFFERENTIAL vector suite for terrCVM's nostr geospatial protocol.",
     "",
     "Every rule in CONTRACT.md that either language could get wrong is pinned",
     "here as an explicit input/output pair. Both the TypeScript builders in",
@@ -419,14 +419,14 @@
       "note": "the canonical sample; integral 8.0 must print as '8', never '8.0'",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -443,7 +443,7 @@
           ],
           [
             "title",
-            "terrDVM terrain tiles"
+            "terrCVM terrain tiles"
           ],
           [
             "bbox",
@@ -454,7 +454,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "license",
@@ -600,7 +600,7 @@
           17.16,
           49.02
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "data.gv.at",
         "server": "https://blossom.example",
@@ -628,7 +628,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "license",
@@ -708,14 +708,14 @@
       "name": "dataset-empty",
       "input": {
         "dataset": "",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -728,14 +728,14 @@
       "name": "dataset-uppercase",
       "input": {
         "dataset": "Terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -748,14 +748,14 @@
       "name": "dataset-colon",
       "input": {
         "dataset": "terr:ain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -768,14 +768,14 @@
       "name": "dataset-space",
       "input": {
         "dataset": "terr ain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -788,14 +788,14 @@
       "name": "dataset-untrimmed",
       "input": {
         "dataset": " terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -808,14 +808,14 @@
       "name": "dataset-non-ascii",
       "input": {
         "dataset": "terräin",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -828,14 +828,14 @@
       "name": "dataset-nfd",
       "input": {
         "dataset": "terräin",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -848,14 +848,14 @@
       "name": "dataset-trailing-dash",
       "input": {
         "dataset": "terrain-",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -868,14 +868,14 @@
       "name": "dataset-too-long",
       "input": {
         "dataset": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -895,7 +895,7 @@
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -915,7 +915,7 @@
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -928,14 +928,14 @@
       "name": "bbox-antimeridian",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           170.0,
           -10.0,
           -170.0,
           10.0
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -948,14 +948,14 @@
       "name": "bbox-inverted",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           48.6,
           9.5,
           47.9
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -968,14 +968,14 @@
       "name": "bbox-out-of-range",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           95.0
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -988,14 +988,14 @@
       "name": "bbox-degenerate-width",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           8.0,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1008,14 +1008,14 @@
       "name": "bbox-degenerate-height",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           47.9
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1028,14 +1028,14 @@
       "name": "bbox-degenerate-after-rounding",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           -5e-07,
           -5e-07,
           5e-07,
           5e-07
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1048,7 +1048,7 @@
       "name": "bbox-not-finite",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
@@ -1057,7 +1057,7 @@
             "__number__": "Infinity"
           }
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1070,7 +1070,7 @@
       "name": "mime-empty",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
@@ -1090,7 +1090,7 @@
       "name": "mime-no-subtype",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
@@ -1110,14 +1110,14 @@
       "name": "created-at-negative",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1130,14 +1130,14 @@
       "name": "created-at-float",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1150,14 +1150,14 @@
       "name": "created-at-milliseconds",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1170,14 +1170,14 @@
       "name": "created-at-overflow",
       "input": {
         "dataset": "terrain",
-        "title": "terrDVM terrain tiles",
+        "title": "terrCVM terrain tiles",
         "bbox": [
           8.0,
           47.9,
           9.5,
           48.6
         ],
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "license": "CC-BY-4.0",
         "source": "Copernicus DEM GLO-30",
         "server": "https://blossom.example",
@@ -1201,7 +1201,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {
@@ -1236,7 +1236,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1259,7 +1259,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {
@@ -1294,7 +1294,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1372,7 +1372,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {},
@@ -1404,7 +1404,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1427,7 +1427,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {},
@@ -1459,7 +1459,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1482,7 +1482,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {},
@@ -1514,7 +1514,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1537,7 +1537,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2026-01-01T00:00:00Z",
         "properties": {
@@ -1595,7 +1595,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -1618,7 +1618,7 @@
         "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-        "mimeType": "application/vnd.terrdvm.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
         "size": 65536,
         "datetime": "2024-02-29T23:59:59.250Z",
         "properties": {
@@ -1652,7 +1652,7 @@
           ],
           [
             "m",
-            "application/vnd.terrdvm.tft2"
+            "application/vnd.terrcvm.tft2"
           ],
           [
             "size",
@@ -2029,14 +2029,14 @@
     ],
     "collectionBaseInput": {
       "dataset": "terrain",
-      "title": "terrDVM terrain tiles",
+      "title": "terrCVM terrain tiles",
       "bbox": [
         8,
         47.9,
         9.5,
         48.6
       ],
-      "mimeType": "application/vnd.terrdvm.tft2",
+      "mimeType": "application/vnd.terrcvm.tft2",
       "license": "CC-BY-4.0",
       "source": "Copernicus DEM GLO-30",
       "server": "https://blossom.example",
@@ -2048,7 +2048,7 @@
         "name": "title-leading-bom",
         "builder": "collection",
         "patch": {
-          "title": "\ufeffterrDVM terrain tiles"
+          "title": "\ufeffterrCVM terrain tiles"
         },
         "accepted": false,
         "reason": "TEXT_EMPTY \u2014 U+FEFF is whitespace to JS \\s and to trim, and to neither Python \\s nor strip"
@@ -2057,7 +2057,7 @@
         "name": "title-trailing-bom",
         "builder": "collection",
         "patch": {
-          "title": "terrDVM terrain tiles\ufeff"
+          "title": "terrCVM terrain tiles\ufeff"
         },
         "accepted": false,
         "reason": "TEXT_EMPTY \u2014 the same character at the other edge"
@@ -2111,7 +2111,7 @@
         "name": "title-leading-nbsp",
         "builder": "collection",
         "patch": {
-          "title": "\u00a0terrDVM terrain tiles"
+          "title": "\u00a0terrCVM terrain tiles"
         },
         "accepted": false,
         "reason": "TEXT_EMPTY \u2014 U+00A0 is whitespace to both, and must stay rejected"
@@ -2129,7 +2129,7 @@
         "name": "title-interior-bom",
         "builder": "collection",
         "patch": {
-          "title": "terrDVM\ufeffterrain"
+          "title": "terrCVM\ufeffterrain"
         },
         "accepted": true,
         "reason": "the whitespace rule is an EDGE rule; the interior is unrestricted"
@@ -2138,7 +2138,7 @@
         "name": "title-leading-zero-width-space",
         "builder": "collection",
         "patch": {
-          "title": "\u200bterrDVM terrain tiles"
+          "title": "\u200bterrCVM terrain tiles"
         },
         "accepted": true,
         "reason": "U+200B is whitespace to NEITHER language, so it must be accepted by both"
@@ -2147,7 +2147,7 @@
         "name": "title-trailing-mongolian-vowel-separator",
         "builder": "collection",
         "patch": {
-          "title": "terrDVM terrain tiles\u180e"
+          "title": "terrCVM terrain tiles\u180e"
         },
         "accepted": true,
         "reason": "U+180E stopped being whitespace in Unicode 6.3; neither language treats it as such now"
@@ -2311,7 +2311,7 @@
         "name": "title-combining-acute",
         "builder": "collection",
         "patch": {
-          "title": "terrDVM\u0301 tiles"
+          "title": "terrCVM\u0301 tiles"
         },
         "accepted": true,
         "reason": "title is unrestricted Unicode; only the dataset name is normalisation-free by construction"
@@ -2320,7 +2320,7 @@
         "name": "title-astral-pair",
         "builder": "collection",
         "patch": {
-          "title": "terrDVM \ud83d\uddfb tiles"
+          "title": "terrCVM \ud83d\uddfb tiles"
         },
         "accepted": true,
         "reason": "a WELL-FORMED surrogate pair must survive the lone-surrogate gate"
@@ -2758,7 +2758,7 @@
       "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
-      "mimeType": "application/vnd.terrdvm.tft2",
+      "mimeType": "application/vnd.terrcvm.tft2",
       "size": 65536,
       "datetime": "2026-01-01T00:00:00Z",
       "properties": {

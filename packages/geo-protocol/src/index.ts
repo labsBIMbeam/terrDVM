@@ -1,5 +1,5 @@
 /**
- * terrDVM's geospatial protocol on nostr: one Collection kind, one Item kind,
+ * terrCVM's geospatial protocol on nostr: one Collection kind, one Item kind,
  * one extent tag, one location tag.
  *
  * `CONTRACT.md` is the normative spec and `tests/fixtures/geo-vectors.json` is
@@ -11,7 +11,7 @@
  * a visible error.
  *
  * Pure by construction — no DOM, no network, no `@napplet/sdk`, no dependency
- * on `@terrdvm/terrain-engine`. This is the lower layer; the engine and the
+ * on `@terrcvm/terrain-engine`. This is the lower layer; the engine and the
  * app sit on top of it.
  */
 export * from './kinds';

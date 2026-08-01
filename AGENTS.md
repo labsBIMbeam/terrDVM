@@ -1,8 +1,8 @@
-# AGENTS.md — terrDVM
+# AGENTS.md — terrCVM
 
 ## Project root
 
-This repository is the canonical project root for terrDVM. Run GSD and all project-scoped Hermes sessions from this directory. Do not create `.planning/` in a parent workspace or in PalaceOfCulture.
+This repository is the canonical project root for terrCVM. Run GSD and all project-scoped Hermes sessions from this directory. Do not create `.planning/` in a parent workspace or in PalaceOfCulture.
 
 ## Authoritative brief
 

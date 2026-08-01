@@ -34,7 +34,7 @@ Features required for the product promise and acceptance gates. Missing any item
 
 ### Differentiators (Competitive Advantage)
 
-These features align directly with terrDVM’s narrow product promise rather than expanding it into a general GIS suite.
+These features align directly with terrCVM’s narrow product promise rather than expanding it into a general GIS suite.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
@@ -53,14 +53,14 @@ These features align directly with terrDVM’s narrow product promise rather tha
 | Terrain processor before paid dummy delivery | Mesh output is visually impressive | Violates the fixed execution order and can conceal payment, state, and delivery failures | First complete bbox/ortho UI, then signed request → invoice → confirmed payment → valid dummy GLB |
 | Production-grade mesh quality in the demo core | Makes the result look finished | Can consume the schedule without validating the paid DVM | Time-box mesh work to three hours, then ship honest displacement output |
 | General-purpose GIS workbench | GeoLibre demonstrates many useful GIS tools | Expands scope far beyond a terrain purchase flow and creates unnecessary dependencies | Keep bbox, preview, constraints, status, payment, and artifact inspection only |
-| FIPS | May appear related to adjacent infrastructure work | Explicitly excluded from terrDVM | Keep the project focused on the standalone paid terrain slice |
+| FIPS | May appear related to adjacent infrastructure work | Explicitly excluded from terrCVM | Keep the project focused on the standalone paid terrain slice |
 | Freenet | May appear useful for decentralized delivery | Explicitly excluded and unrelated to the core validation | Use Nostr for DVM messaging and Blossom/local serving for artifact delivery |
 | Protocol bridges | Promise broader interoperability | Add integration and security surface before the core flow is proven | Implement one documented NIP-90 terrain request/result mapping |
 | Broader NIP standardization before the demo | A terrain microstandard may eventually be useful | NIP-90 is draft/unrecommended and premature standardization blocks execution | Choose one kind and schema locally; revisit standardization after the SEC/demo slice |
 | Custom tile server | Gives maximum control over basemap traffic | Unnecessary infrastructure for a bounded demo and contrary to the upstream-use approach | Reuse verified/licensed 21maps or policy-compliant OSM/MapLibre-compatible sources |
 | Bulk tile scraping or disguised heavy traffic | Can make data appear locally available | Violates upstream policy and risks blocking | Bound requests, cache normally, identify the client, show attribution, and use licensed/public raster samples |
 | Direct privileged network/payment/upload logic in the Napplet | Seems simpler than a shell/backend split | Breaks sandbox/CSP assumptions and risks exposing secrets | Use narrow shell/backend adapters for signing, relay, resource fetch, payment admin, storage, and Blossom upload |
-| Palace or 30-Napplet fleet coupling | Offers immediate ecosystem integration | Adds unrelated deployment dependencies before standalone success | Ship terrDVM as a standalone package; discuss fleet placement later |
+| Palace or 30-Napplet fleet coupling | Offers immediate ecosystem integration | Adds unrelated deployment dependencies before standalone success | Ship terrCVM as a standalone package; discuss fleet placement later |
 | GeoLibre as runtime/backend/mandatory dependency | It already contains broad GIS patterns | Violates the reference-only boundary and imports an oversized architecture | Use it only as a licensed UX/pattern reference after exact source/version verification |
 | Pricing optimization in the MVP | Dynamic pricing sounds commercially complete | Distracts from proving a real payment gate and has unresolved parameters | Use a simple bounded price first; sats/km² with factors/caps is stretch scope |
 | Unverified “delivered” state | Reduces latency and implementation work | Can charge users for absent, corrupt, or substituted bytes | Require byte readback and hash verification before the delivered transition |
@@ -176,7 +176,7 @@ Complete these in order; do not start processor implementation before both are a
 
 ## Reference Product and Standards Analysis
 
-| Capability | Prior evidence | terrDVM approach |
+| Capability | Prior evidence | terrCVM approach |
 |------------|----------------|------------------|
 | Map-based bounded terrain selection | TouchTerrain and Terrain2STL expose area/region selection; GeoLibre includes map controls, area measurement, bbox extraction, raster/WMS loading, and CRS metadata | Implement only bounded bbox draw/edit/clear, area, preview, and constraints—not a general GIS workbench |
 | Request/payment/result lifecycle | NIP-90 defines request/result ranges and kind-7000 feedback including payment-required, processing, error, success, and partial; LNbits exposes invoice creation and payment-state lookup | Use one documented terrain kind, strict event validation, real invoice, verified settlement, explicit state, and result correlation |
@@ -203,7 +203,7 @@ These are unresolved inputs or implementation decisions already named by the bri
 
 Evidence below was already collected in the prior research trace; no additional research was performed to create this artifact.
 
-- terrDVM authoritative sources: `.planning/PROJECT.md`, `docs/PROJECT-BRIEF.md`, and `AGENTS.md`.
+- terrCVM authoritative sources: `.planning/PROJECT.md`, `docs/PROJECT-BRIEF.md`, and `AGENTS.md`.
 - Nostr protocol NIP-90 (`nostr-protocol/nips`, `90.md`) and the `nostr-protocol/data-vending-machines` kind-range reference inspected in the prior trace.
 - Current LNbits source, especially `lnbits/core/views/payment_api.py`, inspected in the prior trace.
 - Blossom BUD-01, BUD-02, BUD-04, BUD-07, and BUD-11 inspected in the prior trace.
@@ -216,5 +216,5 @@ Evidence below was already collected in the prior research trace; no additional 
 - Cached verified digests in `.planning/research/.cache/` (eight JSON records, mostly MEDIUM confidence; conference/offline prevalence synthesis is LOW confidence).
 
 ---
-*Feature research for: terrDVM paid terrain/GIS DVM demo*
+*Feature research for: terrCVM paid terrain/GIS DVM demo*
 *Researched: 2026-07-26*

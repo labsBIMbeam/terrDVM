@@ -1,5 +1,5 @@
 {
-  "name": "@terrdvm/napplet",
+  "name": "@terrcvm/napplet",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,8 +12,8 @@
   "dependencies": {
     "@napplet/sdk": "0.25.0",
     "@noble/curves": "2.0.1",
-    "@terrdvm/geo-protocol": "workspace:*",
-    "@terrdvm/terrain-engine": "workspace:*",
+    "@terrcvm/geo-protocol": "workspace:*",
+    "@terrcvm/terrain-engine": "workspace:*",
     "@turf/area": "7.3.5",
     "maplibre-gl": "5.24.0",
     "terra-draw": "1.32.2",

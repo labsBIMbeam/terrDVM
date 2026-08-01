@@ -3,7 +3,7 @@
  *
  * Deliberately excludes `render/preview3d` (WebGL2) and `map/*` (MapLibre):
  * importing those from a node test would drag a browser-only dependency in for
- * no reason. Reach for them by subpath — `@terrdvm/terrain-engine/render/preview3d`.
+ * no reason. Reach for them by subpath — `@terrcvm/terrain-engine/render/preview3d`.
  */
 export * from './bbox/validate';
 export * from './bbox/area';

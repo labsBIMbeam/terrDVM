@@ -7,7 +7,7 @@ name: CI
 #
 # NOTE: there is deliberately no build step here. `apps/napplet` builds with
 # artifactMode:'single-file', which currently collides with the demo binaries in
-# `apps/napplet/public/`, so `pnpm --filter @terrdvm/napplet build` fails. That is a
+# `apps/napplet/public/`, so `pnpm --filter @terrcvm/napplet build` fails. That is a
 # known pre-existing issue tracked separately; adding it now would make CI born red.
 # Re-add a build job once the public/ collision is resolved.
 

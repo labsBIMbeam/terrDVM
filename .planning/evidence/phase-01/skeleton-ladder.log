@@ -1,5 +1,5 @@
 
-> @terrdvm/napplet@0.0.0 test:unit [PROJECT_ROOT]/apps/napplet
+> @terrcvm/napplet@0.0.0 test:unit [PROJECT_ROOT]/apps/napplet
 > vitest run
 
 
@@ -15,17 +15,17 @@
 
 PASS unit
 
-> @terrdvm/napplet@0.0.0 typecheck [PROJECT_ROOT]/apps/napplet
+> @terrcvm/napplet@0.0.0 typecheck [PROJECT_ROOT]/apps/napplet
 > tsc --noEmit
 
 PASS typecheck
 
-> terrdvm@ lint [PROJECT_ROOT]
+> terrcvm@ lint [PROJECT_ROOT]
 > eslint --no-error-on-unmatched-pattern apps/napplet/src apps/napplet/tests scripts
 
 PASS lint
 
-> @terrdvm/napplet@0.0.0 build [PROJECT_ROOT]/apps/napplet
+> @terrcvm/napplet@0.0.0 build [PROJECT_ROOT]/apps/napplet
 > vite build
 
 vite v8.1.5 building client environment for production...

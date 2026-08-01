@@ -1,7 +1,7 @@
 # Vertical Slice: the public corpus path
 
 **Defined:** 2026-08-01
-**Branch context:** follows `refactor: extract the terrain engine into @terrdvm/terrain-engine`; tasks 3/4/5/13 in flight.
+**Branch context:** follows `refactor: extract the terrain engine into @terrcvm/terrain-engine`; tasks 3/4/5/13 in flight.
 **Relation to ROADMAP.md:** ROADMAP.md records the four-phase paid-DVM slice. The repo has since deviated from that plan at explicit operator request (README, "Deviations"). This document scopes the distribution slice the project actually pivoted to. It does not rewrite ROADMAP.md; reconciliation is task 12 plus a later GSD transition.
 
 ## The thesis this slice proves
@@ -27,7 +27,7 @@ One Funchal tile travels the full public path — crawled once, content-addresse
 5. The mapplet (new `apps/mapplet`; manifest declares `resource` + `outbox`, never `upload`) fetches `{kinds:[30550], authors:[<crawler>]}` wholesale and filters bbox locally — collections are few, and `bbox` is deliberately unindexed. It learns the datasets, the blossom server URL, and the mandatory attribution from the events, not from config.
 6. Viewport over Funchal → the mapplet queries `{kinds:[30551], authors:[<crawler>], "#g":["etgc"]}` and refines the superset by parsing `d` and the content bbox.
 7. For the covered tile it fetches both blobs by hash through the `resource` capability and **recomputes sha256 against the `x` tag before decoding** — fail closed on mismatch.
-8. `@terrdvm/terrain-engine` decodes: Terrarium → heightfield → mesh; TFT2 → buildings/roads. The WebGL2 renderer shows the 3D tile with the collection's attribution.
+8. `@terrcvm/terrain-engine` decodes: Terrarium → heightfield → mesh; TFT2 → buildings/roads. The WebGL2 renderer shows the 3D tile with the collection's attribution.
 9. **Negative case:** neighbour **14/7423/6618** — same p4 cell, so the `#g` query *returns* items; refinement finds none for that tile; the mapplet shows an explicit "no data for this tile" state, renders nothing, and contacts no upstream.
 
 During the render the network log shows only the relay and the blossom host. No Mapzen, no Overpass, no Esri. That single observable is the thesis.
@@ -129,7 +129,7 @@ In the style of the brief's ladder: concrete command, concrete observation. All 
 5. **Bytes by hash.** `curl -s <blossom>/<sha_dem> | sha256sum` = `<sha_dem>`; same for `<sha_features>`.
 6. **Announcements.** Query `{kinds:[30550], authors:[<crawler>]}` → exactly two collections with `bbox`, `license`, `server` tags. Query `{kinds:[30551], authors:[<crawler>], "#g":["etgc"]}` → exactly two items; each `x` equals its blob hash; `d` values are `dem:14/7422/6618` and `features:14/7422/6618`.
 7. **Write path closed.** The same 30551 publish signed with a throwaway key → strfry returns `OK false`. The mapplet manifest contains no `upload` capability.
-8. **Client artifact.** `corepack pnpm --filter @terrdvm/mapplet build` then `napplet-conformance` against `apps/mapplet/dist` → PASS; `node scripts/verify-shell-boundary.mjs` → PASS including the mapplet root.
+8. **Client artifact.** `corepack pnpm --filter @terrcvm/mapplet build` then `napplet-conformance` against `apps/mapplet/dist` → PASS; `node scripts/verify-shell-boundary.mjs` → PASS including the mapplet root.
 9. **Positive render.** Mapplet open over Funchal in the shell (or dev shim with the fallback named): 3D terrain with buildings and the collection's attribution visible; the request log for the session contains only the relay and blossom origins.
 10. **Negative render + record.** Neighbour tile shows the explicit "no data for this tile" state — never a flat plate, never a silent upstream fetch. VS-6 number recorded; ARCHITECTURE.md corrected and deviation 4 recorded (VS-7); secret scan of the diff finds no key material.
 

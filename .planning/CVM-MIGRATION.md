@@ -135,7 +135,7 @@ four SDK releases are all CEP-41 bug fixes.
 ## 5. What the flag actually guards
 
 Since no DVM path exists, the flag protects the **working demo**: today the napplet generates
-terrain in-browser from `@terrdvm/terrain-engine`. That path stays default until CVM is proven.
+terrain in-browser from `@terrcvm/terrain-engine`. That path stays default until CVM is proven.
 
 ```
 terrainSource: 'local'   (default)  → today's in-browser generation, unchanged
@@ -202,7 +202,7 @@ ContextVM lives in one ~100-line bridge process. It does not enter the napplet �
 domain absorbs it — and it does not enter the Python service. When the SDK breaks, one file changes.
 
 **Server-side for paid; the browser stays a free preview.** The napplet keeps generating terrain
-locally from `@terrdvm/terrain-engine` (flag default `local`, today's working demo). The CVM path
+locally from `@terrcvm/terrain-engine` (flag default `local`, today's working demo). The CVM path
 returns a higher-quality server-built artifact for 21 sats. Both consume the same engine.
 
 This settles a question the plan could not answer on its own: **what is actually being sold.** Not
@@ -215,7 +215,7 @@ quality*, not on "a terrain happened".
 Consequence for the free tier: it must stay genuinely useful, not crippled. The moment the local
 path is degraded to make the paid path look better, the honesty the project trades on is gone.
 
-**Rename: product strings only; `nappletType` stays `terrdvm`.** The four product-meaning `DVM`
+**Rename: product strings only; `nappletType` stays `terrcvm`.** The four product-meaning `DVM`
 strings become CVM. Protocol prose in `PROJECT-BRIEF.md` and `AGENTS.md` is untouched. The NIP-5D
 `d` tag does not change, so the napplet keeps its published addressable identity; renaming it is a
 separate, deliberate act tied to a deploy.

@@ -1,8 +1,8 @@
-# terrDVM
+# terrCVM
 
 ## What This Is
 
-terrDVM is a public, local-first demonstration of a paid terrain Data Vending Machine. A user selects a terrain bounding box on an OSM-based map, previews orthophoto imagery, submits a signed Nostr DVM request, pays a Lightning invoice, and receives a terrain artifact that can be inspected in the Napplet.
+terrCVM is a public, local-first demonstration of a paid terrain Data Vending Machine. A user selects a terrain bounding box on an OSM-based map, previews orthophoto imagery, submits a signed Nostr DVM request, pays a Lightning invoice, and receives a terrain artifact that can be inspected in the Napplet.
 
 The initial release is a standalone sandboxed Napplet plus backend services. It is not coupled to Palace and does not attempt broader protocol standardization before the SEC/demo slice works.
 
@@ -35,7 +35,7 @@ A valid signed request must produce an invoice and, only after confirmed payment
 - Freenet — explicitly excluded from this project.
 - Protocol bridges — explicitly excluded from the initial slice.
 - Custom tile server — unnecessary for the demo and contrary to the bounded upstream-use approach.
-- Palace or 30-Napplet fleet coupling — defer until terrDVM succeeds as a standalone package.
+- Palace or 30-Napplet fleet coupling — defer until terrCVM succeeds as a standalone package.
 - Broader NIP standardization — defer until after the SEC/demo vertical slice.
 - Production-grade terrain mesh quality before payment delivery — polish must not block the paid DVM proof.
 - Bulk tile scraping or disguised heavy traffic — violates upstream OSM/data-service policy.
@@ -81,7 +81,7 @@ A valid signed request must produce an invoice and, only after confirmed payment
 | Keep protocol/job truth separate from Nostr, Lightning, raster, and Blossom adapters | Enables deterministic tests and fail-closed state transitions | — Pending |
 | Keep the Napplet sandboxed and secret-free | Privileged capabilities belong to shell/backend boundaries | — Pending |
 | Use mandatory fallbacks after strict timeboxes | A working honest demo is more valuable than an unfinished ideal path | — Pending |
-| Keep terrDVM standalone for the initial slice | Avoids Palace coupling and protects narrow execution focus | — Pending |
+| Keep terrCVM standalone for the initial slice | Avoids Palace coupling and protects narrow execution focus | — Pending |
 | Treat GeoLibre as an optional licensed reference only | Prevents accidental architectural or licensing dependency | — Pending |
 
 ## Evolution

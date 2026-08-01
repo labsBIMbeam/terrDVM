@@ -283,7 +283,7 @@ def upstream_fetch():
         import urllib.request
 
         request = urllib.request.Request(
-            url, headers={"User-Agent": "terrDVM-cache/0.1 (+https://github.com/labsBIMbeam/terrDVM)"}
+            url, headers={"User-Agent": "terrCVM-cache/0.1 (+https://github.com/labsBIMbeam/terrCVM)"}
         )
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
             return response.read()
@@ -528,7 +528,7 @@ def dashboard() -> HTMLResponse:
 
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="refresh" content="15">
-<title>terrDVM — data flows</title>
+<title>terrCVM — data flows</title>
 <style>
   body {{ background: #111; color: #e8e2d6; font: 14px/1.5 system-ui, sans-serif;
          margin: 0; padding: 2rem; }}
@@ -544,7 +544,7 @@ def dashboard() -> HTMLResponse:
   .stat b {{ color: #F7931A; display: block; font-size: 1.6rem; }}
   footer {{ color: #9a927f; font-size: .8rem; }}
 </style></head><body>
-<h1>terrDVM — data flows</h1>
+<h1>terrCVM — data flows</h1>
 <p>Every external byte, its source and its licence. Refreshes every 15&nbsp;s.</p>
 
 <h2>Imagery sources by region</h2>
@@ -667,7 +667,7 @@ def placement_event(
         ["size", str(entry.get("size", 0))],
         ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
         ["heading", f"{heading:.1f}"],
-        ["t", "terrdvm-avatar"],
+        ["t", "terrcvm-avatar"],
         ["name", character],
     ]
     tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
@@ -726,11 +726,11 @@ def presence_event(
         raise HTTPException(400, "at is outside the world")
 
     tags = [
-        ["d", "terrdvm"],
+        ["d", "terrcvm"],
         ["name", character],
         ["x", entry["sha256"]],
         ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
-        ["t", "terrdvm-presence"],
+        ["t", "terrcvm-presence"],
     ]
     tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
     status = message.strip()[:280] or f"exploring {lat:.4f}, {lon:.4f}"
@@ -783,12 +783,12 @@ def calendar_event(
         raise HTTPException(400, "starts must be a unix timestamp")
 
     tags = [
-        ["d", f"terrdvm-{starts}-{geohash_encode(lat, lon, 8)}"],
+        ["d", f"terrcvm-{starts}-{geohash_encode(lat, lon, 8)}"],
         ["title", name],
         ["start", str(starts)],
         ["location", location.strip()[:160] or name],
         ["bbox", f"{lon:.6f},{lat:.6f},{lon:.6f},{lat:.6f}"],
-        ["t", "terrdvm-event"],
+        ["t", "terrcvm-event"],
     ]
     tags.extend(["g", cell] for cell in geohash_prefixes(lat, lon, max(DEFAULT_GEOHASH_PRECISIONS)))
     return JSONResponse(
@@ -1067,7 +1067,7 @@ def _parse_texture_request(region: str, bbox: str, target: float) -> BBox:
 def _resolve_texture_region(region: str, box: BBox) -> str:
     """A bbox inside a regional survey gets that survey's source chain.
 
-    The DVM promises the best qualified source for the *place*, not for the
+    The CVM promises the best qualified source for the *place*, not for the
     URL parameter: a Funchal selection made from the continental view must
     still reach DROTe's 10 cm survey, not the Esri fallback. Observed live —
     the same selection came back at 2.0 m/px instead of 0.54 m/px purely

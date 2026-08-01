@@ -1,7 +1,7 @@
 """Build the demo intro v2: the roster, the crab, the fall of Vienna — and a goose.
 
 A 21-second (504 frames @ 24 fps) film assembled deterministically from
-cached DVM artifacts and last week's 600BillionCWO bundle:
+cached CVM artifacts and last week's 600BillionCWO bundle:
 
 * terrain      — cached Mapzen terrarium tiles (z14) for the Ring selection
 * orthophoto   — the basemap.at bake the collection server produced
@@ -39,7 +39,7 @@ import bpy
 from mathutils import Vector
 
 DATA = Path(r"G:\Github\.local\blossom-gis")
-ROOT = Path(r"G:\Github\terrDVM")
+ROOT = Path(r"G:\Github\terrCVM")
 BUNDLE = Path(
     r"G:\workspace\20_PROJECTS\600BillionCWO\exports"
     r"\SECrab_Animation_Windows_Fable_Bundle\SECrab_Animation_Windows_Fable_Bundle"
@@ -723,7 +723,7 @@ def animate(crab: bpy.types.Object, destructibles: list[bpy.types.Object],
     scene.render.fps = FPS
 
     # Only terrain and roster at first: after the avatar highlight the whole
-    # city grows out of the map — the DVM generation made visible.
+    # city grows out of the map — the CVM generation made visible.
     for obj in [static, *destructibles]:
         obj.scale = (1.0, 1.0, 0.0008)
         obj.keyframe_insert("scale", frame=1)

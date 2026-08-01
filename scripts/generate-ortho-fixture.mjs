@@ -97,7 +97,7 @@ async function render() {
   const provenance = {
     schema_version: 1,
     artifact: LABEL,
-    owner: 'terrDVM repository; fully self-generated procedural test data',
+    owner: 'terrCVM repository; fully self-generated procedural test data',
     license: 'self-generated; no third-party imagery or asset code',
     generator: { path: 'scripts/generate-ortho-fixture.mjs', sha256: sha256(script) },
     output: { path: 'apps/napplet/tests/fixtures/ortho-fixture.png', sha256: sha256(png), width: WIDTH, height: HEIGHT },

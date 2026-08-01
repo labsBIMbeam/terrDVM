@@ -5,9 +5,9 @@ import {
   jobFlowReducer,
   type JobFlowState,
 } from '../../src/job/job-flow';
-import { buildTerrainMesh } from '@terrdvm/terrain-engine/terrain/mesh';
+import { buildTerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
 import { COPY } from '../../src/ui/copy';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const BBOX: BBox4326 = [-17.05, 32.7, -16.95, 32.78];
 const AREA_KM2 = 83.2;

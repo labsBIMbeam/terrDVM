@@ -1,4 +1,4 @@
-"""The terrDVM geo protocol: one collection event, one item event, one spatial tag each.
+"""The terrCVM geo protocol: one collection event, one item event, one spatial tag each.
 
 This is the Python half of a two-language protocol. The other half is the
 TypeScript in `packages/geo-protocol/src`. Both are governed by

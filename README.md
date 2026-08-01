@@ -1,4 +1,4 @@
-# terrDVM
+# terrCVM
 
 Public, local-first demo of a terrain Data Vending Machine:
 
@@ -26,7 +26,7 @@ Working demo. The payment stage is deliberately skipped; see
 
 ```bash
 corepack pnpm install
-corepack pnpm --filter @terrdvm/napplet dev
+corepack pnpm --filter @terrcvm/napplet dev
 ```
 
 Then open `http://localhost:5173/?region=south-tyrol` to switch regions.

@@ -210,7 +210,7 @@ export function encodeFeatureTile(tile: FeatureTile): Uint8Array {
 export function decodeFeatureTile(bytes: Uint8Array): FeatureTile {
   const reader = new ByteReader(bytes);
   if (reader.uint32() !== TFT_MAGIC) {
-    throw new Error('not a terrDVM feature tile');
+    throw new Error('not a terrCVM feature tile');
   }
   const z = reader.byte();
   const x = reader.uint32();

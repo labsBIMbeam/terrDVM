@@ -4,10 +4,10 @@ import {
   isApprovedCachedDemUrl,
   loadBytesCacheFirst,
 } from '../job/collection';
-import { DEM_SOURCE, chooseDemZoom, demTileUrl, demTilesForBBox, isApprovedDemUrl } from '@terrdvm/terrain-engine/terrain/dem';
-import { sampleHeightfield, type DemTileRaster } from '@terrdvm/terrain-engine/terrain/heightfield';
-import { buildTerrainMesh, type TerrainMesh } from '@terrdvm/terrain-engine/terrain/mesh';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import { DEM_SOURCE, chooseDemZoom, demTileUrl, demTilesForBBox, isApprovedDemUrl } from '@terrcvm/terrain-engine/terrain/dem';
+import { sampleHeightfield, type DemTileRaster } from '@terrcvm/terrain-engine/terrain/heightfield';
+import { buildTerrainMesh, type TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /** Preview grid density. 192² keeps the mesh under ~74k triangles. */
 export const TERRAIN_GRID_N = 192;

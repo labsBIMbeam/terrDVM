@@ -164,7 +164,7 @@ class TestRoundTrip:
 
 class TestFailureModes:
     def test_rejects_a_foreign_magic(self) -> None:
-        with pytest.raises(ValueError, match="not a terrDVM feature tile"):
+        with pytest.raises(ValueError, match="not a terrCVM feature tile"):
             decode_feature_tile(b"\x00\x01\x02\x03and then some")
 
     def test_rejects_truncated_input(self) -> None:

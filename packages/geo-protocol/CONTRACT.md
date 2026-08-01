@@ -1,4 +1,4 @@
-# terrDVM geo protocol — normative contract
+# terrCVM geo protocol — normative contract
 
 **Status:** normative. **Version:** 3. **Conformance suite:**
 `packages/geo-protocol/tests/fixtures/geo-vectors.json`.
@@ -898,7 +898,7 @@ Nothing forced both toolchains to run together, which is exactly the latency tha
 TFT2 pin stay one-directional for months, and exactly why two suites could assert
 `MAX_TILE_ZOOM = 22` and `MAX_TILE_ZOOM = 30` and both stay green.
 
-A single CI job MUST run `pnpm -F @terrdvm/geo-protocol test:unit` **and**
+A single CI job MUST run `pnpm -F @terrcvm/geo-protocol test:unit` **and**
 `uv run pytest services/blossom-gis` on every push, and MUST fail if either side fails to
 reproduce a vector. Two green suites that never run together are not evidence of
 agreement.

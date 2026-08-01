@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js';
-import { SOCIAL_GEOHASH_PRECISIONS } from '@terrdvm/geo-protocol/kinds';
-import { socialGeohashTags } from '@terrdvm/geo-protocol/geohash';
+import { SOCIAL_GEOHASH_PRECISIONS } from '@terrcvm/geo-protocol/kinds';
+import { socialGeohashTags } from '@terrcvm/geo-protocol/geohash';
 
 // The relay list is the only thing this module needs from publish.ts, and
 // publish.ts drags in the shell client. Mocking it keeps this a unit test and
@@ -100,7 +100,7 @@ const identities = new Map<string, { secret: Uint8Array; pubkey: string }>();
 function identity(label: string): { secret: Uint8Array; pubkey: string } {
   let found = identities.get(label);
   if (!found) {
-    const secret = nobleSha256(new TextEncoder().encode(`terrdvm-test:${label}`));
+    const secret = nobleSha256(new TextEncoder().encode(`terrcvm-test:${label}`));
     found = { secret, pubkey: toHex(schnorr.getPublicKey(secret)) };
     identities.set(label, found);
   }
@@ -134,7 +134,7 @@ function presenceEvent(options: {
   omitHash?: boolean;
   bboxTag?: string;
 }): unknown {
-  const tags: string[][] = [['name', options.name], ['t', 'terrdvm-presence']];
+  const tags: string[][] = [['name', options.name], ['t', 'terrcvm-presence']];
   if (!options.omitHash) tags.push(['x', 'a'.repeat(64)]);
   tags.push(['bbox', options.bboxTag ?? `${options.lon},${options.lat}`]);
   tags.push(...socialGeohashTags(options.lat, options.lon));
@@ -377,7 +377,7 @@ describe('fetchPresences', () => {
     expect(openedUrls).toEqual(['wss://relay.one.test', 'wss://relay.two.test']);
     for (const filter of sentFilters) {
       expect(filter.kinds).toEqual([30315]);
-      expect(filter['#t']).toEqual(['terrdvm-presence']);
+      expect(filter['#t']).toEqual(['terrcvm-presence']);
       expect(filter['#g']).toEqual(coverage.cells);
       expect(filter.limit).toBe(128);
     }
@@ -596,7 +596,7 @@ describe('fetchGeoNotes', () => {
         lon: 16.36,
         lat: 48.2,
         createdAt: 15,
-        extraTags: [['title', 'terrDVM meetup'], ['start', '1767225600']],
+        extraTags: [['title', 'terrCVM meetup'], ['start', '1767225600']],
       }),
       noteEvent({ id: 'faraway', kind: 1, lon: -73.9, lat: 40.7, createdAt: 30 }),
       noteEvent({ id: 'nogeo', kind: 1, lon: 16.37, lat: 48.21, createdAt: 40, omitGeohash: true }),
@@ -604,7 +604,7 @@ describe('fetchGeoNotes', () => {
     ];
     const notes = await fetchGeoNotes(VIENNA, 50);
     expect(notes.map(handleOf)).toEqual(['newer', 'meetup', 'older']);
-    expect(notes[1].content.startsWith('📅 terrDVM meetup')).toBe(true);
+    expect(notes[1].content.startsWith('📅 terrCVM meetup')).toBe(true);
     // Deduplicated across the two relays, which both answered.
     expect(new Set(notes.map((note) => note.id)).size).toBe(3);
     // Positioned from the finest rung of the ladder, not the coarsest.

@@ -31,7 +31,7 @@ from .geo import BBox, tile_bbox, tile_for_point
 
 OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
 OVERPASS_STATUS = "https://overpass-api.de/api/status"
-USER_AGENT = "terrDVM-crawler/0.1 (+https://github.com/labsBIMbeam/terrDVM)"
+USER_AGENT = "terrCVM-crawler/0.1 (+https://github.com/labsBIMbeam/terrCVM)"
 
 #: Terrarium-encoded elevation, AWS Open Data. No key, no published quota.
 DEM_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
@@ -61,7 +61,7 @@ SLOT_LIMITED_KINDS = frozenset({"features"})
 MEDIA_TYPES = {
     "dem": "image/png",
     "ortho": "image/jpeg",
-    "features": "application/vnd.terrdvm.tft",
+    "features": "application/vnd.terrcvm.tft",
 }
 
 SCHEMA = """

@@ -1,6 +1,6 @@
-import { geodesicAreaKm2, validateBBox } from '@terrdvm/terrain-engine/bbox/area';
-import { buildRequestPreview, type RequestPreviewDTO } from '@terrdvm/terrain-engine/bbox/request-preview';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import { geodesicAreaKm2, validateBBox } from '@terrcvm/terrain-engine/bbox/area';
+import { buildRequestPreview, type RequestPreviewDTO } from '@terrcvm/terrain-engine/bbox/request-preview';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 import { errorCopyFor, COPY } from './copy';
 import {
   createInitialSelectionState,
@@ -8,8 +8,8 @@ import {
   type SelectionState,
 } from './selection';
 import { createMapView, mapAttribution, type MapView } from '../map/map-view';
-import { OUTPUT_MIME, RES_M } from '@terrdvm/terrain-engine/config/defaults';
-import { getRegion, isWithinRegion, type Region } from '@terrdvm/terrain-engine/config/regions';
+import { OUTPUT_MIME, RES_M } from '@terrcvm/terrain-engine/config/defaults';
+import { getRegion, isWithinRegion, type Region } from '@terrcvm/terrain-engine/config/regions';
 import {
   createInitialJobFlowState,
   jobFlowReducer,
@@ -23,7 +23,7 @@ import {
   fetchPlacements,
   type CharacterEntry,
 } from '../job/collection';
-import { projector } from '@terrdvm/terrain-engine/buildings/extrude';
+import { projector } from '@terrcvm/terrain-engine/buildings/extrude';
 import { COLLECTION_SERVICE } from '../job/collection';
 import {
   buildCalendarEvent,
@@ -33,18 +33,18 @@ import {
 } from '../nostr/publish';
 import { fetchGeoNotes, fetchGlobalPresences, fetchPresences } from '../nostr/presence';
 import { createMatrixGlobe, type MatrixGlobe } from './globe';
-import cities from '@terrdvm/terrain-engine/config/cities.json';
-import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrdvm/terrain-engine/viewer/glb';
+import cities from '@terrcvm/terrain-engine/config/cities.json';
+import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrcvm/terrain-engine/viewer/glb';
 import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
-import type { TerrainMesh } from '@terrdvm/terrain-engine/terrain/mesh';
-import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrdvm/terrain-engine/buildings/extrude';
+import type { TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
+import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
 import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '../buildings/source-wien';
 import { fetchFeatures } from '../features/source-osm';
-import { buildLandcoverMesh, type LandcoverMesh } from '@terrdvm/terrain-engine/features/landcover';
-import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '@terrdvm/terrain-engine/features/ribbon';
-import { WATERWAY_WIDTH_M } from '@terrdvm/terrain-engine/features/types';
-import { createTerrainViewer, type TerrainViewer, type ViewerModel } from '@terrdvm/terrain-engine/render/preview3d';
+import { buildLandcoverMesh, type LandcoverMesh } from '@terrcvm/terrain-engine/features/landcover';
+import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '@terrcvm/terrain-engine/features/ribbon';
+import { WATERWAY_WIDTH_M } from '@terrcvm/terrain-engine/features/types';
+import { createTerrainViewer, type TerrainViewer, type ViewerModel } from '@terrcvm/terrain-engine/render/preview3d';
 
 const AXES = ['west', 'south', 'east', 'north'] as const;
 type Axis = (typeof AXES)[number];
@@ -482,7 +482,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !placeCharacter ||
       !placePosition || !placeMessage || !placeVenue || !placeWhen ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
-    throw new Error('Incomplete terrDVM UI scaffold.');
+    throw new Error('Incomplete terrCVM UI scaffold.');
   }
 
   let state: SelectionState = createInitialSelectionState();
@@ -1365,7 +1365,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'terrdvm-map.png';
+      anchor.download = 'terrcvm-map.png';
       anchor.click();
       URL.revokeObjectURL(url);
     });
@@ -1440,7 +1440,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // (continent buttons, globe pins) reload the page — the flag keeps the
   // start screen from replaying on them. In a sandboxed shell without
   // storage the try/catch degrades to the old always-intro behaviour.
-  const ENTERED_FLAG = 'terrdvm-entered';
+  const ENTERED_FLAG = 'terrcvm-entered';
   const hasEntered = (): boolean => {
     try {
       return sessionStorage.getItem(ENTERED_FLAG) === '1';

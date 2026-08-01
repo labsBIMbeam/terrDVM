@@ -1,9 +1,9 @@
 import { loadApprovedBytes } from '../shell/resource-client';
 import { cachedOsmUrl, isApprovedCachedOsmUrl } from './collection';
 import { ORTHO_SERVICE, isApprovedOrthoUrl } from './ortho';
-import { DEM_SOURCE, chooseDemZoom } from '@terrdvm/terrain-engine/terrain/dem';
+import { DEM_SOURCE, chooseDemZoom } from '@terrcvm/terrain-engine/terrain/dem';
 import { TERRAIN_GRID_N } from '../terrain/generate';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * Pre-flight availability for a selection, answered before any generation:

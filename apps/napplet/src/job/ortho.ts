@@ -1,6 +1,6 @@
 import { loadApprovedBytes } from '../shell/resource-client';
 import { COLLECTION_SERVICE } from './collection';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * Orthophoto texture for terrain draping.

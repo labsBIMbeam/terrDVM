@@ -241,7 +241,7 @@ def encode_feature_tile(tile: FeatureTile) -> bytes:
 def decode_feature_tile(data: bytes) -> FeatureTile:
     reader = _Reader(data)
     if reader.uint32() != TFT_MAGIC:
-        raise ValueError("not a terrDVM feature tile")
+        raise ValueError("not a terrCVM feature tile")
 
     z = reader.byte()
     x = reader.uint32()

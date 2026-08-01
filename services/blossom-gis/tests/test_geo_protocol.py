@@ -114,7 +114,7 @@ def repo_root() -> Path:
     for candidate in Path(__file__).resolve().parents:
         if (candidate / "packages").is_dir() and (candidate / "services").is_dir():
             return candidate
-    raise AssertionError("could not locate the terrDVM workspace root from " + __file__)
+    raise AssertionError("could not locate the terrCVM workspace root from " + __file__)
 
 
 def load_vectors() -> dict[str, Any]:

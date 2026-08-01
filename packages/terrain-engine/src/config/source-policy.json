@@ -25,7 +25,7 @@
           "required": false,
           "credential_reference": null
         },
-        "cors_shell_behavior": "Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrDVM User-Agent",
+        "cors_shell_behavior": "Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrCVM User-Agent",
         "attribution": "© OpenStreetMap contributors",
         "dataset_terms": "OpenStreetMap data licensed under ODbL; visible attribution and license link required",
         "endpoint_terms": "OSMF Standard tile policy: identifying User-Agent, valid web Referer where applicable, cache headers honored, no bulk download/scraping/prefetch",

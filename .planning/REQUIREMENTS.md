@@ -1,4 +1,4 @@
-# Requirements: terrDVM
+# Requirements: terrCVM
 
 **Defined:** 2026-07-26
 **Core Value:** A valid signed request produces a real invoice and, only after confirmed payment, delivers verified artifact bytes—first as a structurally valid dummy GLB so payment plus delivery is proven before terrain processing begins.
@@ -38,7 +38,7 @@ Requirements for the complete ordered demo slice. Phases must preserve: bbox/ort
 
 - [ ] **PROT-01**: The project documents exactly one terrain request kind in `5000–5999`, derives its result kind as request kind + 1000, and documents kind-7000 feedback usage and rationale against current NIP-90 conventions.
 - [ ] **PROT-02**: DVM independently verifies canonical Nostr serialization, event ID, Schnorr signature, kind, configured created-at window and clock-skew tolerance, pubkey, and string-only tag structure before creating a job or invoice.
-- [ ] **PROT-03**: A versioned strict terrDVM request schema atomically validates bbox order, bbox CRS, source/coverage identifier, resolution or compute factor, requested output MIME, and configured resource limits.
+- [ ] **PROT-03**: A versioned strict terrCVM request schema atomically validates bbox order, bbox CRS, source/coverage identifier, resolution or compute factor, requested output MIME, and configured resource limits.
 - [ ] **PROT-04**: DVM rejects unknown schema versions, unsupported output types, duplicate singleton tags, conflicting parameters, malformed content, oversized requests, and unapproved provider inputs before invoicing.
 - [ ] **PROT-05**: Requester identity and job identity derive from the verified request event, and every feedback, invoice, result, and artifact descriptor remains correlated to that immutable request ID.
 - [ ] **PROT-06**: Protocol schemas, parsers, canonical identifiers, artifact descriptors, and state transitions reside in `packages/protocol` without signer, relay, wallet, raster, or Blossom I/O.
@@ -126,11 +126,11 @@ Deferred beyond the ordered initial slice. These are tracked but not part of the
 ### Protocol Evolution
 
 - **EVOL-01**: Project can migrate versioned terrain request profiles while preserving compatibility and audit history.
-- **EVOL-02**: Proven terrDVM semantics can inform a broader terrain microstandard discussion after the demo succeeds.
+- **EVOL-02**: Proven terrCVM semantics can inform a broader terrain microstandard discussion after the demo succeeds.
 
 ### Product Expansion
 
-- **PROD-01**: Standalone terrDVM may be evaluated for Palace/30-Napplet fleet integration after all four gates pass.
+- **PROD-01**: Standalone terrCVM may be evaluated for Palace/30-Napplet fleet integration after all four gates pass.
 - **PROD-02**: Terrain quality, formats, and large-area processing may be expanded beyond the bounded demo budgets.
 - **PROD-03**: Multi-node or scale-out DVM deployment may replace the single-machine local-first architecture when demonstrated demand requires it.
 
@@ -144,7 +144,7 @@ Explicit exclusions prevent scope creep.
 | Freenet | Explicitly excluded; Nostr plus Blossom/local serving are sufficient |
 | Protocol bridges | Additional integration/security surface before core validation |
 | Custom tile server | Unnecessary infrastructure; use bounded policy-compliant upstream sources |
-| Palace coupling in v1 | terrDVM must succeed as a standalone Napplet/DVM first |
+| Palace coupling in v1 | terrCVM must succeed as a standalone Napplet/DVM first |
 | Broad NIP standardization during v1 | Choose one documented local profile; standardization is post-demo work |
 | General GIS workbench | Bbox, preview, payment, delivery, and viewing are the narrow product |
 | GeoLibre as runtime/backend/dependency | It is reference-only and reuse requires exact license/source verification |

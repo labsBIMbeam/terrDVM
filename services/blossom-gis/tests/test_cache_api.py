@@ -50,7 +50,7 @@ def other_auth_event(
         "created_at": now,
         "kind": 24242,
         "tags": tags,
-        "content": "terrDVM blossom-gis second publisher",
+        "content": "terrCVM blossom-gis second publisher",
     }
     serialized = json.dumps(
         [0, event["pubkey"], event["created_at"], event["kind"], event["tags"], event["content"]],
@@ -279,7 +279,7 @@ class TestPlacementEvent:
                     "title": "SEC demo night",
                     "at": "16.372500,48.208500",
                     "starts": 1785500000,
-                    "description": "terrain DVM live",
+                    "description": "terrain CVM live",
                 },
             ).json()
         assert event["kind"] == 31923
@@ -288,8 +288,8 @@ class TestPlacementEvent:
         assert tags["start"] == "1785500000"
         # Location falls back to the title when the caller sends none.
         assert tags["location"] == "SEC demo night"
-        assert tags["d"].startswith("terrdvm-1785500000-")
-        assert event["content"] == "terrain DVM live"
+        assert tags["d"].startswith("terrcvm-1785500000-")
+        assert event["content"] == "terrain CVM live"
         geohashes = [t[1] for t in event["tags"] if t[0] == "g"]
         assert geohashes == [geohash_encode(48.2085, 16.3725, p) for p in range(1, 7)]
         assert "sig" not in event and "pubkey" not in event
@@ -309,7 +309,7 @@ class TestPlacementEvent:
             ).json()
         assert event["kind"] == 30315
         tags = {t[0]: t[1] for t in event["tags"] if t[0] != "g"}
-        assert tags["d"] == "terrdvm"
+        assert tags["d"] == "terrcvm"
         assert tags["name"] == "flx600"
         geohashes = [t[1] for t in event["tags"] if t[0] == "g"]
         assert geohashes == [geohash_encode(48.2085, 16.3725, p) for p in range(1, 7)]
@@ -537,7 +537,7 @@ class TestSocialGeohashLadder:
             y=5677,
             sha256="fedcba9876543210" * 4,
             url="https://blossom.example/x.tft2",
-            mime_type="application/vnd.terrdvm.tft2",
+            mime_type="application/vnd.terrcvm.tft2",
             size=65536,
             datetime="2026-01-01T00:00:00Z",
             created_at=1767225600,

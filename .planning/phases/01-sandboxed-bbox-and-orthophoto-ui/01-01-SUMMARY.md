@@ -39,7 +39,7 @@ key-files:
 key-decisions:
   - "MAP-08 remains clean-room-fallback: no 21maps code, assets, styles, or configuration may be copied."
   - "The 14 exact project pins are approved for all Phase 1 installs, exclusively through Plan 01-02's one lockfile mutation."
-  - "Chromium provisioning is authorized only as `pnpm --filter @terrdvm/napplet exec playwright install chromium`; --with-deps, sudo, OS packages, and extra packages remain prohibited."
+  - "Chromium provisioning is authorized only as `pnpm --filter @terrcvm/napplet exec playwright install chromium`; --with-deps, sudo, OS packages, and extra packages remain prohibited."
   - "RES_M=5, OUTPUT_MIME=model/gltf-binary, MAX_AREA_KM2=100, and TIMEOUT_S=15 are immutable approved v1 defaults."
   - "@kehto/cli@0.2.16 and @kehto/paja@0.8.0 may be used only as already-installed tools; their SUS/UNRESOLVED research verdicts remain and compatibility requires the later real smoke."
 
@@ -143,8 +143,8 @@ Each task was committed atomically:
 
 - **Clean-room MAP-08 boundary:** 21maps provenance remained unresolved, so the existing clean-room fallback decision remains unchanged. Reuse is still forbidden unless all five provenance fields independently pass before map code exists.
 - **Exact package approval:** All 14 exact project pins are approved for all Phase 1 installs, but only Plan 01-02 may install them and only in its one lockfile mutation. Approval did not rewrite any research verdict.
-- **Exact browser provisioning:** Only `pnpm --filter @terrdvm/napplet exec playwright install chromium` is authorized. `--with-deps`, sudo, distro/OS package installation, and any extra package remain outside approval.
-- **Existing tools are not dependencies:** `@kehto/cli@0.2.16` and `@kehto/paja@0.8.0` may be invoked only from their existing installation/cache. They must never enter a terrDVM manifest or lockfile and still require the later real compatibility smoke.
+- **Exact browser provisioning:** Only `pnpm --filter @terrcvm/napplet exec playwright install chromium` is authorized. `--with-deps`, sudo, distro/OS package installation, and any extra package remain outside approval.
+- **Existing tools are not dependencies:** `@kehto/cli@0.2.16` and `@kehto/paja@0.8.0` may be invoked only from their existing installation/cache. They must never enter a terrCVM manifest or lockfile and still require the later real compatibility smoke.
 - **Immutable defaults:** `RES_M=5`, `OUTPUT_MIME=model/gltf-binary`, `MAX_AREA_KM2=100`, and `TIMEOUT_S=15` are approved and may change only through a new explicit human checkpoint followed by re-pinning.
 
 ## Validation Results

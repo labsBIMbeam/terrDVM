@@ -7,7 +7,7 @@ import {
   parseOrthoPlan,
   parseOverpassCount,
 } from '../../src/job/preflight';
-import type { BBox4326 } from '@terrdvm/terrain-engine/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const SCHOENBRUNN: BBox4326 = [16.3, 48.178, 16.32, 48.19];
 
