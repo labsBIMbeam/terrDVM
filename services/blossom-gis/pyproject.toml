@@ -9,6 +9,9 @@ dependencies = [
     "python-multipart>=0.0.12",
     "dracopy>=2.0.0",
     "numpy>=2.5.1",
+    # texture.py and source_check.py import PIL at module scope, and app.py
+    # imports texture at module scope, so this is a hard runtime dependency.
+    "pillow>=11",
 ]
 
 [project.optional-dependencies]
