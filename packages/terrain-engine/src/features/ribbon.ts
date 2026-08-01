@@ -1,4 +1,9 @@
 import { projector } from '../buildings/extrude';
+import {
+  assertGroundSampler,
+  type GroundSampler,
+  type SurfaceDisclosure,
+} from '../buildings/ground';
 import { ROAD_WIDTH_M, type RoadFeature } from './types';
 import type { BBox4326 } from '../bbox/validate';
 
@@ -8,6 +13,12 @@ import type { BBox4326 } from '../bbox/validate';
  * Each segment becomes its own quad rather than a mitred polyline: joins are
  * visually negligible at these widths, and independent quads keep the geometry
  * trivially correct on steep ground where a shared join would tear.
+ *
+ * A ribbon is draped, so it inherits whatever the sampled surface is. On bare
+ * earth that is the street. On a DSM it is the roofline the street runs
+ * between, which is the same defect as the building double-count and gets the
+ * same treatment — the identical `GroundSampler` gate, no per-layer exception.
+ * Fixing buildings and leaving roads floating would be half a fix.
  */
 
 export type RoadMesh = {
@@ -15,14 +26,19 @@ export type RoadMesh = {
   normals: Float32Array;
   indices: Uint32Array;
   stats: { roads: number; segments: number; triangles: number };
+  /** What these ribbons are draped over. Mandatory, same rule as buildings. */
+  surface: SurfaceDisclosure;
 };
 
-const EMPTY: RoadMesh = {
-  positions: new Float32Array(0),
-  normals: new Float32Array(0),
-  indices: new Uint32Array(0),
-  stats: { roads: 0, segments: 0, triangles: 0 },
-};
+function emptyMesh(surface: SurfaceDisclosure): RoadMesh {
+  return {
+    positions: new Float32Array(0),
+    normals: new Float32Array(0),
+    indices: new Uint32Array(0),
+    stats: { roads: 0, segments: 0, triangles: 0 },
+    surface,
+  };
+}
 
 /** Lift above the surface so ribbons never z-fight with the terrain. */
 export const ROAD_DRAPE_OFFSET_M = 1.5;
@@ -36,11 +52,13 @@ export type RibbonLine = {
 export function buildRibbonMesh(
   lines: readonly RibbonLine[],
   bbox: BBox4326,
-  sampleGround: (x: number, z: number) => number,
+  ground: GroundSampler,
   verticalScale = 1,
   liftM = ROAD_DRAPE_OFFSET_M,
 ): RoadMesh {
-  if (lines.length === 0) return EMPTY;
+  const sampler = assertGroundSampler(ground, 'buildRibbonMesh');
+  const sampleGround = sampler.sample;
+  if (lines.length === 0) return emptyMesh(sampler.surface);
 
   const project = projector(bbox);
   const positions: number[] = [];
@@ -91,26 +109,27 @@ export function buildRibbonMesh(
     if (emitted) usedRoads += 1;
   }
 
-  if (segments === 0) return EMPTY;
+  if (segments === 0) return emptyMesh(sampler.surface);
 
   return {
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
     indices: new Uint32Array(indices),
     stats: { roads: usedRoads, segments, triangles: indices.length / 3 },
+    surface: sampler.surface,
   };
 }
 
 export function buildRoadMesh(
   roads: readonly RoadFeature[],
   bbox: BBox4326,
-  sampleGround: (x: number, z: number) => number,
+  ground: GroundSampler,
   verticalScale = 1,
 ): RoadMesh {
   return buildRibbonMesh(
     roads.map((road) => ({ line: road.line, widthM: ROAD_WIDTH_M[road.roadClass] ?? 4 })),
     bbox,
-    sampleGround,
+    ground,
     verticalScale,
   );
 }

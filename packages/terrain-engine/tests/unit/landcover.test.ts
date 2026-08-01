@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { LANDCOVER_COLORS, buildLandcoverMesh } from '../../src/features/landcover';
+import { createGroundSampler } from '../../src/buildings/ground';
 import type { LanduseFeature } from '../../src/features/types';
 import type { BBox4326 } from '../../src/bbox/validate';
 
 const BBOX: BBox4326 = [16.3, 48.178, 16.32, 48.19];
-const flat = (): number => 10;
+// Bare earth: a patch draped on a DTM lies on the ground it claims to cover.
+const flat = createGroundSampler({
+  sample: () => 10,
+  model: 'dtm',
+  sourceId: 'at-bev-dtm-1m',
+});
 
 const square = (
   west: number,

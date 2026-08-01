@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { extrudeFootprints, triangulate, type Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
+import { createGroundSampler, type GroundSampler } from '@terrcvm/terrain-engine/buildings/ground';
 import {
   DEFAULT_BUILDING_HEIGHT_M,
   METRES_PER_LEVEL,
@@ -13,7 +14,17 @@ import {
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const BBOX: BBox4326 = [-16.93, 32.64, -16.90, 32.66];
-const FLAT = () => 0;
+
+/**
+ * Bare earth. A footprint height is measured from the ground, so these
+ * assertions only mean what they say on a DTM — the surface model travels with
+ * the sample precisely so a test cannot forget which one it is on. The
+ * non-bare-earth path is covered in the engine's own ground.test.ts.
+ */
+const dtm = (sample: (x: number, z: number) => number): GroundSampler =>
+  createGroundSampler({ sample, model: 'dtm', sourceId: 'it-bz-dtm-05m' });
+
+const FLAT = dtm(() => 0);
 
 /** A small axis-aligned square footprint inside BBOX. */
 function square(size = 0.001): Footprint {
@@ -85,7 +96,7 @@ describe('extrudeFootprints', () => {
   });
 
   it('places the roof exactly `heightM` above the sampled ground', () => {
-    const mesh = extrudeFootprints([{ ...square(), heightM: 25 }], BBOX, () => 100);
+    const mesh = extrudeFootprints([{ ...square(), heightM: 25 }], BBOX, dtm(() => 100));
     const ys: number[] = [];
     for (let i = 1; i < mesh.positions.length; i += 3) ys.push(mesh.positions[i]);
     expect(Math.min(...ys)).toBeCloseTo(100, 6);
@@ -93,7 +104,7 @@ describe('extrudeFootprints', () => {
   });
 
   it('follows terrain so a building on a slope is not left floating', () => {
-    const onHill = extrudeFootprints([square()], BBOX, (x) => x);
+    const onHill = extrudeFootprints([square()], BBOX, dtm((x) => x));
     const ys: number[] = [];
     for (let i = 1; i < onHill.positions.length; i += 3) ys.push(onHill.positions[i]);
     // Ground is no longer at zero, and the solid is still exactly 10 m tall.

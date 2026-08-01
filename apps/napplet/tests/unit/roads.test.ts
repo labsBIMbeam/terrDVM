@@ -2,11 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import { ROAD_DRAPE_OFFSET_M, buildRibbonMesh, buildRoadMesh } from '@terrcvm/terrain-engine/features/ribbon';
 import { ROAD_WIDTH_M, WATERWAY_WIDTH_M, type RoadFeature } from '@terrcvm/terrain-engine/features/types';
+import { createGroundSampler, type GroundSampler } from '@terrcvm/terrain-engine/buildings/ground';
 import { featuresQuery, parseFeatures, roadClassFor } from '../../src/features/source-osm';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const BBOX: BBox4326 = [-16.93, 32.64, -16.90, 32.66];
-const FLAT = () => 0;
+
+/**
+ * Bare earth — a ribbon draped on a DTM lies on the street. Roads take the
+ * identical surface rule as buildings, so the same sampler contract applies
+ * here; the non-bare-earth path is covered in the engine's ground.test.ts.
+ */
+const dtm = (sample: (x: number, z: number) => number): GroundSampler =>
+  createGroundSampler({ sample, model: 'dtm', sourceId: 'it-bz-dtm-05m' });
+
+const FLAT = dtm(() => 0);
 
 function straightRoad(roadClass: RoadFeature['roadClass'] = 'primary'): RoadFeature {
   return { line: [[-16.925, 32.645], [-16.915, 32.645]], roadClass };
@@ -37,19 +47,19 @@ describe('road ribbons', () => {
   });
 
   it('lifts the ribbon above the surface so it cannot z-fight', () => {
-    const mesh = buildRoadMesh([straightRoad()], BBOX, () => 50);
+    const mesh = buildRoadMesh([straightRoad()], BBOX, dtm(() => 50));
     for (let i = 1; i < mesh.positions.length; i += 3) {
       expect(mesh.positions[i]).toBeCloseTo(50 + ROAD_DRAPE_OFFSET_M, 5);
     }
   });
 
   it('applies the same vertical scale as the terrain', () => {
-    const mesh = buildRoadMesh([straightRoad()], BBOX, () => 0, 3);
+    const mesh = buildRoadMesh([straightRoad()], BBOX, dtm(() => 0), 3);
     expect(mesh.positions[1]).toBeCloseTo(ROAD_DRAPE_OFFSET_M * 3, 5);
   });
 
   it('follows the terrain along its length', () => {
-    const mesh = buildRoadMesh([straightRoad()], BBOX, (x) => x, 1);
+    const mesh = buildRoadMesh([straightRoad()], BBOX, dtm((x) => x), 1);
     const ys: number[] = [];
     for (let i = 1; i < mesh.positions.length; i += 3) ys.push(mesh.positions[i]);
     expect(Math.max(...ys)).toBeGreaterThan(Math.min(...ys));
@@ -175,7 +185,7 @@ describe('waterway ribbons', () => {
     const mesh = buildRibbonMesh(
       [{ line: [[-16.925, 32.645], [-16.915, 32.645]], widthM: WATERWAY_WIDTH_M.river }],
       BBOX,
-      () => 0,
+      FLAT,
       1,
       0.8,
     );

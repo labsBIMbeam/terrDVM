@@ -1,4 +1,9 @@
 import { projector, triangulate, type LocalPoint } from '../buildings/extrude';
+import {
+  assertGroundSampler,
+  type GroundSampler,
+  type SurfaceDisclosure,
+} from '../buildings/ground';
 import type { LanduseClass, LanduseFeature } from './types';
 import type { BBox4326 } from '../bbox/validate';
 
@@ -10,6 +15,11 @@ import type { BBox4326 } from '../bbox/validate';
  * override colour. Zone classes (residential, industrial, …) are deliberately
  * not drawn: painting whole districts over the orthophoto hides more than it
  * says.
+ *
+ * Draped, therefore subject to the same surface rule as roads and buildings —
+ * on a DSM a park patch sits at canopy height and a water surface at whatever
+ * the radar saw. Same `GroundSampler` gate, same disclosure; see
+ * `../buildings/ground.ts`.
  */
 
 export const LANDCOVER_COLORS: Partial<
@@ -42,6 +52,8 @@ export type LandcoverClassMesh = {
 export type LandcoverMesh = {
   classes: LandcoverClassMesh[];
   stats: { patches: number; triangles: number };
+  /** What these patches are draped over. Mandatory, same rule as buildings. */
+  surface: SurfaceDisclosure;
 };
 
 type Bucket = {
@@ -53,9 +65,11 @@ type Bucket = {
 export function buildLandcoverMesh(
   features: readonly LanduseFeature[],
   bbox: BBox4326,
-  sampleGround: (x: number, z: number) => number,
+  ground: GroundSampler,
   exaggeration = 1,
 ): LandcoverMesh {
+  const sampler = assertGroundSampler(ground, 'buildLandcoverMesh');
+  const sampleGround = sampler.sample;
   const project = projector(bbox);
   const lift = LIFT_M * exaggeration;
   const buckets = new Map<LanduseClass, Bucket>();
@@ -117,5 +131,5 @@ export function buildLandcoverMesh(
     });
   }
 
-  return { classes, stats: { patches, triangles: triangleCount } };
+  return { classes, stats: { patches, triangles: triangleCount }, surface: sampler.surface };
 }

@@ -33,12 +33,20 @@ import {
 } from '../nostr/publish';
 import { fetchGeoNotes, fetchGlobalPresences, fetchPresences } from '../nostr/presence';
 import { createMatrixGlobe, type MatrixGlobe } from './globe';
+import {
+  INTRO_MAX_MS,
+  hasEnteredThisSession,
+  markEnteredThisSession,
+  playIntro,
+  prefersReducedMotion,
+} from './intro';
 import cities from '@terrcvm/terrain-engine/config/cities.json';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrcvm/terrain-engine/viewer/glb';
 import { sound } from './sound';
 import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
 import type { TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
 import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
+import { createGroundSampler, type GroundSampler } from '@terrcvm/terrain-engine/buildings/ground';
 import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '../buildings/source-wien';
 import { fetchFeatures } from '../features/source-osm';
 import { buildLandcoverMesh, type LandcoverMesh } from '@terrcvm/terrain-engine/features/landcover';
@@ -69,16 +77,29 @@ async function toViewerModel(bytes: ArrayBuffer, heightM: number): Promise<Viewe
 /**
  * Nearest-vertex lookup into the generated heightfield, so a footprint can be
  * placed on the terrain surface rather than at datum zero.
+ *
+ * The surface model is not guessed here. `generateTerrain` walks a fallback
+ * chain and does not yet report which source actually answered, so asking the
+ * registry for the *preferred* source would claim bare earth on a run that
+ * quietly demoted to Terrarium — a fabricated provenance, which is worse than
+ * none. Until the terrain layer returns the source it used, this reports
+ * `'unknown'`, which the engine treats exactly as harshly as a DSM: geometry
+ * still renders, and it renders labelled.
  */
-function sampleTerrain(mesh: TerrainMesh): (x: number, z: number) => number {
+function sampleTerrain(mesh: TerrainMesh): GroundSampler {
   const { gridN, widthM, depthM } = mesh.stats;
   const stepX = widthM / (gridN - 1);
   const stepZ = depthM / (gridN - 1);
-  return (x, z) => {
-    const col = Math.min(gridN - 1, Math.max(0, Math.round((x + widthM / 2) / stepX)));
-    const row = Math.min(gridN - 1, Math.max(0, Math.round((z + depthM / 2) / stepZ)));
-    return mesh.positions[(row * gridN + col) * 3 + 1];
-  };
+  return createGroundSampler({
+    sample: (x, z) => {
+      const col = Math.min(gridN - 1, Math.max(0, Math.round((x + widthM / 2) / stepX)));
+      const row = Math.min(gridN - 1, Math.max(0, Math.round((z + depthM / 2) / stepZ)));
+      return mesh.positions[(row * gridN + col) * 3 + 1];
+    },
+    model: 'unknown',
+    sourceId: 'unreported',
+    onNonBareEarth: 'render-indicative',
+  });
 }
 
 export type RenderAppOptions = {
@@ -340,9 +361,9 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </div>
     </div>
     <div class="start-screen" id="start-screen">
-      <video class="start-video" id="start-video" loop playsinline preload="auto"
-        src="/intro.mp4" aria-hidden="true"></video>
-      <img class="start-poster" src="/start-poster.png" alt="SEC brandmark" />
+      <!-- The intro stage: empty until ui/intro.ts draws into it, and emptied
+           again when the intro ends. See playIntro's contract. -->
+      <div class="start-stage" id="start-stage" aria-hidden="true"></div>
       <p class="start-kicker">${COPY.boot.startKicker}</p>
       <h1 class="start-title">${COPY.boot.appTitle}</h1>
       <div class="start-actions">
@@ -391,7 +412,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const demoButton = root.querySelector<HTMLButtonElement>('#demo-button');
   const jobScoreDot = root.querySelector<HTMLElement>('#job-score-dot');
   const jobScoreValue = root.querySelector<HTMLElement>('#job-score-value');
-  const startVideo = root.querySelector<HTMLVideoElement>('#start-video');
   const jobAvailTerrain = root.querySelector<HTMLElement>('#job-avail-terrain');
   const jobAvailOrtho = root.querySelector<HTMLElement>('#job-avail-ortho');
   const jobAvailStreets = root.querySelector<HTMLElement>('#job-avail-streets');
@@ -435,6 +455,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const placeButton = root.querySelector<HTMLButtonElement>('#place-avatar-button');
   const soundButton = root.querySelector<HTMLButtonElement>('#sound-button');
   const startScreen = root.querySelector<HTMLDivElement>('#start-screen');
+  const startStage = root.querySelector<HTMLDivElement>('#start-stage');
   const startSoundOn = root.querySelector<HTMLButtonElement>('#start-sound-on');
   const startSoundOff = root.querySelector<HTMLButtonElement>('#start-sound-off');
   const startSkip = root.querySelector<HTMLButtonElement>('#start-skip');
@@ -463,7 +484,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !stopDrawingButton || !clearButton || !coverageButton || !restoreButton || !toast || !requestAction ||
       !continueRequestButton || !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
-      !jobArea || !demoButton || !jobScoreDot || !jobScoreValue || !startVideo ||
+      !jobArea || !demoButton || !jobScoreDot || !jobScoreValue || !startStage ||
       !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
       !jobProgress || !jobProgressFill || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
@@ -524,6 +545,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let roadCount = 0;
   let featuresFailed = false;
   let buildingsAttribution: string | null = null;
+  /** Non-null whenever the geometry is not standing on bare earth. */
+  let surfaceNotice: string | null = null;
   let orthoMeta: OrthoMeta | null = null;
   // The generated scene, kept for the fullscreen viewer to remount.
   let lastScene: {
@@ -599,8 +622,17 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       jobImageryAttribution.textContent = orthoMeta
         ? COPY.jobFlow.imageryAttribution(orthoMeta.source.attribution)
         : '';
-      jobBuildingsAttribution.hidden = buildingsAttribution === null;
-      jobBuildingsAttribution.textContent = buildingsAttribution ?? '';
+      // Provenance of the geometry, which includes the surface it stands on:
+      // on anything but a bare-earth DTM the buildings are extruded from roof
+      // height and the roads drape there too, so the notice ships with the
+      // count rather than being available to whoever thinks to look. The
+      // sentence comes from the engine on purpose — the measurement lives with
+      // the code that knows it, and one copy cannot drift from another.
+      const provenance = [buildingsAttribution, surfaceNotice].filter(
+        (line): line is string => line !== null,
+      );
+      jobBuildingsAttribution.hidden = provenance.length === 0;
+      jobBuildingsAttribution.textContent = provenance.join(' ');
     }
 
     if (jobState.kind === 'FAILED') {
@@ -656,6 +688,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         : Promise.resolve(null);
 
     generateTerrain(bbox, {
+      // Without this the elevation chain short-circuits to Terrarium — the
+      // 30 m radar DSM — and every national LiDAR DTM is unreachable. The
+      // registry, its licences and the transcode path all exist; omitting
+      // `region` here is what made them dead code in the shipping app.
+      region: region.id,
       signal: controller.signal,
       onProgress: (progress) => {
         if (controller.signal.aborted) return;
@@ -678,6 +715,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         let osmBuildings: Footprint[] = [];
         let featuresOk = true;
         const ground = sampleTerrain(mesh);
+        surfaceNotice = ground.surface.notice;
         try {
           const features = await fetchFeatures(bbox, { signal: controller.signal });
           osmBuildings = features.buildings;
@@ -1087,22 +1125,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     demoButton.addEventListener('click', () => runCurated(demoSelection));
   }
 
-  // The intro film waits behind the poster; if the asset is not served
-  // (production napplet build), the animated start screen stands alone.
-  startVideo.addEventListener('error', () => startVideo.remove());
-  // Chrome may retro-pause audible playback it decides lacked a gesture —
-  // fall back to muted so the film never stalls mid-intro.
-  startVideo.addEventListener('pause', () => {
-    if (!startScreen.classList.contains('is-cinema')) return;
-    if (startScreen.classList.contains('is-leaving') || startVideo.ended) return;
-    startVideo.muted = true;
-    void startVideo.play().catch(() => {});
-  });
-
-  // Cinema mode: while the film plays it owns the whole screen — no menu at
-  // all. A click anywhere skips into the app.
-  startVideo.addEventListener('playing', () => startScreen.classList.add('is-cinema'));
-
   // The global event console: dot-earth, live events, a locate field.
   let globe: MatrixGlobe | undefined;
   const GLOBE_PLACES: { name: string; lon: number; lat: number }[] = [
@@ -1436,25 +1458,15 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
 
   // The start screen: one deliberate click opens the app — and that same
   // gesture is what unlocks the AudioContext, so the chime lands with it.
-  // The intro belongs to the session's FIRST entry only. Region hops
-  // (continent buttons, globe pins) reload the page — the flag keeps the
-  // start screen from replaying on them. In a sandboxed shell without
-  // storage the try/catch degrades to the old always-intro behaviour.
-  const ENTERED_FLAG = 'terrcvm-entered';
-  const hasEntered = (): boolean => {
-    try {
-      return sessionStorage.getItem(ENTERED_FLAG) === '1';
-    } catch {
-      return false;
-    }
-  };
-  const markEntered = (): void => {
-    try {
-      sessionStorage.setItem(ENTERED_FLAG, '1');
-    } catch {
-      // No storage in this shell — the intro will simply play again.
-    }
-  };
+  // ui/sound.ts synthesises every sound instead of loading files, so this
+  // gesture outlived the intro film and still has to happen: without it the
+  // browser keeps the audio context suspended and the session stays silent.
+  //
+  // The ceremony belongs to the session's FIRST entry only. Region hops
+  // (continent buttons, globe pins) reload the page — the session flag keeps
+  // the start screen from replaying on them, and in a sandboxed shell without
+  // storage it degrades to always-intro. Flag and seam live together in
+  // ui/intro.ts.
 
   // A pin click from another region carries its target in the hash and
   // goes straight to generation.
@@ -1471,8 +1483,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
 
   const enterApp = (): void => {
     if (startScreen.classList.contains('is-leaving')) return;
-    markEntered();
-    startVideo.muted = true;
+    markEnteredThisSession();
     sound.chime();
     startScreen.classList.add('is-leaving');
     root.querySelector('.app-header')?.classList.add('is-arriving');
@@ -1482,39 +1493,89 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     if (goTarget) runCurated(goTarget);
     else openGlobe();
   };
-  // The poster is a deliberate gate: picking a sound option is the user
-  // gesture browsers require before audible playback; skip goes straight in.
-  // Once the film rolls (cinema mode) any click enters the app.
-  const startFilm = (audible: boolean): void => {
-    if (!startVideo.isConnected) {
+
+  // The header toggle mirrors whatever the start screen decided.
+  const syncSoundButton = (): void => {
+    soundButton.setAttribute('aria-pressed', String(!sound.isMuted()));
+    soundButton.classList.toggle('is-muted', sound.isMuted());
+  };
+
+  // The gate: picking a sound option is the user gesture browsers require
+  // before audio, and it also decides whether the synthesised layer speaks at
+  // all. Then the intro plays once and the app opens behind it.
+  const introAbort = new AbortController();
+  let entering = false;
+  const beginEntry = (audible: boolean, withIntro: boolean): void => {
+    if (entering) return;
+    entering = true;
+    sound.setMuted(!audible);
+    syncSoundButton();
+    if (!withIntro) {
+      introAbort.abort();
       enterApp();
       return;
     }
-    startVideo.muted = !audible;
-    void startVideo.play().catch(() => {
-      startVideo.muted = true;
-      void startVideo.play().catch(() => enterApp());
-    });
+    // While the intro runs it owns the screen; the menu steps aside.
+    startScreen.classList.add('is-intro');
+    let ceiling = 0;
+    let opened = false;
+    const open = (): void => {
+      if (opened) return;
+      opened = true;
+      window.clearTimeout(ceiling);
+      // Aborting on the way out too: it retires the skip listeners below and
+      // tells a still-running intro to stop drawing.
+      introAbort.abort();
+      startStage.replaceChildren();
+      enterApp();
+    };
+    // Belt and braces on the duration budget: a stalled or misbehaving intro
+    // must never be able to hold the app shut past its ceiling.
+    ceiling = window.setTimeout(() => {
+      introAbort.abort();
+      open();
+    }, INTRO_MAX_MS);
+    void playIntro({
+      host: startStage,
+      signal: introAbort.signal,
+      muted: !audible,
+      reducedMotion: prefersReducedMotion(),
+    }).then(open, open);
   };
-  startScreen.addEventListener('click', () => {
-    if (startScreen.classList.contains('is-cinema')) enterApp();
-  });
+
+  // Any click, Escape, Enter or Space during the intro skips ahead. playIntro
+  // hears about it through the abort signal and is expected to stop drawing
+  // and resolve; the ceiling above covers it if it does not. Both listeners
+  // are bound to the same signal, so they retire with the intro.
+  const skipIntro = (): void => {
+    if (entering) introAbort.abort();
+  };
+  startScreen.addEventListener('click', skipIntro, { signal: introAbort.signal });
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') skipIntro();
+    },
+    { signal: introAbort.signal },
+  );
+
   startSoundOn.addEventListener('click', (event) => {
     event.stopPropagation();
-    startFilm(true);
+    beginEntry(true, true);
   });
   startSoundOff.addEventListener('click', (event) => {
     event.stopPropagation();
-    startFilm(false);
+    beginEntry(false, true);
   });
   startSkip.addEventListener('click', (event) => {
     event.stopPropagation();
-    enterApp();
+    // Skipping still counts as the gesture — the sound layer stays on and the
+    // AudioContext unlocks; only the intro is declined.
+    beginEntry(true, false);
   });
   soundButton.addEventListener('click', () => {
     sound.setMuted(!sound.isMuted());
-    soundButton.setAttribute('aria-pressed', String(!sound.isMuted()));
-    soundButton.classList.toggle('is-muted', sound.isMuted());
+    syncSoundButton();
     // Muting kills the wind bed; unmuting inside the viewer brings it back.
     if (!sound.isMuted() && viewerModal.open) sound.startAmbient();
   });
@@ -1722,12 +1783,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     announce(error instanceof Error ? error.message : COPY.sourceUnavailable.body);
   }
 
-  // Region hops skip the ceremony: no intro replay, no 17 MB video load —
-  // straight to the pin's generation or the map the user navigated to.
-  if (hasEntered() && startScreen.isConnected) {
-    startVideo.pause();
-    startVideo.removeAttribute('src');
-    startVideo.load();
+  // Region hops skip the ceremony: no intro replay, no gate — straight to the
+  // pin's generation or the map the user navigated to.
+  if (hasEnteredThisSession() && startScreen.isConnected) {
+    entering = true;
+    introAbort.abort();
     startScreen.remove();
     const goTarget = resolveGoTarget();
     if (goTarget) runCurated(goTarget);

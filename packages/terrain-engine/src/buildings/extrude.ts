@@ -1,3 +1,4 @@
+import { assertGroundSampler, type GroundSampler, type SurfaceDisclosure } from './ground';
 import { bboxExtentMetres } from '../terrain/mesh';
 import type { BBox4326 } from '../bbox/validate';
 
@@ -8,6 +9,12 @@ import type { BBox4326 } from '../bbox/validate';
  * Deliberately source-agnostic. OSM ways and an INSPIRE `BU.Building` WFS
  * response both reduce to "a ring plus a height", so the adapter that fetches
  * them is the only thing that differs.
+ *
+ * The one thing it is not agnostic about is the surface it stands on: a
+ * footprint height is measured from the ground, so extruding it from a DSM
+ * (which measures the roof) counts the building twice. See `./ground.ts` for
+ * the measurements and for why the DSM path is gated rather than removed or
+ * silently offset.
  */
 
 /** A single footprint: outer ring only, in lon/lat degrees. */
@@ -23,14 +30,19 @@ export type BuildingMesh = {
   normals: Float32Array;
   indices: Uint32Array;
   stats: { footprints: number; vertices: number; triangles: number };
+  /** What these solids stand on. Mandatory: heights are only true on bare earth. */
+  surface: SurfaceDisclosure;
 };
 
-const EMPTY: BuildingMesh = {
-  positions: new Float32Array(0),
-  normals: new Float32Array(0),
-  indices: new Uint32Array(0),
-  stats: { footprints: 0, vertices: 0, triangles: 0 },
-};
+function emptyMesh(surface: SurfaceDisclosure): BuildingMesh {
+  return {
+    positions: new Float32Array(0),
+    normals: new Float32Array(0),
+    indices: new Uint32Array(0),
+    stats: { footprints: 0, vertices: 0, triangles: 0 },
+    surface,
+  };
+}
 
 type Vec2 = { x: number; z: number };
 
@@ -131,15 +143,22 @@ export function projector(bbox: BBox4326): (lon: number, lat: number) => Vec2 {
 /**
  * Build extruded solids for a set of footprints.
  *
- * @param sampleGround Terrain elevation at a point in the local frame, so a
- *   building sits on the hillside instead of floating at datum zero.
+ * @param ground Terrain elevation at a point in the local frame *plus* what
+ *   that elevation measured, so a building sits on the hillside instead of
+ *   floating at datum zero — and so a building on a rooftop-height surface is
+ *   reported rather than quietly stacked on itself. Constructing the sampler is
+ *   where a non-bare-earth surface is accepted or refused; by the time it
+ *   arrives here the decision is already made and recorded in
+ *   `ground.surface`.
  */
 export function extrudeFootprints(
   footprints: readonly Footprint[],
   bbox: BBox4326,
-  sampleGround: (x: number, z: number) => number,
+  ground: GroundSampler,
 ): BuildingMesh {
-  if (footprints.length === 0) return EMPTY;
+  const sampler = assertGroundSampler(ground, 'extrudeFootprints');
+  const sampleGround = sampler.sample;
+  if (footprints.length === 0) return emptyMesh(sampler.surface);
 
   const project = projector(bbox);
   const positions: number[] = [];
@@ -174,10 +193,14 @@ export function extrudeFootprints(
     if (triangles.length === 0) continue;
 
     // One ground height per building keeps walls vertical and avoids shearing.
-    let ground = 0;
-    for (const point of ring) ground += sampleGround(point.x, point.z);
-    ground /= ring.length;
-    const top = ground + footprint.heightM;
+    let baseM = 0;
+    for (const point of ring) baseM += sampleGround(point.x, point.z);
+    baseM /= ring.length;
+    // Correct as written on a DTM: `heightM` is measured from bare earth, and
+    // that is what `baseM` is. On a DSM `baseM` is already the roof, so this
+    // stacks the building on itself — not corrected here on purpose, because
+    // any correction would be an invented number. `sampler.surface` says so.
+    const top = baseM + footprint.heightM;
 
     // Roof cap.
     const roofBase = positions.length / 3;
@@ -200,7 +223,7 @@ export function extrudeFootprints(
       const nz = -dx / length;
 
       const base = positions.length / 3;
-      positions.push(a.x, ground, a.z, b.x, ground, b.z, b.x, top, b.z, a.x, top, a.z);
+      positions.push(a.x, baseM, a.z, b.x, baseM, b.z, b.x, top, b.z, a.x, top, a.z);
       for (let n = 0; n < 4; n += 1) normals.push(nx, 0, nz);
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
@@ -208,7 +231,7 @@ export function extrudeFootprints(
     used += 1;
   }
 
-  if (used === 0) return EMPTY;
+  if (used === 0) return emptyMesh(sampler.surface);
 
   return {
     positions: new Float32Array(positions),
@@ -219,5 +242,6 @@ export function extrudeFootprints(
       vertices: positions.length / 3,
       triangles: indices.length / 3,
     },
+    surface: sampler.surface,
   };
 }

@@ -1,6 +1,30 @@
 import type { BBox4326 } from '../bbox/validate';
 
 /**
+ * The tile-grid contract every elevation source has to satisfy.
+ *
+ * Deliberately structural and minimal: it is everything the tile maths below
+ * needs and nothing else, so `DEM_SOURCE` and the national DTM entries in
+ * `elevation-sources.ts` can share one implementation of zoom choice, tile
+ * enumeration, URL building and the fail-closed allowlist. The repo has been
+ * bitten by two copies of one algorithm drifting apart; this is the seam that
+ * keeps there being one.
+ */
+export type TileEndpoint = {
+  readonly pathTemplate: string;
+  readonly tileSize: number;
+  readonly minZoom: number;
+  readonly maxZoom: number;
+};
+
+/** A `TileEndpoint` the browser may fetch directly, i.e. one with an origin. */
+export type OriginTileEndpoint = TileEndpoint & {
+  readonly scheme: string;
+  readonly host: string;
+  readonly port: number;
+};
+
+/**
  * Elevation source for the demo terrain processor.
  *
  * Deliberately NOT part of `config/source-policy.json`: that file carries the
@@ -60,10 +84,13 @@ export const MAX_DEM_TILES = 16;
 
 export type DemTileId = { z: number; x: number; y: number };
 
-const ORIGIN = `${DEM_SOURCE.scheme}://${DEM_SOURCE.host}:${DEM_SOURCE.port}`;
+/** Normalised origin of a directly fetchable endpoint (drops the default port). */
+export function endpointOrigin(endpoint: OriginTileEndpoint): string {
+  return new URL(`${endpoint.scheme}://${endpoint.host}:${endpoint.port}`).origin;
+}
 
 function expectedOrigin(): string {
-  return new URL(ORIGIN).origin;
+  return endpointOrigin(DEM_SOURCE);
 }
 
 /**
@@ -91,33 +118,48 @@ export function tileYToLat(y: number, zoom: number): number {
   return (Math.atan(Math.sinh(n)) * 180) / Math.PI;
 }
 
-/** Pick the shallowest zoom that still gives at least `targetPx` DEM samples across the bbox. */
-export function chooseDemZoom(bbox: BBox4326, targetPx: number): number {
+/**
+ * Pick the shallowest zoom that still gives at least `targetPx` DEM samples
+ * across the bbox, clamped to what `endpoint` actually carries.
+ *
+ * The clamp is the whole point of passing an endpoint: Terrarium's ceiling of
+ * 13 is a statement about SRTM/GMTED posting, and a 1 m national DTM would be
+ * thrown away by it.
+ */
+export function chooseDemZoom(
+  bbox: BBox4326,
+  targetPx: number,
+  endpoint: TileEndpoint = DEM_SOURCE,
+): number {
   const [west, , east] = bbox;
   const spanFraction = (east - west) / 360;
   if (!Number.isFinite(spanFraction) || spanFraction <= 0) {
     throw new RangeError('DEM zoom requires a positive longitude span.');
   }
-  const ideal = Math.log2(targetPx / (DEM_SOURCE.tileSize * spanFraction));
+  const ideal = Math.log2(targetPx / (endpoint.tileSize * spanFraction));
   const zoom = Math.ceil(ideal);
-  return Math.min(DEM_SOURCE.maxZoom, Math.max(DEM_SOURCE.minZoom, zoom));
+  return Math.min(endpoint.maxZoom, Math.max(endpoint.minZoom, zoom));
 }
 
 /**
  * Tiles covering the bbox at `zoom`, coarsening automatically rather than ever
  * exceeding MAX_DEM_TILES.
  */
-export function demTilesForBBox(bbox: BBox4326, zoom: number): { zoom: number; tiles: DemTileId[] } {
+export function demTilesForBBox(
+  bbox: BBox4326,
+  zoom: number,
+  endpoint: TileEndpoint = DEM_SOURCE,
+): { zoom: number; tiles: DemTileId[] } {
   const [west, south, east, north] = bbox;
 
-  for (let z = zoom; z >= DEM_SOURCE.minZoom; z -= 1) {
+  for (let z = zoom; z >= endpoint.minZoom; z -= 1) {
     const minX = Math.floor(lonToTileX(west, z));
     const maxX = Math.floor(lonToTileX(east, z));
     const minY = Math.floor(latToTileY(north, z));
     const maxY = Math.floor(latToTileY(south, z));
     const count = (maxX - minX + 1) * (maxY - minY + 1);
 
-    if (count <= MAX_DEM_TILES || z === DEM_SOURCE.minZoom) {
+    if (count <= MAX_DEM_TILES || z === endpoint.minZoom) {
       const tiles: DemTileId[] = [];
       for (let x = minX; x <= maxX; x += 1) {
         for (let y = minY; y <= maxY; y += 1) {
@@ -131,35 +173,71 @@ export function demTilesForBBox(bbox: BBox4326, zoom: number): { zoom: number; t
   throw new RangeError('No DEM zoom satisfies the tile budget for this bounding box.');
 }
 
-export function demTileUrl(z: number, x: number, y: number): string {
+/**
+ * The path part of a tile URL — origin-free, so a transcoded source served by
+ * the collection server and a direct upstream share one implementation.
+ */
+export function demTilePath(
+  z: number,
+  x: number,
+  y: number,
+  endpoint: TileEndpoint = DEM_SOURCE,
+): string {
   if (![z, x, y].every((value) => Number.isSafeInteger(value) && value >= 0)) {
     throw new RangeError('DEM tile coordinates must be non-negative safe integers.');
   }
-  if (z < DEM_SOURCE.minZoom || z > DEM_SOURCE.maxZoom) {
+  if (z < endpoint.minZoom || z > endpoint.maxZoom) {
     throw new RangeError('DEM tile zoom is outside the approved range.');
   }
-  const path = DEM_SOURCE.pathTemplate
+  return endpoint.pathTemplate
     .replace('{z}', String(z))
     .replace('{x}', String(x))
     .replace('{y}', String(y));
-  return `${expectedOrigin()}${path}`;
 }
 
-const DEM_PATH_PATTERN = new RegExp(
-  `^${DEM_SOURCE.pathTemplate
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\\\{[zxy]\\\}/g, '[0-9]+')}$`,
-);
+export function demTileUrl(
+  z: number,
+  x: number,
+  y: number,
+  endpoint: OriginTileEndpoint = DEM_SOURCE,
+): string {
+  return `${endpointOrigin(endpoint)}${demTilePath(z, x, y, endpoint)}`;
+}
 
-/** Fail-closed allowlist used by the shell resource client. */
-export function isApprovedDemUrl(candidate: string): boolean {
+/** Compiled once per template — the registry is small and never mutated. */
+const PATH_PATTERNS = new Map<string, RegExp>();
+
+function pathPattern(template: string): RegExp {
+  const cached = PATH_PATTERNS.get(template);
+  if (cached) return cached;
+  const compiled = new RegExp(
+    `^${template
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\{[zxy]\\\}/g, '[0-9]+')}$`,
+  );
+  PATH_PATTERNS.set(template, compiled);
+  return compiled;
+}
+
+/**
+ * Fail-closed allowlist used by the shell resource client.
+ *
+ * `origin` overrides the endpoint's own origin, which is what a transcoded
+ * source needs: its tiles come from the collection server, so the host is the
+ * caller's to supply while the path shape stays the source's to declare.
+ */
+export function isApprovedDemUrl(
+  candidate: string,
+  endpoint: TileEndpoint = DEM_SOURCE,
+  origin: string = expectedOrigin(),
+): boolean {
   let url: URL;
   try {
     url = new URL(candidate);
   } catch {
     return false;
   }
-  if (url.origin !== expectedOrigin()) return false;
+  if (url.origin !== origin) return false;
   if (url.search || url.hash || url.username || url.password) return false;
-  return DEM_PATH_PATTERN.test(url.pathname);
+  return pathPattern(endpoint.pathTemplate).test(url.pathname);
 }
