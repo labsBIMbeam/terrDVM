@@ -15,7 +15,7 @@
     "verify:fallback-ledger": "node scripts/validate-fallback-ledger.mjs",
     "verify:lock-approved": "node scripts/verify-lock-approved.mjs",
     "test:smoke:paja": "node apps/napplet/tests/smoke/paja-harness.mjs",
-    "test:all": "pnpm -r test:unit && uv run --directory services/blossom-gis --extra dev pytest -q"
+    "test:all": "pnpm -r test:unit && uv run --directory services/blossom-gis --extra dev pytest -q && uv run --directory services/terrain-mcp --extra dev pytest -q"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

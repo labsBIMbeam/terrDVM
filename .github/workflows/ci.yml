@@ -86,3 +86,30 @@ jobs:
 
       - name: Pytest
         run: uv run --extra dev --locked pytest -q
+
+  # Kept as its own job rather than folded into the one above: terrain-mcp
+  # depends on blossom-gis through a path dependency, so its lockfile pins both
+  # and `--locked` here is what catches the two drifting apart. Running them in
+  # one job would hide that behind a single cache key.
+  terrain-mcp:
+    name: python (terrain-mcp)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/terrain-mcp
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/terrain-mcp/uv.lock
+
+      - name: Install
+        run: uv sync --extra dev --locked --python 3.12
+
+      - name: Ruff
+        run: uv run --extra dev --locked ruff check .
+
+      - name: Pytest
+        run: uv run --extra dev --locked pytest -q
