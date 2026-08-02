@@ -18,6 +18,31 @@ importers:
         specifier: 8.46.4
         version: 8.46.4(eslint@9.39.2)(typescript@5.9.3)
 
+  apps/field-measurement:
+    dependencies:
+      '@terrcvm/napplet-kit':
+        specifier: workspace:*
+        version: link:../../packages/napplet-kit
+    devDependencies:
+      '@napplet/conformance-cli':
+        specifier: 0.2.16
+        version: 0.2.16
+      '@napplet/vite-plugin':
+        specifier: 0.12.0
+        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
   apps/player:
     dependencies:
       '@terrcvm/geo-protocol':
