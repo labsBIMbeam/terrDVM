@@ -1,15 +1,17 @@
 import { loadApprovedBytes } from '@terrcvm/napplet-kit/shell/resource-client';
 import { COLLECTION_SERVICE, collectionOrigin } from '@terrcvm/napplet-kit/job/collection';
+import { devSigner, openRelaySocket } from './transport';
 
 /**
  * Placement publishing: the collection server builds the unsigned NIP-94
  * announcement, a NIP-07 signer signs it, and the signed event goes to the
  * relays. The app never sees a key.
  *
- * DEV-PATH NOTE: `window.nostr` and a direct relay WebSocket are the plain-
- * browser path. Inside a real napplet shell both must route through shell
- * domains (signer capability, OUTBOX publish) instead — this module is the
- * seam where that swap happens.
+ * DEV-PATH NOTE: `window.nostr` and direct relay WebSockets are the plain-
+ * browser development path and exist only there — `./transport` compiles
+ * them out of the production artifact, where signing and publishing fail
+ * with a named reason until the shell's signer capability and OUTBOX domain
+ * land and take this seam over.
  */
 
 export const PLACEMENT_RELAYS = ['wss://relay.bimcvp.com', 'wss://relay.damus.io'] as const;
@@ -26,14 +28,7 @@ export type SignedEvent = UnsignedEvent & { id: string; pubkey: string; sig: str
 type Nip07 = { signEvent: (event: UnsignedEvent) => Promise<SignedEvent> };
 
 export function nipSigner(): Nip07 | null {
-  const candidate = (window as Window & { nostr?: unknown }).nostr;
-  if (
-    candidate &&
-    typeof (candidate as Record<string, unknown>).signEvent === 'function'
-  ) {
-    return candidate as Nip07;
-  }
-  return null;
+  return devSigner();
 }
 
 export function isApprovedPlacementEventUrl(candidate: string): boolean {
@@ -158,7 +153,11 @@ export async function buildPlacementEvent(
 /** Publish a signed event to one relay; resolves on OK, rejects otherwise. */
 function publishToRelay(relay: string, event: SignedEvent, timeoutMs = 8000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(relay);
+    const socket = openRelaySocket(relay);
+    if (!socket) {
+      reject(new Error(`${relay}: relay transport unavailable in this artifact`));
+      return;
+    }
     const deadline = setTimeout(() => {
       socket.close();
       reject(new Error(`${relay}: timeout`));

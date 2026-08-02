@@ -1,4 +1,5 @@
 import { PLACEMENT_RELAYS } from './publish';
+import { openRelaySocket } from './transport';
 import {
   encode as geohashEncode,
   coverCellCount,
@@ -30,11 +31,12 @@ import { isVerifiedEvent } from '@terrcvm/napplet-kit/verify';
  * A RELAY IS NOT A WITNESS. Every filter here is a request, and the answer is
  * whatever the relay felt like sending. Nothing from the wire reaches the map
  * until `verifiedEvents` has recomputed its NIP-01 id and checked its BIP-340
- * signature — see `../verify`.
+ * signature — see `@terrcvm/napplet-kit/verify`.
  *
- * DEV-PATH NOTE: direct relay WebSockets are the plain-browser path; inside
- * a real napplet shell this module must route through the shell's OUTBOX
- * domain instead — the same seam as publish.ts.
+ * DEV-PATH NOTE: direct relay WebSockets are the plain-browser development
+ * path and exist only there — `./transport` compiles them out of the
+ * production artifact, where every query resolves empty until the shell's
+ * OUTBOX domain lands and takes this seam over.
  */
 
 export type Presence = {
@@ -343,10 +345,11 @@ function queryRelay(
 ): Promise<NostrEvent[]> {
   return new Promise((resolve) => {
     const events: NostrEvent[] = [];
-    let socket: WebSocket;
-    try {
-      socket = new WebSocket(relay);
-    } catch {
+    // No transport (production artifact, or a constructor throw) resolves
+    // empty: the caller's coverage contract already distinguishes "nobody is
+    // here" from "we could not look" at the reporting layer.
+    const socket = openRelaySocket(relay);
+    if (!socket) {
       resolve([]);
       return;
     }

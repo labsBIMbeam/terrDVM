@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 /**
  * The app intro — and the seam where a code-drawn opening plugs in.
  *
@@ -86,23 +88,30 @@ const ENTERED_FLAG = 'terrcvm-entered';
  * Has this browsing session already been through the start screen?
  *
  * Region hops reload the page, and the flag is what keeps the ceremony from
- * replaying on them. In a sandboxed shell without storage the try/catch
- * degrades to "not entered", i.e. the intro simply plays again — the same
- * fallback the film had.
+ * replaying on them. Storage is a development affordance: a napplet artifact
+ * may not touch `sessionStorage` at all (conformance scans for it), so the
+ * production build compiles the access out and degrades to "not entered",
+ * i.e. the intro simply plays again — the exact fallback a sandboxed shell
+ * without storage always had.
  */
 export function hasEnteredThisSession(): boolean {
-  try {
-    return sessionStorage.getItem(ENTERED_FLAG) === '1';
-  } catch {
-    return false;
+  if (import.meta.env.DEV) {
+    try {
+      return sessionStorage.getItem(ENTERED_FLAG) === '1';
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 /** Record that the start screen has been passed. Silent when storage is absent. */
 export function markEnteredThisSession(): void {
-  try {
-    sessionStorage.setItem(ENTERED_FLAG, '1');
-  } catch {
-    // No storage in this shell — the intro will simply play again.
+  if (import.meta.env.DEV) {
+    try {
+      sessionStorage.setItem(ENTERED_FLAG, '1');
+    } catch {
+      // No storage in this shell — the intro will simply play again.
+    }
   }
 }

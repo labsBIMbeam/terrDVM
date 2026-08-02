@@ -5,11 +5,13 @@ name: CI
 # geohash tables); running only one toolchain lets those pins rot one-directionally
 # and stay green until someone happens to run the other suite by hand.
 #
-# NOTE: there is deliberately no build step here. `apps/napplet` builds with
-# artifactMode:'single-file', which currently collides with the demo binaries in
-# `apps/napplet/public/`, so `pnpm --filter @terrcvm/napplet build` fails. That is a
-# known pre-existing issue tracked separately; adding it now would make CI born red.
-# Re-add a build job once the public/ collision is resolved.
+# The build step exists again: the napplet split removed apps/napplet (whose
+# public/ demo binaries collided with artifactMode:'single-file') and each of
+# the three napplets now builds a clean single-file artifact whose build script
+# also runs scripts/verify-dist.mjs — single-file, self-contained, and free of
+# direct browser network authority. napplet-conformance itself stays a local
+# gate (it needs a provisioned Playwright Chromium); verify-dist covers the
+# same forbidden-surface scan the conformance CLI runs.
 
 on:
   push:
@@ -51,6 +53,9 @@ jobs:
 
       - name: Unit tests
         run: corepack pnpm -r test:unit
+
+      - name: Build napplet artifacts
+        run: corepack pnpm -r build
 
       - name: Verify shell boundary
         run: node scripts/verify-shell-boundary.mjs

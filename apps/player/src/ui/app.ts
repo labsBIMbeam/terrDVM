@@ -1,7 +1,5 @@
-import { geodesicAreaKm2, validateBBox } from '@terrcvm/terrain-engine/bbox/area';
-import { buildRequestPreview, type RequestPreviewDTO } from '@terrcvm/terrain-engine/bbox/request-preview';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
-import { errorCopyFor, COPY } from '@terrcvm/napplet-kit/ui/copy';
+import { COPY } from '@terrcvm/napplet-kit/ui/copy';
 import {
   createInitialSelectionState,
   selectionReducer,
@@ -9,22 +7,24 @@ import {
 } from '@terrcvm/napplet-kit/ui/selection';
 import { createMapView, mapAttribution, type MapView } from '@terrcvm/napplet-kit/map/map-view';
 import { OUTPUT_MIME, RES_M } from '@terrcvm/terrain-engine/config/defaults';
-import { getRegion, isWithinRegion, type Region } from '@terrcvm/terrain-engine/config/regions';
+import { getRegion, type Region } from '@terrcvm/terrain-engine/config/regions';
 import {
   createInitialJobFlowState,
   jobFlowReducer,
   type JobFlowState,
 } from '@terrcvm/napplet-kit/job/job-flow';
-import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '@terrcvm/napplet-kit/job/ortho';
+import { type OrthoMeta } from '@terrcvm/napplet-kit/job/ortho';
 import { demResolution, runPreflight } from '@terrcvm/napplet-kit/job/preflight';
+import { buildScene } from '@terrcvm/napplet-kit/scene/build-scene';
+import { CURATED, type Curated } from '@terrcvm/napplet-kit/config/curated';
 import {
   fetchCharacterBytes,
   fetchCharacterManifest,
   fetchPlacements,
+  COLLECTION_SERVICE,
   type CharacterEntry,
 } from '@terrcvm/napplet-kit/job/collection';
 import { projector } from '@terrcvm/terrain-engine/buildings/extrude';
-import { COLLECTION_SERVICE } from '@terrcvm/napplet-kit/job/collection';
 import {
   buildCalendarEvent,
   buildPlacementEvent,
@@ -32,6 +32,7 @@ import {
   signAndPublish,
 } from '../nostr/publish';
 import { fetchGeoNotes, fetchGlobalPresences, fetchPresences } from '../nostr/presence';
+import { devPostJson } from '../nostr/transport';
 import { createMatrixGlobe, type MatrixGlobe } from './globe';
 import {
   INTRO_MAX_MS,
@@ -43,25 +44,29 @@ import {
 import cities from '@terrcvm/terrain-engine/config/cities.json';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrcvm/terrain-engine/viewer/glb';
 import { sound } from './sound';
-import { generateTerrain, TERRAIN_EXAGGERATION } from '@terrcvm/napplet-kit/terrain/generate';
 import type { TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
-import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
-import { createGroundSampler, type GroundSampler } from '@terrcvm/terrain-engine/buildings/ground';
-import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '@terrcvm/napplet-kit/buildings/source-wien';
-import { fetchFeatures } from '@terrcvm/napplet-kit/features/source-osm';
-import { buildLandcoverMesh, type LandcoverMesh } from '@terrcvm/terrain-engine/features/landcover';
-import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '@terrcvm/terrain-engine/features/ribbon';
-import { WATERWAY_WIDTH_M } from '@terrcvm/terrain-engine/features/types';
+import type { BuildingMesh } from '@terrcvm/terrain-engine/buildings/extrude';
+import type { LandcoverMesh } from '@terrcvm/terrain-engine/features/landcover';
+import type { RoadMesh } from '@terrcvm/terrain-engine/features/ribbon';
 import { createTerrainViewer, type TerrainViewer, type ViewerModel } from '@terrcvm/terrain-engine/render/preview3d';
 
-const AXES = ['west', 'south', 'east', 'north'] as const;
-type Axis = (typeof AXES)[number];
-
-/** Human-facing name for the approved imagery role in the source policy. */
-const IMAGERY_SOURCE_NAME = 'Esri World Imagery';
+/**
+ * The player napplet: be somewhere. It owns the presence layer — the globe
+ * console, the presence and geo-note markers, avatar placement and the
+ * walkable world with its sound and ceremony. Terrain generation is the
+ * stage it walks on, built by the same shared pipeline the terrain napplet
+ * uses; the product workbench (coordinates, coverage, request preview,
+ * invoice) lives over there, not here.
+ */
 
 /** Avatars stand as 21 m giants, visible clear across a selection. */
 const GIANT_HEIGHT_M = 21;
+
+/** Player-local copy: the world entry point the product workbench lacks. */
+const PLAYER_COPY = {
+  enterWorld: 'Enter world',
+  selectionReady: (areaKm2: string): string => `Selection ready. ${areaKm2} km².`,
+} as const;
 
 /** Parse a GLB, normalise it to height, and decode its painted skin. */
 async function toViewerModel(bytes: ArrayBuffer, heightM: number): Promise<ViewerModel> {
@@ -74,39 +79,10 @@ async function toViewerModel(bytes: ArrayBuffer, heightM: number): Promise<Viewe
   return { ...mesh, texture };
 }
 
-/**
- * Nearest-vertex lookup into the generated heightfield, so a footprint can be
- * placed on the terrain surface rather than at datum zero.
- *
- * The surface model is not guessed here. `generateTerrain` walks a fallback
- * chain and does not yet report which source actually answered, so asking the
- * registry for the *preferred* source would claim bare earth on a run that
- * quietly demoted to Terrarium — a fabricated provenance, which is worse than
- * none. Until the terrain layer returns the source it used, this reports
- * `'unknown'`, which the engine treats exactly as harshly as a DSM: geometry
- * still renders, and it renders labelled.
- */
-function sampleTerrain(mesh: TerrainMesh): GroundSampler {
-  const { gridN, widthM, depthM } = mesh.stats;
-  const stepX = widthM / (gridN - 1);
-  const stepZ = depthM / (gridN - 1);
-  return createGroundSampler({
-    sample: (x, z) => {
-      const col = Math.min(gridN - 1, Math.max(0, Math.round((x + widthM / 2) / stepX)));
-      const row = Math.min(gridN - 1, Math.max(0, Math.round((z + depthM / 2) / stepZ)));
-      return mesh.positions[(row * gridN + col) * 3 + 1];
-    },
-    model: 'unknown',
-    sourceId: 'unreported',
-    onNonBareEarth: 'render-indicative',
-  });
-}
-
 export type RenderAppOptions = {
   /** Region id; falls back to the default region when unknown. */
   region?: string;
 };
-
 
 function stateBBox(state: SelectionState): BBox4326 | null {
   if (state.kind === 'SELECTED_VALID' || state.kind === 'SELECTED_INVALID' || state.kind === 'EDITING') {
@@ -128,15 +104,9 @@ function previousBBox(state: SelectionState): BBox4326 | null {
   return previous.kind === 'EMPTY' ? null : previous.bbox;
 }
 
-
-function coordinateLabels(): Record<Axis, string> {
-  return { west: 'West (°)', south: 'South (°)', east: 'East (°)', north: 'North (°)' };
-}
-
 export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}): void {
   const region: Region = getRegion(options.region);
   root.innerHTML = `
-    <a class="skip-link" href="#request-panel">${COPY.boot.skipToRequestPanel}</a>
     <header class="app-header" aria-label="${COPY.boot.toolbarLabel}">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
@@ -144,27 +114,21 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       </div>
       <div class="toolbar" role="toolbar" aria-label="${COPY.boot.toolbarLabel}">
         <button class="button button-primary" id="draw-button" type="button">${COPY.buttons.drawBoundingBox}</button>
-        <button class="button" id="demo-button" type="button" hidden></button>
         <button class="button" id="stop-drawing-button" type="button" hidden>${COPY.buttons.stopDrawing}</button>
-        <button class="button" id="coordinates-button" type="button" aria-expanded="false" aria-controls="coordinates-panel">${COPY.buttons.enterCoordinates}</button>
-        <button class="button" id="coverage-button" type="button" aria-pressed="false">${COPY.buttons.showCoverage}</button>
+        <button class="button button-primary" id="enter-world-button" type="button" hidden>${PLAYER_COPY.enterWorld}</button>
         <button class="button" id="place-avatar-button" type="button">${COPY.jobFlow.placeButton}</button>
         <button class="button" id="sound-button" type="button" aria-pressed="true">${COPY.jobFlow.soundButton}</button>
         <button class="button" id="globe-button" type="button">${COPY.globe.button}</button>
         <button class="button button-danger" id="clear-button" type="button">${COPY.buttons.clearSelection}</button>
       </div>
     </header>
-    <div class="workbench">
+    <div class="workbench workbench-player">
       <main class="map-region" aria-label="${COPY.boot.mapRegionLabel}">
         <div class="map-shell">
           <div class="map-canvas" id="map-canvas" tabindex="0" role="application" aria-label="${COPY.boot.mapRegionLabel}"></div>
           <section class="source-status" id="source-status" aria-labelledby="source-status-title">
             <h2 class="status-title" id="source-status-title">${COPY.sourceUnavailable.heading}</h2>
             <p>${COPY.sourceUnavailable.body}</p>
-          </section>
-          <section class="empty-state" id="empty-state" aria-labelledby="empty-state-title">
-            <h2 class="empty-state-title" id="empty-state-title">${COPY.emptyState.heading}</h2>
-            <p>${COPY.emptyState.body}</p>
           </section>
           <div class="status-alert" id="status-alert" role="alert" hidden></div>
           <div class="undo-toast" id="undo-toast" role="status" hidden>
@@ -176,44 +140,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         <p class="selection-helper" id="selection-helper">${COPY.helpers.idle}</p>
         <div class="live-announcement" id="live-announcement" aria-live="polite"></div>
       </main>
-      <aside class="request-panel" id="request-panel" aria-labelledby="request-panel-title" tabindex="-1">
-        <h2 class="panel-title" id="request-panel-title">${COPY.requestPanel.title}</h2>
-        <section class="selection-summary" aria-labelledby="selection-summary-title">
-          <h3 class="section-title" id="selection-summary-title">Selection</h3>
-          <p class="area-readout" id="area-readout"><span class="area-value">—</span> <span>km²</span></p>
-        </section>
-        <section class="coordinates-panel" id="coordinates-panel" aria-labelledby="coordinates-title" hidden>
-          <h3 class="section-title" id="coordinates-title">Coordinates</h3>
-          <form id="coordinates-form" novalidate>
-            <div class="coordinate-grid">
-              ${AXES.map((axis) => `
-                <div class="coordinate-field">
-                  <label for="coordinate-${axis}">${coordinateLabels()[axis]}</label>
-                  <input id="coordinate-${axis}" name="${axis}" inputmode="decimal" autocomplete="off" spellcheck="false" />
-                </div>
-              `).join('')}
-            </div>
-            <button class="button button-primary" type="submit">${COPY.buttons.applyCoordinates}</button>
-          </form>
-        </section>
-        <section class="request-preview" aria-labelledby="dto-title">
-          <h3 class="section-title" id="dto-title">${COPY.requestPanel.title}</h3>
-          <dl class="request-list" id="request-dto">
-            <div class="request-row"><dt class="request-label">${COPY.requestPanel.bboxLabel}</dt><dd class="request-value" data-dto="bbox">${COPY.requestPanel.emptyBbox}</dd></div>
-            <div class="request-row"><dt class="request-label">${COPY.requestPanel.crsLabel}</dt><dd class="request-value" data-dto="crs">${COPY.requestPanel.crsValue}</dd></div>
-            <div class="request-row"><dt class="request-label">Area</dt><dd class="request-value" data-dto="area">—</dd></div>
-            <div class="request-row"><dt class="request-label">${COPY.requestPanel.resolutionLabel}</dt><dd class="request-value fixed-default">${COPY.fixedDefaults.resolution}</dd></div>
-            <div class="request-row"><dt class="request-label">${COPY.requestPanel.outputLabel}</dt><dd class="request-value fixed-default">${COPY.fixedDefaults.output}</dd></div>
-            <div class="request-row"><dt class="request-label">${COPY.requestPanel.sourceLabel}</dt><dd class="request-value" data-dto="source">${COPY.requestPanel.sourceUnavailable}</dd></div>
-          </dl>
-          <p class="helper-caption">${COPY.fixedDefaults.helperCaption}</p>
-        </section>
-        <section class="request-action" id="request-action" aria-labelledby="request-action-title" hidden>
-          <h3 class="section-title" id="request-action-title">Next step</h3>
-          <p class="helper-caption">The selection is valid and ready for request review.</p>
-          <button class="button button-primary button-wide" id="continue-request-button" type="button">${COPY.buttons.continueToRequest}</button>
-        </section>
-      </aside>
     </div>
     <dialog class="job-modal" id="job-modal" aria-label="${COPY.jobFlow.readyTitle}">
       <section class="job-stage" id="job-stage-ready" hidden>
@@ -384,22 +310,13 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const mapCanvas = root.querySelector<HTMLDivElement>('#map-canvas');
   const stateAlert = root.querySelector<HTMLDivElement>('#status-alert');
   const announcement = root.querySelector<HTMLDivElement>('#live-announcement');
-  const emptyState = root.querySelector<HTMLElement>('#empty-state');
   const helper = root.querySelector<HTMLElement>('#selection-helper');
-  const areaReadout = root.querySelector<HTMLElement>('#area-readout');
-  const dtoBBox = root.querySelector<HTMLElement>('[data-dto="bbox"]');
-  const dtoArea = root.querySelector<HTMLElement>('[data-dto="area"]');
-  const coordinatesPanel = root.querySelector<HTMLElement>('#coordinates-panel');
-  const coordinatesButton = root.querySelector<HTMLButtonElement>('#coordinates-button');
-  const form = root.querySelector<HTMLFormElement>('#coordinates-form');
   const drawButton = root.querySelector<HTMLButtonElement>('#draw-button');
   const stopDrawingButton = root.querySelector<HTMLButtonElement>('#stop-drawing-button');
+  const enterWorldButton = root.querySelector<HTMLButtonElement>('#enter-world-button');
   const clearButton = root.querySelector<HTMLButtonElement>('#clear-button');
-  const coverageButton = root.querySelector<HTMLButtonElement>('#coverage-button');
   const restoreButton = root.querySelector<HTMLButtonElement>('#restore-button');
   const toast = root.querySelector<HTMLElement>('#undo-toast');
-  const requestAction = root.querySelector<HTMLElement>('#request-action');
-  const continueRequestButton = root.querySelector<HTMLButtonElement>('#continue-request-button');
   const sourceStatus = root.querySelector<HTMLElement>('#source-status');
   const jobModal = root.querySelector<HTMLDialogElement>('#job-modal');
   const jobStages = {
@@ -409,7 +326,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     FAILED: root.querySelector<HTMLElement>('#job-stage-failed'),
   };
   const jobArea = root.querySelector<HTMLElement>('#job-area');
-  const demoButton = root.querySelector<HTMLButtonElement>('#demo-button');
   const jobScoreDot = root.querySelector<HTMLElement>('#job-score-dot');
   const jobScoreValue = root.querySelector<HTMLElement>('#job-score-value');
   const jobAvailTerrain = root.querySelector<HTMLElement>('#job-avail-terrain');
@@ -479,12 +395,11 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const jobCloseFailed = root.querySelector<HTMLButtonElement>('#job-close-failed');
   const jobRetry = root.querySelector<HTMLButtonElement>('#job-retry');
 
-  if (!mapCanvas || !stateAlert || !announcement || !emptyState || !helper || !areaReadout ||
-      !dtoBBox || !dtoArea || !coordinatesPanel || !coordinatesButton || !form || !drawButton ||
-      !stopDrawingButton || !clearButton || !coverageButton || !restoreButton || !toast || !requestAction ||
-      !continueRequestButton || !sourceStatus || !jobModal ||
+  if (!mapCanvas || !stateAlert || !announcement || !helper || !drawButton ||
+      !stopDrawingButton || !enterWorldButton || !clearButton || !restoreButton || !toast ||
+      !sourceStatus || !jobModal ||
       !jobStages.READY || !jobStages.GENERATING || !jobStages.PREVIEW || !jobStages.FAILED ||
-      !jobArea || !demoButton || !jobScoreDot || !jobScoreValue || !startStage ||
+      !jobArea || !jobScoreDot || !jobScoreValue || !startStage ||
       !jobAvailTerrain || !jobAvailOrtho || !jobAvailStreets || !jobAvailWater ||
       !jobProgress || !jobProgressFill || !jobCanvas || !jobElevation || !jobExtent || !jobTriangles ||
       !jobBuildings || !jobRoads || !jobOrtho || !jobImageryAttribution ||
@@ -503,7 +418,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       !placeCharacter ||
       !placePosition || !placeMessage || !placeVenue || !placeWhen ||
       !placeHeading || !placeStatus || !placePublish || !placeCancel) {
-    throw new Error('Incomplete terrCVM UI scaffold.');
+    throw new Error('Incomplete terrCVM player UI scaffold.');
   }
 
   let state: SelectionState = createInitialSelectionState();
@@ -512,12 +427,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   let toastRemaining = 0;
   let toastPaused = false;
   let mapView: MapView;
-
-  const field = (axis: Axis): HTMLInputElement => {
-    const input = root.querySelector<HTMLInputElement>(`#coordinate-${axis}`);
-    if (!input) throw new Error(`Missing ${axis} coordinate field.`);
-    return input;
-  };
 
   const announce = (text: string): void => {
     announcement.textContent = text;
@@ -528,16 +437,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     stateAlert.hidden = text.length === 0;
   };
 
-  const syncFields = (bbox: BBox4326 | null): void => {
-    if (!bbox) return;
-    AXES.forEach((axis, index) => {
-      field(axis).value = bbox[index].toFixed(6);
-    });
-  };
-
-  // Starts unavailable and only flips once a tile has actually arrived, so a
-  // capability-denied shell never sees a "live" claim.
-  let previewSource: RequestPreviewDTO['source'] = { name: '', suffix: 'unavailable' };
   let jobState: JobFlowState = createInitialJobFlowState();
   let terrainAbort: AbortController | undefined;
   let viewer: TerrainViewer | undefined;
@@ -622,12 +521,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       jobImageryAttribution.textContent = orthoMeta
         ? COPY.jobFlow.imageryAttribution(orthoMeta.source.attribution)
         : '';
-      // Provenance of the geometry, which includes the surface it stands on:
-      // on anything but a bare-earth DTM the buildings are extruded from roof
-      // height and the roads drape there too, so the notice ships with the
-      // count rather than being available to whoever thinks to look. The
-      // sentence comes from the engine on purpose — the measurement lives with
-      // the code that knows it, and one copy cannot drift from another.
+      // Provenance of the geometry, which includes the surface it stands on.
       const provenance = [buildingsAttribution, surfaceNotice].filter(
         (line): line is string => line !== null,
       );
@@ -673,95 +567,22 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     terrainAbort = controller;
     setGenProgress(0.03, '');
 
-    // The orthophoto bake runs beside the terrain fetch. Like buildings it is
-    // an enhancement, never a gate: without a collection server the preview
-    // ships with the elevation ramp and says so.
-    const orthoPromise: Promise<OrthoTexture | null> = fetchOrthoTexture(region.id, bbox, {
+    buildScene(bbox, region, {
       signal: controller.signal,
-    }).catch(() => null);
-
-    // Vienna's measured building-body model beats OSM storey guesses; any
-    // failure falls back to the OSM footprints from the feature fetch.
-    const wienPromise =
-      region.id === 'vienna'
-        ? fetchWienBuildings(bbox, { signal: controller.signal }).catch(() => null)
-        : Promise.resolve(null);
-
-    generateTerrain(bbox, {
-      // Without this the elevation chain short-circuits to Terrarium — the
-      // 30 m radar DSM — and every national LiDAR DTM is unreachable. The
-      // registry, its licences and the transcode path all exist; omitting
-      // `region` here is what made them dead code in the shipping app.
-      region: region.id,
-      signal: controller.signal,
-      onProgress: (progress) => {
+      onTerrainProgress: (progress) => {
         if (controller.signal.aborted) return;
         setGenProgress(
           0.05 + 0.4 * (progress.total > 0 ? progress.loaded / progress.total : 0),
           COPY.jobFlow.progress(progress.loaded, progress.total),
         );
       },
-    })
-      .then(async (mesh) => {
+      onPhase: (phase) => {
         if (controller.signal.aborted) return;
-        setGenProgress(0.5, COPY.jobFlow.progressFeatures);
-
-        // Buildings are an enhancement, never a gate: if the footprint source
-        // is slow, blocked or empty, the terrain still ships.
-        let buildings: BuildingMesh | undefined;
-        let roads: RoadMesh | undefined;
-        let landcover: LandcoverMesh | undefined;
-        let waterways: RoadMesh | undefined;
-        let osmBuildings: Footprint[] = [];
-        let featuresOk = true;
-        const ground = sampleTerrain(mesh);
-        surfaceNotice = ground.surface.notice;
-        try {
-          const features = await fetchFeatures(bbox, { signal: controller.signal });
-          osmBuildings = features.buildings;
-          if (features.roads.length > 0) {
-            roads = buildRoadMesh(features.roads, bbox, ground, TERRAIN_EXAGGERATION);
-          }
-          if (features.landuse.length > 0) {
-            landcover = buildLandcoverMesh(features.landuse, bbox, ground, TERRAIN_EXAGGERATION);
-            if (landcover.classes.length === 0) landcover = undefined;
-          }
-          if (features.waterways.length > 0) {
-            // Below the road lift so bridges keep winning at crossings.
-            waterways = buildRibbonMesh(
-              features.waterways.map((w) => ({ line: w.line, widthM: WATERWAY_WIDTH_M[w.waterwayClass] })),
-              bbox,
-              ground,
-              TERRAIN_EXAGGERATION,
-              0.8,
-            );
-            if (waterways.indices.length === 0) waterways = undefined;
-          }
-        } catch {
-          roads = undefined;
-          landcover = undefined;
-          waterways = undefined;
-          featuresOk = false;
-        }
-
-        // Vienna's measured building bodies stand on their own: an Overpass
-        // outage must not cost the better source, and vice versa.
-        const wienFootprints = await wienPromise;
-        const fromWien = Boolean(wienFootprints && wienFootprints.length > 0);
-        buildingsAttribution = fromWien ? WIEN_BUILDINGS_ATTRIBUTION : null;
-        const footprints = fromWien ? wienFootprints! : osmBuildings;
-        if (footprints.length > 0) {
-          // The ground sample comes from the exaggerated terrain, so building
-          // heights must take the same vertical scale or they sit squashed
-          // against the relief.
-          buildings = extrudeFootprints(
-            footprints.map((f) => ({ ...f, heightM: f.heightM * TERRAIN_EXAGGERATION })),
-            bbox,
-            ground,
-          );
-        }
-        if (!controller.signal.aborted) setGenProgress(0.95, COPY.jobFlow.progressOrtho, true);
-        const ortho = await orthoPromise;
+        if (phase === 'features') setGenProgress(0.5, COPY.jobFlow.progressFeatures);
+        else setGenProgress(0.95, COPY.jobFlow.progressOrtho, true);
+      },
+    })
+      .then(async (scene) => {
         if (controller.signal.aborted) return;
         setGenProgress(1, COPY.jobFlow.progressMount);
 
@@ -816,35 +637,37 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         // Reveal the preview stage first so the canvas has layout, then mount
         // synchronously — deferring to rAF would never run while the page is
         // backgrounded or not compositing.
-        dispatchJob({ type: 'TERRAIN_READY', mesh });
+        dispatchJob({ type: 'TERRAIN_READY', mesh: scene.mesh });
         sound.chime();
         // A golden breath around the fresh scene.
         jobCanvas.classList.add('terrain-ready-flash');
         setTimeout(() => jobCanvas.classList.remove('terrain-ready-flash'), 1400);
-        buildingCount = buildings?.stats.footprints ?? 0;
-        roadCount = roads?.stats.roads ?? 0;
-        featuresFailed = !featuresOk;
-        orthoMeta = ortho?.meta ?? null;
+        buildingCount = scene.buildings?.stats.footprints ?? 0;
+        roadCount = scene.roads?.stats.roads ?? 0;
+        featuresFailed = scene.featuresFailed;
+        buildingsAttribution = scene.buildingsAttribution;
+        surfaceNotice = scene.surfaceNotice;
+        orthoMeta = scene.ortho?.meta ?? null;
         lastScene = {
           bbox,
-          mesh,
-          buildings,
-          roads,
-          landcover,
-          waterways,
-          ortho: ortho?.bitmap,
+          mesh: scene.mesh,
+          buildings: scene.buildings,
+          roads: scene.roads,
+          landcover: scene.landcover,
+          waterways: scene.waterways,
+          ortho: scene.ortho?.bitmap,
           npcs,
-          featuresFailed: !featuresOk,
+          featuresFailed: scene.featuresFailed,
         };
         renderJobFlow();
         destroyViewer();
         try {
-          viewer = createTerrainViewer(jobCanvas, mesh, {
-            buildings,
-            roads,
-            landcover,
-            waterways,
-            ortho: ortho?.bitmap,
+          viewer = createTerrainViewer(jobCanvas, scene.mesh, {
+            buildings: scene.buildings,
+            roads: scene.roads,
+            landcover: scene.landcover,
+            waterways: scene.waterways,
+            ortho: scene.ortho?.bitmap,
             audio: { step: () => sound.step(), stomp: () => sound.stomp() },
           });
           if (npcs.length > 0) viewer.setNpcs(npcs);
@@ -864,16 +687,10 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   const updateView = (): void => {
     const bbox = stateBBox(state);
     const isCleared = state.kind === 'CLEARED_UNDOABLE';
-    const area = state.kind === 'SELECTED_VALID'
-      ? state.areaKm2
-      : state.kind === 'SELECTED_INVALID' || state.kind === 'EDITING'
-        ? geodesicAreaKm2(state.bbox)
-        : null;
 
     root.dataset.selectionState = state.kind;
     root.dataset.selectionCount = bbox && !isCleared ? '1' : '0';
-    emptyState.hidden = Boolean(bbox && !isCleared);
-    requestAction.hidden = state.kind !== 'SELECTED_VALID';
+    enterWorldButton.hidden = state.kind !== 'SELECTED_VALID';
     if (state.kind !== 'SELECTED_VALID' && jobState.kind !== 'CLOSED') closeJobFlow();
     stopDrawingButton.hidden = state.kind !== 'DRAWING';
     drawButton.hidden = state.kind === 'DRAWING';
@@ -882,33 +699,16 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       : bbox && !isCleared
         ? COPY.helpers.editSelection
         : COPY.helpers.idle;
-    areaReadout.innerHTML = area === null
-      ? '<span class="area-value">—</span> <span>km²</span>'
-      : `<span class="area-value">${area.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span> <span>km²</span>`;
-
-    const sourceCell = root.querySelector<HTMLElement>('[data-dto="source"]');
-    if (sourceCell) {
-      sourceCell.textContent = COPY.requestPanel.sourceRow(
-        previewSource.name,
-        previewSource.suffix,
-      );
-    }
 
     if (state.kind === 'SELECTED_VALID') {
-      const preview = buildRequestPreview(state.bbox, state.areaKm2, {
-        kind: previewSource.suffix === 'live' ? 'live' : 'none',
-        name: previewSource.name,
-      });
-      dtoBBox.textContent = preview.bbox.map((coordinate) => coordinate.display).join(', ');
-      dtoArea.textContent = `${preview.areaKm2.display} km²`;
-      syncFields(state.bbox);
-      announce(`Bounding box set. West ${preview.bbox[0].display}, south ${preview.bbox[1].display}, east ${preview.bbox[2].display}, north ${preview.bbox[3].display}. Area ${preview.areaKm2.display} square kilometers.`);
+      announce(PLAYER_COPY.selectionReady(
+        state.areaKm2.toLocaleString('en-US', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }),
+      ));
     } else if (state.kind === 'SELECTED_INVALID') {
-      syncFields(state.bbox);
       alert(state.error);
-    } else if (state.kind === 'EMPTY') {
-      dtoBBox.textContent = COPY.requestPanel.emptyBbox;
-      dtoArea.textContent = '—';
     }
   };
 
@@ -964,51 +764,6 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       state = selectionReducer(state, { type: 'DRAW_CANCEL' });
       mapView.stopDrawing();
       updateView();
-    }
-  });
-  coordinatesButton.addEventListener('click', () => {
-    const expanded = coordinatesButton.getAttribute('aria-expanded') === 'true';
-    coordinatesButton.setAttribute('aria-expanded', String(!expanded));
-    coordinatesPanel.hidden = expanded;
-    if (!expanded) field('west').focus();
-  });
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const raw = AXES.map((axis) => {
-      const value = field(axis).value.trim();
-      return value.length === 0 ? Number.NaN : Number(value);
-    });
-    const result = validateBBox(raw);
-    if (!result.ok) {
-      const message = result.code === 'AREA_LIMIT'
-        ? errorCopyFor('AREA_LIMIT', { areaKm2: geodesicAreaKm2(raw as unknown as BBox4326) })
-        : errorCopyFor(result.code);
-      alert(message);
-      announce(message);
-      return;
-    }
-    if (!isWithinRegion(region, result.bbox)) {
-      alert(COPY.coverage.outside(region.name));
-      announce(COPY.coverage.outside(region.name));
-      return;
-    }
-    state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: result.bbox });
-    mapView.setSelection(result.bbox);
-    alert('');
-    updateView();
-    openJobFlow();
-  });
-  coverageButton.addEventListener('click', () => {
-    const visible = mapView.toggleCoverage();
-    coverageButton.setAttribute('aria-pressed', String(visible));
-    const summary = mapView.coverageSummary();
-    if (!summary) {
-      announce(COPY.coverageLegend.none);
-    } else if (visible) {
-      announce(
-        `${COPY.coverageLegend.covered(summary.covered)}, ` +
-          `${COPY.coverageLegend.gap(summary.gap)}.`,
-      );
     }
   });
   clearButton.addEventListener('click', () => {
@@ -1093,23 +848,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   };
 
   // The curated places: prewarmed selections that double as GPS-pinned
-  // buttons on the globe and as the region's demo shortcut.
-  type Curated = {
-    key: string; name: string; region: string;
-    lon: number; lat: number; bbox: BBox4326;
-  };
-  const CURATED: Curated[] = [
-    { key: 'ring', name: 'Wien Ring', region: 'vienna',
-      lon: 16.37, lat: 48.205, bbox: [16.355, 48.195, 16.385, 48.215] },
-    { key: 'schoenbrunn', name: 'Schönbrunn', region: 'vienna',
-      lon: 16.31, lat: 48.184, bbox: [16.3, 48.178, 16.32, 48.19] },
-    { key: 'funchal', name: 'Funchal', region: 'madeira',
-      lon: -16.91, lat: 32.65, bbox: [-16.92, 32.64, -16.9, 32.66] },
-    { key: 'bruneck', name: 'Bruneck', region: 'south-tyrol',
-      lon: 11.94, lat: 46.796, bbox: [11.925, 46.788, 11.955, 46.805] },
-    { key: 'innichen', name: 'Innichen', region: 'south-tyrol',
-      lon: 12.28, lat: 46.735, bbox: [12.265, 46.725, 12.295, 46.745] },
-  ];
+  // buttons on the globe.
   const runCurated = (entry: Curated): void => {
     state = selectionReducer(state, { type: 'APPLY_COORDINATES', bbox: entry.bbox });
     alert('');
@@ -1118,21 +857,12 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     openJobFlow();
     startTerrainJob();
   };
-  const demoSelection = CURATED.find((entry) => entry.region === region.id);
-  if (demoSelection) {
-    demoButton.hidden = false;
-    demoButton.textContent = COPY.jobFlow.demoRun(demoSelection.name);
-    demoButton.addEventListener('click', () => runCurated(demoSelection));
-  }
 
   // The global event console: dot-earth, live events, a locate field.
   let globe: MatrixGlobe | undefined;
   const GLOBE_PLACES: { name: string; lon: number; lat: number }[] = [
     ...(cities as { name: string; lon: number; lat: number }[]),
-    { name: 'Wien Ring', lon: 16.37, lat: 48.205 },
-    { name: 'Funchal', lon: -16.91, lat: 32.65 },
-    { name: 'Bruneck', lon: 11.94, lat: 46.796 },
-    { name: 'Innichen', lon: 12.28, lat: 46.735 },
+    ...CURATED.map(({ name, lon, lat }) => ({ name, lon, lat })),
   ];
   const logLine = (line: string): void => {
     globeLog.textContent = `${globeLog.textContent}\n${line}`.split('\n').slice(-18).join('\n');
@@ -1244,7 +974,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
     })
     .catch(() => undefined);
 
-  continueRequestButton.addEventListener('click', openJobFlow);
+  enterWorldButton.addEventListener('click', openJobFlow);
   jobCancel.addEventListener('click', closeJobFlow);
   jobClose.addEventListener('click', closeJobFlow);
   jobCloseFailed.addEventListener('click', closeJobFlow);
@@ -1392,7 +1122,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       URL.revokeObjectURL(url);
     });
   });
-  // The crab: secrab from the blossom store, normalised to 42 m, stomping
+  // The crab: secrab from the blossom store, normalised to 63 m, stomping
   // across the selection. The button toggles it.
   let crabActive = false;
   viewerCrab.addEventListener('click', () => {
@@ -1639,18 +1369,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         const entry = avatarManifest?.find((candidate) => candidate.name === name);
         if (entry) {
           // Local sync is dev convenience; the signed event is the truth.
-          await fetch(`${COLLECTION_SERVICE.baseUrl}/placements`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              sha256: entry.sha256,
-              lon: spot.lon,
-              lat: spot.lat,
-              heading,
-              ...(message ? { message } : {}),
-            }),
-          }).catch(() => undefined);
+          await devPostJson(`${COLLECTION_SERVICE.baseUrl}/placements`, {
+            name,
+            sha256: entry.sha256,
+            lon: spot.lon,
+            lat: spot.lat,
+            heading,
+            ...(message ? { message } : {}),
+          });
           mapView.addAvatarMarker(name, spot.lon, spot.lat, entry.sha256);
           // Placed from inside the world: the giant appears on the spot,
           // no regeneration needed.
@@ -1717,7 +1443,7 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
   // Escape (native dialog close) must reset the gate, not leave it mid-flight.
   jobModal.addEventListener('close', () => {
     if (jobState.kind !== 'CLOSED') closeJobFlow();
-    continueRequestButton.focus();
+    enterWorldButton.focus();
   });
 
   const startTerrainJob = (): void => {
@@ -1755,16 +1481,14 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
       },
       onMapError: () => {
         // Tile capability failures are intentionally non-fatal. The source status
-        // remains truthful while the selection and coordinate path stay usable.
+        // remains truthful while the map itself stays usable.
         announce(COPY.sourceUnavailable.body);
       },
       onSourceActive: (role) => {
         if (role !== 'imagery') return;
-        previewSource = { name: IMAGERY_SOURCE_NAME, suffix: 'live' };
         sourceStatus.querySelector('.status-title')!.textContent = COPY.coverage.activeHeading(region.name);
         sourceStatus.querySelector('p')!.textContent = COPY.coverage.activeBody;
         sourceStatus.dataset.state = 'live';
-        updateView();
       },
       // Placed avatars: every marker is a blob anyone can fetch by hash.
       loadPlacements: () => fetchPlacements(),

@@ -11,9 +11,9 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../.
 const evidenceRoot = join(repositoryRoot, '.planning', 'evidence', 'phase-01');
 const contractPath = join(evidenceRoot, 'kehto-cli-contract.json');
 const provisioningPath = join(evidenceRoot, 'chromium-provisioning.json');
-const distIndexPath = join(repositoryRoot, 'apps', 'napplet', 'dist', 'index.html');
+const distIndexPath = join(repositoryRoot, 'apps', 'terrain', 'dist', 'index.html');
 const verifyDistPath = join(repositoryRoot, 'scripts', 'verify-dist.mjs');
-const sourcePolicyPath = join(repositoryRoot, 'apps', 'napplet', 'src', 'config', 'source-policy.json');
+const sourcePolicyPath = join(repositoryRoot, 'packages', 'terrain-engine', 'src', 'config', 'source-policy.json');
 const sourcePolicy = JSON.parse(readFileSync(sourcePolicyPath, 'utf8'));
 const supportedCases = new Set(['boot', 'boot-denied', 'draw', 'edit-clear', 'coords-keyboard']);
 const requiredHostOverride = 'ubuntu24.04-x64';
@@ -29,7 +29,7 @@ function fail(message) {
 
 function parseCase(argv) {
   if (argv.length !== 2 || argv[0] !== '--case' || !supportedCases.has(argv[1])) {
-    fail('usage: node apps/napplet/tests/smoke/paja-harness.mjs --case boot|boot-denied|draw|edit-clear|coords-keyboard');
+    fail('usage: node apps/terrain/tests/smoke/paja-harness.mjs --case boot|boot-denied|draw|edit-clear|coords-keyboard');
   }
   return argv[1];
 }
@@ -515,9 +515,9 @@ let redactionReplacements = [[repositoryRoot, '[REPO_ROOT]']];
 
 try {
   if (!existsSync(distIndexPath)) {
-    fail('apps/napplet/dist/index.html is missing; refusing to use a development server');
+    fail('apps/terrain/dist/index.html is missing; refusing to use a development server');
   }
-  verifyDistOutput = runChecked(process.execPath, [verifyDistPath, 'apps/napplet'], 'verify-dist');
+  verifyDistOutput = runChecked(process.execPath, [verifyDistPath, 'apps/terrain'], 'verify-dist');
   distHash = createHash('sha256').update(await readFile(distIndexPath)).digest('hex');
 
   contract = await readJson(contractPath, 'kehto CLI contract');
@@ -722,7 +722,7 @@ const evidence = {
     headless: true,
   },
   built_artifact: {
-    path: 'apps/napplet/dist/index.html',
+    path: 'apps/terrain/dist/index.html',
     sha256: distHash ?? null,
     verify_dist: verifyDistOutput ? 'PASS' : 'FAIL',
     verify_dist_output: verifyDistOutput ?? null,

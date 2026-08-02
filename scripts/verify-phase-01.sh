@@ -35,7 +35,7 @@ const { isAbsolute, resolve, sep } = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const repoRoot = process.cwd();
-const manifestPath = resolve(repoRoot, 'apps/napplet/tests/smoke/cases.json');
+const manifestPath = resolve(repoRoot, 'apps/terrain/tests/smoke/cases.json');
 let manifest;
 try {
   manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -87,33 +87,33 @@ for (const entry of manifest.cases) {
 NODE
 }
 
-run_step unit pnpm --filter @terrcvm/napplet test:unit
-run_step typecheck pnpm --filter @terrcvm/napplet typecheck
+run_step unit pnpm --filter @terrcvm/napplet-terrain test:unit
+run_step typecheck pnpm --filter @terrcvm/napplet-terrain typecheck
 run_step lint pnpm lint
 
 build_ran=false
-if [[ -f apps/napplet/vite.config.ts ]]; then
-  run_step build pnpm --filter @terrcvm/napplet build
+if [[ -f apps/terrain/vite.config.ts ]]; then
+  run_step build pnpm --filter @terrcvm/napplet-terrain build
   build_ran=true
 else
-  skip build 'apps/napplet/vite.config.ts does not exist yet'
+  skip build 'apps/terrain/vite.config.ts does not exist yet'
 fi
 
 if [[ -f scripts/verify-dist.mjs ]]; then
   if [[ "$build_ran" != true ]]; then
     fail verify-dist 'scripts/verify-dist.mjs exists but build did not run'
   fi
-  run_step verify-dist node scripts/verify-dist.mjs
+  run_step verify-dist node scripts/verify-dist.mjs apps/terrain
 elif [[ "$build_ran" == true ]]; then
   fail verify-dist 'build exists but scripts/verify-dist.mjs is missing'
 else
   skip verify-dist 'scripts/verify-dist.mjs does not exist yet'
 fi
 
-if [[ -f apps/napplet/vite.config.ts ]]; then
-  run_step conformance pnpm --filter @terrcvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json
+if [[ -f apps/terrain/vite.config.ts ]]; then
+  run_step conformance pnpm --filter @terrcvm/napplet-terrain exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json
 else
-  skip conformance 'apps/napplet/vite.config.ts does not exist yet'
+  skip conformance 'apps/terrain/vite.config.ts does not exist yet'
 fi
 
 run_step manifest-cases verify_manifest_cases
