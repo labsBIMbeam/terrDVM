@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from .coverage import summarise, survey, write_geojson
-from .crawl import KINDS, CrawlQueue, RateLimiter, run
+from .crawl import KINDS, MEDIA_TYPES, CrawlQueue, RateLimiter, run
 from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox
 from .source_check import CANDIDATES
@@ -109,6 +109,17 @@ def main(argv: list[str] | None = None) -> int:
         if name == "run":
             p.add_argument("--max-tiles", type=int, default=5)
             p.add_argument("--min-interval", type=float, default=4.0)
+            p.add_argument(
+                "--tile",
+                default="",
+                help="target one tile as z/x/y — seeds it and crawls it alone; "
+                "re-running replaces",
+            )
+            p.add_argument(
+                "--kinds",
+                default=",".join(KINDS),
+                help="with --tile: comma-separated layers to (re)enqueue",
+            )
         if name == "coverage":
             p.add_argument("--zoom", type=int, default=11)
             p.add_argument("--sources", default="", help="comma-separated source ids")
@@ -382,10 +393,45 @@ def main(argv: list[str] | None = None) -> int:
             print(f"wrote {out}")
             return 0
 
+        target: tuple[int, int, int] | None = None
+        if args.tile:
+            from .geo_protocol import GeoProtocolError, validate_tile
+
+            try:
+                z, x, y = (int(part) for part in args.tile.split("/"))
+                target = validate_tile(z, x, y)
+            except (ValueError, GeoProtocolError) as error:
+                print(f"--tile must be a valid z/x/y: {error}")
+                return 2
+            kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
+            try:
+                queue.seed_tile(args.region, *target, kinds)
+            except ValueError as error:
+                print(str(error))
+                return 2
+
+        # Write-through: with BLOSSOM_SERVER_URL set, every stored blob must
+        # also land on the byte-owning blossom-server, authorized by the
+        # crawler key. Missing key material fails before any crawling starts.
+        blossom_url = os.environ.get("BLOSSOM_SERVER_URL", "").strip()
+        sink_secret: int | None = None
+        if blossom_url:
+            from .signer import load_secret
+
+            secret_file = os.environ.get("CRAWLER_SECRET_FILE", "").strip()
+            if not secret_file:
+                print(
+                    "BLOSSOM_SERVER_URL is set but CRAWLER_SECRET_FILE is not — "
+                    "refusing to crawl without write-through authorization"
+                )
+                return 2
+            sink_secret = load_secret(secret_file)
+
         store = BlobStore(blob_dir)
         index = BlobIndex(index_path)
         limiter = RateLimiter(args.min_interval)
         processed = 0
+        write_failures = 0
 
         for record in run(
             queue=queue,
@@ -394,6 +440,7 @@ def main(argv: list[str] | None = None) -> int:
             region=args.region,
             max_tiles=args.max_tiles,
             limiter=limiter,
+            tile=target,
         ):
             tile = record["tile"]
             label = f"{tile.kind:<8} z{tile.z}/{tile.x}/{tile.y}"
@@ -411,13 +458,29 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {label} ok {record['bytes']:>8,}B  {extra}{record['sha256'][:12]}")
                 processed += 1
 
+                if blossom_url and sink_secret is not None:
+                    from .writethrough import WriteThroughError, upload
+
+                    payload = store.read(record["sha256"])
+                    try:
+                        if payload is None:
+                            raise WriteThroughError("blob missing from local store")
+                        upload(blossom_url, payload, MEDIA_TYPES[tile.kind], sink_secret)
+                        # ASCII on purpose: this CLI runs under Windows Task
+                        # Scheduler consoles that still decode cp1252.
+                        print(f"  {'':<8} -> blossom-server ok")
+                    except WriteThroughError as error:
+                        write_failures += 1
+                        print(f"  {'':<8} -> blossom-server FAILED: {error}")
+
         summary = queue.progress(args.region)
         print(
             f"{args.region}: processed {processed} this run; "
             f"{summary.get('done', 0)}/{summary['total']} done"
+            + (f"; {write_failures} write-through FAILURES" if write_failures else "")
         )
         index.close()
-        return 0
+        return 1 if write_failures else 0
     finally:
         queue.close()
 

@@ -166,6 +166,34 @@ every fetch — if none is free it stops cleanly rather than queueing into a
 timeout. Progress lives in SQLite, so it is fully resumable: kill it anywhere
 and the next run continues.
 
+### Targeting one tile
+
+```bash
+python -m blossom_gis.cli run --region madeira --tile 13/3711/3309 --kinds dem
+python -m blossom_gis.cli run --region madeira --tile 14/7422/6618 --kinds features
+```
+
+`--tile z/x/y` seeds exactly that tile and crawls it alone. Unlike `seed`, it
+resets an existing row to pending: a tile's identity is (region, kind, z, x, y),
+so a targeted re-crawl replaces.
+
+### Write-through to blossom-server
+
+With `BLOSSOM_SERVER_URL` set, every stored blob is also uploaded to the
+byte-owning [hzrd149/blossom-server](https://github.com/hzrd149/blossom-server)
+via BUD-02, authorized by a kind-24242 event the crawler signs with the key in
+`CRAWLER_SECRET_FILE` (an operator-local file; the key never enters this
+repository or the server). The returned descriptor's hash must equal the
+uploaded bytes' hash or the write counts as failed — and `run` exits non-zero
+on any write-through failure. blossom-gis keeps the spatial index row either
+way.
+
+| Variable | Meaning |
+|---|---|
+| `BLOSSOM_SERVER_URL` | Enables write-through, e.g. `http://127.0.0.1:3000` |
+| `CRAWLER_SECRET_FILE` | Path to the 64-hex signing key (required with the above) |
+| `OVERPASS_ENDPOINT` / `OVERPASS_STATUS` | Override the Overpass instance. Public instances set their own admission policies (overpass-api.de 406s this crawler's UA since 2026-08-02 — see the fallback ledger); the UA is never changed to dodge a block, the operator picks another instance instead. |
+
 Failures are retried up to four times, after which the tile is marked exhausted
 so one bad tile can never block the queue.
 
