@@ -6,7 +6,7 @@ import {
 } from '@terrcvm/geo-protocol/geohash';
 import { SOCIAL_GEOHASH_PRECISIONS } from '@terrcvm/geo-protocol/kinds';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
-import { isVerifiedEvent } from '../verify';
+import { isVerifiedEvent } from '@terrcvm/napplet-kit/verify';
 
 /**
  * Live presence and the geo-note feed: who and what is here right now.

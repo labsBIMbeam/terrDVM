@@ -1,30 +1,30 @@
 import { geodesicAreaKm2, validateBBox } from '@terrcvm/terrain-engine/bbox/area';
 import { buildRequestPreview, type RequestPreviewDTO } from '@terrcvm/terrain-engine/bbox/request-preview';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
-import { errorCopyFor, COPY } from './copy';
+import { errorCopyFor, COPY } from '@terrcvm/napplet-kit/ui/copy';
 import {
   createInitialSelectionState,
   selectionReducer,
   type SelectionState,
-} from './selection';
-import { createMapView, mapAttribution, type MapView } from '../map/map-view';
+} from '@terrcvm/napplet-kit/ui/selection';
+import { createMapView, mapAttribution, type MapView } from '@terrcvm/napplet-kit/map/map-view';
 import { OUTPUT_MIME, RES_M } from '@terrcvm/terrain-engine/config/defaults';
 import { getRegion, isWithinRegion, type Region } from '@terrcvm/terrain-engine/config/regions';
 import {
   createInitialJobFlowState,
   jobFlowReducer,
   type JobFlowState,
-} from '../job/job-flow';
-import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '../job/ortho';
-import { demResolution, runPreflight } from '../job/preflight';
+} from '@terrcvm/napplet-kit/job/job-flow';
+import { fetchOrthoTexture, type OrthoMeta, type OrthoTexture } from '@terrcvm/napplet-kit/job/ortho';
+import { demResolution, runPreflight } from '@terrcvm/napplet-kit/job/preflight';
 import {
   fetchCharacterBytes,
   fetchCharacterManifest,
   fetchPlacements,
   type CharacterEntry,
-} from '../job/collection';
+} from '@terrcvm/napplet-kit/job/collection';
 import { projector } from '@terrcvm/terrain-engine/buildings/extrude';
-import { COLLECTION_SERVICE } from '../job/collection';
+import { COLLECTION_SERVICE } from '@terrcvm/napplet-kit/job/collection';
 import {
   buildCalendarEvent,
   buildPlacementEvent,
@@ -43,12 +43,12 @@ import {
 import cities from '@terrcvm/terrain-engine/config/cities.json';
 import { normalizeCharacter, normalizeCharacterFrames, parseGlb } from '@terrcvm/terrain-engine/viewer/glb';
 import { sound } from './sound';
-import { generateTerrain, TERRAIN_EXAGGERATION } from '../terrain/generate';
+import { generateTerrain, TERRAIN_EXAGGERATION } from '@terrcvm/napplet-kit/terrain/generate';
 import type { TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
 import { extrudeFootprints, type BuildingMesh, type Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
 import { createGroundSampler, type GroundSampler } from '@terrcvm/terrain-engine/buildings/ground';
-import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '../buildings/source-wien';
-import { fetchFeatures } from '../features/source-osm';
+import { WIEN_BUILDINGS_ATTRIBUTION, fetchWienBuildings } from '@terrcvm/napplet-kit/buildings/source-wien';
+import { fetchFeatures } from '@terrcvm/napplet-kit/features/source-osm';
 import { buildLandcoverMesh, type LandcoverMesh } from '@terrcvm/terrain-engine/features/landcover';
 import { buildRibbonMesh, buildRoadMesh, type RoadMesh } from '@terrcvm/terrain-engine/features/ribbon';
 import { WATERWAY_WIDTH_M } from '@terrcvm/terrain-engine/features/types';
@@ -1766,6 +1766,8 @@ export function renderApp(root: HTMLDivElement, options: RenderAppOptions = {}):
         sourceStatus.dataset.state = 'live';
         updateView();
       },
+      // Placed avatars: every marker is a blob anyone can fetch by hash.
+      loadPlacements: () => fetchPlacements(),
     }, region);
   } catch (error) {
     mapView = {

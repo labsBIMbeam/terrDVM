@@ -1,5 +1,5 @@
-import { loadApprovedBytes } from '../shell/resource-client';
-import { COLLECTION_SERVICE, collectionOrigin } from '../job/collection';
+import { loadApprovedBytes } from '@terrcvm/napplet-kit/shell/resource-client';
+import { COLLECTION_SERVICE, collectionOrigin } from '@terrcvm/napplet-kit/job/collection';
 
 /**
  * Placement publishing: the collection server builds the unsigned NIP-94

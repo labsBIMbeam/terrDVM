@@ -7,24 +7,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'json-summary'],
-      // Only the pure logic is unit-testable here: rendering, the map view and
-      // the shell adapter need a browser and are covered by the Paja smoke run.
-      //
-      // The pure terrain, bbox, config and codec modules now live in
-      // @terrcvm/terrain-engine and are measured by that package's own config.
-      // What remains here is the shell-touching half: the collection client,
-      // the OSM sources and the job flow.
-      include: [
-        'src/buildings/**',
-        'src/features/**',
-        'src/job/**',
-        'src/ui/copy.ts',
-        'src/ui/selection.ts',
-        // The verification layer is pure and is the thing standing between a
-        // hostile relay or blob server and the renderer; it belongs under the
-        // gate, not beside it.
-        'src/verify/**',
-      ],
+      // The shared logic moved to @terrcvm/napplet-kit and is measured by that
+      // package's own config. What remains here is the unwired invoice
+      // placeholder; the nostr modules and the intro need the browser-flavoured
+      // globals and are exercised by their unit tests without being gated on
+      // coverage, exactly as before the kit extraction.
+      include: ['src/job/**'],
       thresholds: {
         statements: 85,
         branches: 80,

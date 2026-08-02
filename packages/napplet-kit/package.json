@@ -1,0 +1,30 @@
+{
+  "name": "@terrcvm/napplet-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./ui/tokens.css": "./src/ui/tokens.css",
+    "./verify": "./src/verify/index.ts",
+    "./*.json": "./src/*.json",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napplet/sdk": "0.25.0",
+    "@noble/curves": "2.0.1",
+    "@terrcvm/terrain-engine": "workspace:*",
+    "maplibre-gl": "5.24.0",
+    "terra-draw": "1.32.2",
+    "terra-draw-maplibre-gl-adapter": "1.4.1"
+  },
+  "devDependencies": {
+    "@noble/hashes": "2.0.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

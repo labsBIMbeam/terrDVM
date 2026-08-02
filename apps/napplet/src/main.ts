@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import './ui/tokens.css';
+import '@terrcvm/napplet-kit/ui/tokens.css';
 import { renderApp } from './ui/app';
 
 const app = document.querySelector<HTMLDivElement>('#app');

@@ -17,7 +17,7 @@ import {
 } from '@terrcvm/terrain-engine/map/source';
 import { getRegion, viewBoundsTuple, type Region } from '@terrcvm/terrain-engine/config/regions';
 import { coverageFor } from '@terrcvm/terrain-engine/config/coverage';
-import { fetchPlacements } from '../job/collection';
+import type { Placement } from '../job/collection';
 import cities from '@terrcvm/terrain-engine/config/cities.json';
 import { addCoverageOverlay, type CoverageOverlay } from '@terrcvm/terrain-engine/map/coverage-overlay';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
@@ -44,6 +44,13 @@ type MapViewCallbacks = {
   onMapError?: (error: unknown) => void;
   /** Fired once a role has actually delivered a tile, so the UI can stop claiming it is unavailable. */
   onSourceActive?: (role: SourceRole) => void;
+  /**
+   * Placed avatars to mark once the map has loaded. Injected rather than
+   * fetched here so the map view carries no opinion about where placements
+   * come from: the player supplies the collection client, the terrain app
+   * supplies nothing and gets a map without social markers.
+   */
+  loadPlacements?: () => Promise<Placement[]>;
 };
 
 export type MapView = {
@@ -513,15 +520,19 @@ export function createMapView(
     });
     map.addLayer(labelLayer('notes'));
 
-    // Placed avatars: every marker is a blob anyone can fetch by hash.
-    void fetchPlacements()
-      .then((placements) => {
-        if (destroyed) return;
-        for (const placement of placements) {
-          avatarMarker(placement.name, placement.lon, placement.lat, placement.sha256);
-        }
-      })
-      .catch(() => undefined);
+    // Placed avatars: every marker is a blob anyone can fetch by hash. The
+    // fetch itself is the caller's — see MapViewCallbacks.loadPlacements.
+    if (callbacks.loadPlacements) {
+      void callbacks
+        .loadPlacements()
+        .then((placements) => {
+          if (destroyed) return;
+          for (const placement of placements) {
+            avatarMarker(placement.name, placement.lon, placement.lat, placement.sha256);
+          }
+        })
+        .catch(() => undefined);
+    }
 
     map.on('click', (event) => {
       if (!placing) return;
