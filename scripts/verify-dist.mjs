@@ -3,9 +3,37 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const distRoot = join(repositoryRoot, 'apps', 'napplet', 'dist');
+const appArgument = process.argv[2];
+if (!appArgument) {
+  console.error('verify-dist: usage: node scripts/verify-dist.mjs <app-dir> (e.g. apps/terrain)');
+  process.exit(2);
+}
+const appRoot = resolve(repositoryRoot, appArgument);
+const distRoot = join(appRoot, 'dist');
 const indexPath = join(distRoot, 'index.html');
 const findings = [];
+
+/**
+ * Direct browser authority surfaces a napplet artifact must not contain.
+ *
+ * Mirrors the static scan in `@napplet/conformance-cli` 0.2.16 (src/scan.ts)
+ * so a violation fails the build here, with a named finding, instead of
+ * surfacing later as a bare conformance FAIL. Every byte of I/O goes through
+ * the shell resource capability; anything matching below is either app code
+ * that bypassed the shell seam or a bundled dependency whose network surface
+ * was not stripped (see scripts/vite-strip-maplibre-fetch.mjs).
+ */
+const FORBIDDEN_SURFACES = [
+  { label: 'window.nostr', re: /\bwindow\s*\.\s*nostr\b/ },
+  { label: 'globalThis.nostr', re: /\bglobalThis\s*\.\s*nostr\b/ },
+  { label: 'fetch', re: /\b(?:window\s*\.\s*|globalThis\s*\.\s*)?fetch\s*\(/ },
+  { label: 'XMLHttpRequest', re: /\b(?:new\s+)?XMLHttpRequest\s*\(/ },
+  { label: 'WebSocket', re: /\b(?:new\s+)?WebSocket\s*\(/ },
+  { label: 'localStorage', re: /\b(?:window\s*\.\s*)?localStorage\b/ },
+  { label: 'sessionStorage', re: /\b(?:window\s*\.\s*)?sessionStorage\b/ },
+  { label: 'indexedDB', re: /\b(?:window\s*\.\s*)?indexedDB\b/ },
+  { label: 'document.cookie', re: /\bdocument\s*\.\s*cookie\b/ },
+];
 
 async function inventory(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -161,6 +189,14 @@ addPatternFinding(
   'token-bearing URL detected',
 );
 
+for (const { label, re } of FORBIDDEN_SURFACES) {
+  addPatternFinding(
+    html,
+    re,
+    `forbidden browser authority surface in artifact: ${label} (napplet-conformance boot/no-forbidden-globals will fail)`,
+  );
+}
+
 if (findings.length > 0) {
   console.error('verify-dist: FAILED');
   for (const finding of findings) {
@@ -169,4 +205,7 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`verify-dist: PASS (${files.length} file, dist/index.html is self-contained)`);
+console.log(
+  `verify-dist: PASS (${appArgument}: ${files.length} file, dist/index.html is self-contained, ` +
+    'no direct browser authority surface)',
+);

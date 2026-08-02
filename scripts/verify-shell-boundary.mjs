@@ -15,6 +15,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const sourceRoots = [
   { root: join(repositoryRoot, 'apps', 'napplet', 'src'), shell: null },
+  { root: join(repositoryRoot, 'apps', 'terrain', 'src'), shell: null },
   { root: join(repositoryRoot, 'packages', 'napplet-kit', 'src'), shell: 'shell' },
   { root: join(repositoryRoot, 'packages', 'terrain-engine', 'src'), shell: null },
   { root: join(repositoryRoot, 'packages', 'geo-protocol', 'src'), shell: null },

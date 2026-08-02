@@ -1,0 +1,25 @@
+{
+  "name": "@terrcvm/napplet-terrain",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node ../../scripts/verify-dist.mjs apps/terrain",
+    "test:unit": "vitest run",
+    "test:conformance": "napplet-conformance .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@terrcvm/napplet-kit": "workspace:*",
+    "@terrcvm/terrain-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@napplet/conformance-cli": "0.2.16",
+    "@napplet/vite-plugin": "0.12.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "typescript": "5.9.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

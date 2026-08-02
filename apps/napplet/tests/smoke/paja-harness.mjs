@@ -517,7 +517,7 @@ try {
   if (!existsSync(distIndexPath)) {
     fail('apps/napplet/dist/index.html is missing; refusing to use a development server');
   }
-  verifyDistOutput = runChecked(process.execPath, [verifyDistPath], 'verify-dist');
+  verifyDistOutput = runChecked(process.execPath, [verifyDistPath, 'apps/napplet'], 'verify-dist');
   distHash = createHash('sha256').update(await readFile(distIndexPath)).digest('hex');
 
   contract = await readJson(contractPath, 'kehto CLI contract');
