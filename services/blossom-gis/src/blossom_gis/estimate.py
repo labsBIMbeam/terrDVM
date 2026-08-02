@@ -178,9 +178,11 @@ def render_report(zooms: tuple[int, ...] = (12, 13, 14)) -> str:
         f"zoom scale x{ZOOM_TOTAL_SCALE} [measured],",
         f"         features dense-urban {FEATURES_DENSE_URBAN_BYTES:,} B [measured 2026-08-02, "
         "supersedes 51.3 kB pre-truncation-fix],",
-        f"         mean-tile fraction {FEATURES_MEAN_FRACTION[0]:.0%}..{FEATURES_MEAN_FRACTION[1]:.0%} [assumption]",
+        f"         mean-tile fraction {FEATURES_MEAN_FRACTION[0]:.0%}.."
+        f"{FEATURES_MEAN_FRACTION[1]:.0%} [assumption]",
         "",
-        f"{'plan':<14}{'z':>3}{'bbox tiles':>12}{'distinct':>11}{'dem':>22}{'features':>22}{'total':>24}  gate",
+        f"{'plan':<14}{'z':>3}{'bbox tiles':>12}{'distinct':>11}"
+        f"{'dem':>22}{'features':>22}{'total':>24}  gate",
     ]
     for plan in PLANS:
         for zoom in zooms:
