@@ -1,0 +1,37 @@
+# blossom-server (hzrd149) config template. render-config.mjs substitutes the
+# __TOKENS__ from deploy/.env and writes deploy/.local/blossom-server.config.yml,
+# so the committed file never carries a concrete deployment's values.
+#
+# Trust model: uploads require BUD-11 auth AND the signer must appear in a storage
+# rule (requirePubkeyInRule) — the crawler key is the only writer of the corpus,
+# same stance as the strfry write policy. Reads stay public: bytes by hash.
+
+publicDomain: "__PUBLIC_URL__"
+
+database:
+  path: data/sqlite.db
+
+storage:
+  backend: local
+  local:
+    dir: data/blobs
+  # Corpus blobs are the product; nothing expires out from under an announced hash.
+  removeWhenNoOwners: false
+  rules:
+    - type: "*"
+      expiration: 10 years
+      pubkeys:
+        - "__CRAWLER_PUBKEY__"
+
+upload:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: true
+  # Matches blossom-gis's ceiling; corpus tiles are tens of kB, this is a guard.
+  maxSize: 67108864
+
+list:
+  requireAuth: false
+
+dashboard:
+  enabled: false
