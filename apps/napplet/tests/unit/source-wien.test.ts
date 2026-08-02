@@ -5,7 +5,7 @@ import {
   parseWienBuildings,
   wienBuildingsUrl,
 } from '../../src/buildings/source-wien';
-import type { BBox4326 } from '../../src/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const RING: BBox4326 = [16.355, 48.195, 16.385, 48.215];
 

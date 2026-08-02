@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
 
         expected = args.url.rsplit("/", 1)[-1].split(".", 1)[0]
         request = urllib.request.Request(
-            args.url, headers={"User-Agent": "terrDVM-mirror/0.1"}
+            args.url, headers={"User-Agent": "terrCVM-mirror/0.1"}
         )
         with urllib.request.urlopen(request, timeout=120) as response:
             payload = response.read()

@@ -3,8 +3,8 @@ import {
   OUTPUT_MIME,
   RES_M,
   TIMEOUT_S,
-} from '../config/defaults';
-import type { BBoxErrorCode } from '../bbox/validate';
+} from '@terrcvm/terrain-engine/config/defaults';
+import type { BBoxErrorCode } from '@terrcvm/terrain-engine/bbox/validate';
 
 type CopyValue = number | string;
 
@@ -43,10 +43,12 @@ export const COPY = {
   boot: {
     skipToRequestPanel: 'Skip to request panel',
     toolbarLabel: 'Toolbar',
-    appTitle: 'terrDVM',
+    appTitle: 'terrCVM',
     mapRegionLabel: 'Map region',
     startKicker: 'terrain data vending machine',
-    startEnter: 'Click to enter',
+    startWithSound: 'Play with sound',
+    startNoSound: 'Play muted',
+    startSkip: 'Skip intro',
   },
   buttons: {
     drawBoundingBox: 'Draw bounding box',
@@ -140,9 +142,9 @@ export const COPY = {
   globe: {
     button: 'Globe',
     enter: 'Enter map ▸',
-    title: 'TERR//DVM · GLOBAL EVENT CONSOLE',
+    title: 'TERR//CVM · GLOBAL EVENT CONSOLE',
     searchPlaceholder: 'locate: wien, funchal, bruneck…',
-    booting: '> scanning relays for terrdvm events…',
+    booting: '> scanning relays for terrcvm events…',
     continentsHint: '> continent maps — set your presence anywhere:',
     empty: '> no events on the wire — place an avatar to light the map',
     locate: (name: string, lat: number, lon: number): string =>
@@ -212,6 +214,9 @@ export const COPY = {
     placeTitle: 'Publish placement',
     placeMessageLabel: 'Say where you are',
     placeMessagePlaceholder: 'e.g. On the ridge above Funchal harbour',
+    placeVenueLabel: 'Event · where',
+    placeVenuePlaceholder: 'Name it to post a meetup (NIP-52)',
+    placeWhenLabel: 'Event · when',
     placePublish: 'Sign & publish',
     placePublished: (relays: number): string =>
       `Published to ${relays} relay${relays === 1 ? '' : 's'} ✓`,

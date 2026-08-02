@@ -1,5 +1,5 @@
 {
-  "name": "@terrdvm/napplet",
+  "name": "@terrcvm/napplet",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@napplet/sdk": "0.25.0",
+    "@noble/curves": "2.0.1",
+    "@terrcvm/geo-protocol": "workspace:*",
+    "@terrcvm/terrain-engine": "workspace:*",
     "@turf/area": "7.3.5",
     "maplibre-gl": "5.24.0",
     "terra-draw": "1.32.2",
@@ -19,6 +22,7 @@
   "devDependencies": {
     "@napplet/conformance-cli": "0.2.16",
     "@napplet/vite-plugin": "0.12.0",
+    "@noble/hashes": "2.0.1",
     "@vitest/coverage-v8": "^4.1.10",
     "playwright": "1.59.1",
     "typescript": "5.9.3",

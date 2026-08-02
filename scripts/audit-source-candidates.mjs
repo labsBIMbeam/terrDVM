@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EVIDENCE_PATH = resolve(ROOT, '.planning/evidence/phase-01/source-candidates.json');
-const USER_AGENT = 'terrDVM/0.1 (+https://github.com/labsBIMbeam/terrDVM)';
+const USER_AGENT = 'terrCVM/0.1 (+https://github.com/labsBIMbeam/terrCVM)';
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_METADATA_BYTES = 1_000_000;
 const MAX_TILE_BYTES = 1_000_000;
@@ -122,7 +122,7 @@ const commonCandidates = {
     candidate({
       id: 'openstreetmap-standard-madeira', role: 'basemap', provider: 'OpenStreetMap Foundation',
       docs: ['https://operations.osmfoundation.org/policies/tiles/', 'https://www.openstreetmap.org/copyright'],
-      contract: baseContract({ scheme: 'https', host: 'tile.openstreetmap.org', path_template: '/{z}/{x}/{y}.png', layer: 'OpenStreetMap Standard', coverage_id: 'Global including Madeira', tile_matrix: 'WebMercatorQuad', crs: 'EPSG:3857', bbox_order: 'slippy z/x/y; app bbox remains W,S,E,N EPSG:4326', format: 'image/png', auth: { required: false, credential_reference: null }, cors_shell_behavior: 'Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrDVM User-Agent', attribution: '© OpenStreetMap contributors', dataset_terms: 'OpenStreetMap data licensed under ODbL; visible attribution and license link required', endpoint_terms: 'OSMF Standard tile policy: identifying User-Agent, valid web Referer where applicable, cache headers honored, no bulk download/scraping/prefetch', rate_limits: { provider_published: 'No numeric public quota; best-effort service with no SLA', application_limit: 'Madeira viewport visible tiles only; no prefetch/scraping; maximum 16 concurrent requests; cache response headers honored' }, coverage_bounds: { west: -180, south: -85.05112878, east: 180, north: 85.05112878 } }),
+      contract: baseContract({ scheme: 'https', host: 'tile.openstreetmap.org', path_template: '/{z}/{x}/{y}.png', layer: 'OpenStreetMap Standard', coverage_id: 'Global including Madeira', tile_matrix: 'WebMercatorQuad', crs: 'EPSG:3857', bbox_order: 'slippy z/x/y; app bbox remains W,S,E,N EPSG:4326', format: 'image/png', auth: { required: false, credential_reference: null }, cors_shell_behavior: 'Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrCVM User-Agent', attribution: '© OpenStreetMap contributors', dataset_terms: 'OpenStreetMap data licensed under ODbL; visible attribution and license link required', endpoint_terms: 'OSMF Standard tile policy: identifying User-Agent, valid web Referer where applicable, cache headers honored, no bulk download/scraping/prefetch', rate_limits: { provider_published: 'No numeric public quota; best-effort service with no SLA', application_limit: 'Madeira viewport visible tiles only; no prefetch/scraping; maximum 16 concurrent requests; cache response headers honored' }, coverage_bounds: { west: -180, south: -85.05112878, east: 180, north: 85.05112878 } }),
       requests: [
         { kind: 'terms', url: 'https://operations.osmfoundation.org/policies/tiles/', max_bytes: MAX_METADATA_BYTES, markers: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'Bulk download', 'User-Agent'] },
         { kind: 'license', url: 'https://www.openstreetmap.org/copyright', max_bytes: MAX_METADATA_BYTES, markers: ['Open Data Commons Open Database License', 'credit OpenStreetMap'] },

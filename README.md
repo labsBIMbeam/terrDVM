@@ -1,4 +1,4 @@
-# terrDVM
+# terrCVM
 
 Public, local-first demo of a terrain Data Vending Machine:
 
@@ -26,7 +26,7 @@ Working demo. The payment stage is deliberately skipped; see
 
 ```bash
 corepack pnpm install
-corepack pnpm --filter @terrdvm/napplet dev
+corepack pnpm --filter @terrcvm/napplet dev
 ```
 
 Then open `http://localhost:5173/?region=south-tyrol` to switch regions.
@@ -38,6 +38,37 @@ cd services/blossom-gis
 uv venv --python 3.12 && uv pip install -e ".[dev]"
 uv run uvicorn blossom_gis.app:app --port 8787
 ```
+
+## Checks
+
+Both halves of the repo — the TypeScript packages and the Python service — share
+cross-language vectors, so run them together:
+
+```bash
+corepack pnpm test:all   # pnpm -r test:unit, then pytest in services/blossom-gis
+```
+
+`test:all` needs `uv` on PATH; it runs Vitest across the workspace, then
+`uv run --directory services/blossom-gis --extra dev pytest -q`. No `cd`, so it
+behaves the same in bash, cmd and PowerShell. Running only one half hides pin
+drift between the two.
+
+The narrower gates, all runnable on their own:
+
+| Script | Checks |
+|---|---|
+| `corepack pnpm lint` | ESLint over `apps`, `packages`, `scripts` |
+| `corepack pnpm -r typecheck` | `tsc --noEmit` in every workspace package |
+| `corepack pnpm -r test:unit` | Vitest, TypeScript half only |
+| `corepack pnpm verify:shell-boundary` | Napplet shell API boundary |
+| `corepack pnpm verify:source-policy` | Data-source licence policy |
+| `corepack pnpm verify:map-provenance` | Baked map artefact provenance |
+| `corepack pnpm verify:fallback-ledger` | Fallback ledger integrity |
+| `corepack pnpm verify:lock-approved` | Lockfile against the approved set |
+
+CI (`.github/workflows/ci.yml`) runs the Node and Python jobs on every push and
+pull request. It deliberately omits a build step — see the comment at the top of
+the workflow.
 
 ## What it does
 
@@ -75,7 +106,7 @@ adds nothing, since a user assumes coverage.
 ## Regions
 
 Regions are data, not code. Adding one is an entry in
-[`regions.ts`](apps/napplet/src/config/regions.ts).
+[`regions.ts`](packages/terrain-engine/src/config/regions.ts).
 
 | Region | Imagery | Licence |
 |---|---|---|

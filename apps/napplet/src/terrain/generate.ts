@@ -1,13 +1,19 @@
-import { loadApprovedBytes } from '../shell/resource-client';
 import {
+  COLLECTION_SERVICE,
   cachedDemTileUrl,
   isApprovedCachedDemUrl,
   loadBytesCacheFirst,
 } from '../job/collection';
-import { DEM_SOURCE, chooseDemZoom, demTileUrl, demTilesForBBox, isApprovedDemUrl } from './dem';
-import { sampleHeightfield, type DemTileRaster } from './heightfield';
-import { buildTerrainMesh, type TerrainMesh } from './mesh';
-import type { BBox4326 } from '../bbox/validate';
+import { chooseDemZoom, demTilesForBBox } from '@terrcvm/terrain-engine/terrain/dem';
+import {
+  type ElevationSource,
+  elevationTileUrl,
+  isApprovedElevationUrl,
+  selectElevationSources,
+} from '@terrcvm/terrain-engine/terrain/elevation-sources';
+import { sampleHeightfield, type DemTileRaster } from '@terrcvm/terrain-engine/terrain/heightfield';
+import { buildTerrainMesh, type TerrainMesh } from '@terrcvm/terrain-engine/terrain/mesh';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /** Preview grid density. 192² keeps the mesh under ~74k triangles. */
 export const TERRAIN_GRID_N = 192;
@@ -28,7 +34,31 @@ export type GenerateTerrainOptions = {
   onProgress?: (progress: TerrainProgress) => void;
   gridN?: number;
   exaggeration?: number;
+  /** Region id — decides the source chain. Omitted means Terrarium only. */
+  region?: string;
+  /** Explicit chain, for tests and for pinning a source deliberately. */
+  sources?: readonly ElevationSource[];
 };
+
+/** Where a source's tiles are fetched from, and what URL shape is allowed. */
+function tileAccess(source: ElevationSource, z: number, x: number, y: number) {
+  if (source.delivery === 'transcoded') {
+    // No third-party fallback exists for these: the national coverage is a
+    // GeoTIFF in a projected CRS that this browser cannot read. The collection
+    // server is the only route, so both attempts point at it and a server that
+    // is not running demotes the whole source rather than silently degrading.
+    const url = elevationTileUrl(source, z, x, y, COLLECTION_SERVICE.baseUrl);
+    const isAllowed = (candidate: string) =>
+      isApprovedElevationUrl(candidate, source, COLLECTION_SERVICE.baseUrl);
+    return { cacheUrl: url, isCacheAllowed: isAllowed, directUrl: url, isDirectAllowed: isAllowed };
+  }
+  return {
+    cacheUrl: cachedDemTileUrl(z, x, y),
+    isCacheAllowed: isApprovedCachedDemUrl,
+    directUrl: elevationTileUrl(source, z, x, y),
+    isDirectAllowed: (candidate: string) => isApprovedElevationUrl(candidate, source),
+  };
+}
 
 type DecodedRaster = { data: Uint8ClampedArray; size: number };
 
@@ -63,38 +93,42 @@ async function decodeRaster(blob: Blob): Promise<DecodedRaster> {
 }
 
 /**
- * Demo terrain processor: fetch the DEM tiles covering the selection through the
- * shell resource capability, resample them onto a regular grid, and mesh it.
+ * Build the terrain from one named source.
  *
  * Every byte goes through `loadApprovedBytes`, so a capability-denied shell
- * fails closed here exactly as it does for basemap and imagery tiles.
+ * fails closed here exactly as it does for basemap and imagery tiles. Tiles are
+ * Terrarium-encoded whichever source they came from — the national DTMs are
+ * transcoded into that encoding server-side precisely so that this function,
+ * `decodeTerrarium` and `sampleHeightfield` stay single-implementation.
  */
-export async function generateTerrain(
+export async function generateTerrainFrom(
   bbox: BBox4326,
+  source: ElevationSource,
   { signal, onProgress, gridN = TERRAIN_GRID_N, exaggeration = TERRAIN_EXAGGERATION }: GenerateTerrainOptions = {},
 ): Promise<TerrainMesh> {
-  const requestedZoom = chooseDemZoom(bbox, gridN);
-  const { zoom, tiles } = demTilesForBBox(bbox, requestedZoom);
+  const requestedZoom = chooseDemZoom(bbox, gridN, source);
+  const { zoom, tiles } = demTilesForBBox(bbox, requestedZoom, source);
 
   let loaded = 0;
   onProgress?.({ phase: 'fetching', loaded, total: tiles.length });
 
   const rasters: DemTileRaster[] = await Promise.all(
     tiles.map(async (tile) => {
-      // Collection-server cache first, the AWS upstream as fallback — reruns
-      // come from disk and a missing server changes nothing.
+      // Collection-server cache first, the upstream as fallback — reruns come
+      // from disk and, for a direct source, a missing server changes nothing.
+      const access = tileAccess(source, tile.z, tile.x, tile.y);
       const blob = await loadBytesCacheFirst(
-        cachedDemTileUrl(tile.z, tile.x, tile.y),
-        isApprovedCachedDemUrl,
-        demTileUrl(tile.z, tile.x, tile.y),
+        access.cacheUrl,
+        access.isCacheAllowed,
+        access.directUrl,
         {
-          deadlineMs: DEM_SOURCE.timeoutMs,
-          isAllowed: isApprovedDemUrl,
+          deadlineMs: source.timeoutMs,
+          isAllowed: access.isDirectAllowed,
           signal,
         },
       );
-      if (blob.size > DEM_SOURCE.maxResponseBytes) {
-        throw new Error('DEM tile exceeded the approved response-size bound.');
+      if (blob.size > source.maxResponseBytes) {
+        throw new Error(`${source.id} tile exceeded the approved response-size bound.`);
       }
       const { data, size } = await decodeRaster(blob);
       loaded += 1;
@@ -112,4 +146,33 @@ export async function generateTerrain(
 
   onProgress?.({ phase: 'meshing', loaded: tiles.length, total: tiles.length });
   return buildTerrainMesh(field, bbox, exaggeration);
+}
+
+/**
+ * Demo terrain processor: best available elevation source for the region, with
+ * Terrarium as the last resort.
+ *
+ * Walks the chain the same way `texture.fetch_texture` walks `REGION_SOURCES`:
+ * try the best source, and on failure fall through to the next rather than
+ * failing the job. The failure that matters in practice is a transcoded
+ * national source with no collection server running — which must demote to
+ * 30 m Terrarium, not to nothing and not to a fabricated surface. An abort is
+ * re-thrown immediately: a cancelled job is not a source failure.
+ */
+export async function generateTerrain(
+  bbox: BBox4326,
+  options: GenerateTerrainOptions = {},
+): Promise<TerrainMesh> {
+  const chain = options.sources ?? selectElevationSources(options.region ?? null, bbox);
+  const failures: string[] = [];
+
+  for (const source of chain) {
+    try {
+      return await generateTerrainFrom(bbox, source, options);
+    } catch (error) {
+      if (options.signal?.aborted || (error as Error)?.name === 'AbortError') throw error;
+      failures.push(`${source.id}: ${(error as Error)?.message ?? String(error)}`);
+    }
+  }
+  throw new Error(`No elevation source produced terrain — ${failures.join('; ')}`);
 }

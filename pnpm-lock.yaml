@@ -23,6 +23,15 @@ importers:
       '@napplet/sdk':
         specifier: 0.25.0
         version: 0.25.0
+      '@noble/curves':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@terrcvm/geo-protocol':
+        specifier: workspace:*
+        version: link:../../packages/geo-protocol
+      '@terrcvm/terrain-engine':
+        specifier: workspace:*
+        version: link:../../packages/terrain-engine
       '@turf/area':
         specifier: 7.3.5
         version: 7.3.5
@@ -42,6 +51,9 @@ importers:
       '@napplet/vite-plugin':
         specifier: 0.12.0
         version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      '@noble/hashes':
+        specifier: 2.0.1
+        version: 2.0.1
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -54,6 +66,37 @@ importers:
       vite:
         specifier: 8.1.5
         version: 8.1.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
+  packages/geo-protocol:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
+  packages/terrain-engine:
+    dependencies:
+      '@turf/area':
+        specifier: 7.3.5
+        version: 7.3.5
+      maplibre-gl:
+        specifier: 5.24.0
+        version: 5.24.0
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)

@@ -299,7 +299,7 @@
   },
   "process_logs": {
     "capture_complete": true,
-    "stdout": "Kehto Paja\nRuntime URL: http://127.0.0.1:5197/\nTarget URL: http://127.0.0.1:4173/\nMode: managed-command\nHMR: iframe-target-url\nSimulation: identity:anon relay:off storage:disabled upload:off theme:dark off:relay,outbox,storage,notify,media,upload,count\nCommand: pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort\n  ➜  Local:   http://127.0.0.1:4173/\n",
+    "stdout": "Kehto Paja\nRuntime URL: http://127.0.0.1:5197/\nTarget URL: http://127.0.0.1:4173/\nMode: managed-command\nHMR: iframe-target-url\nSimulation: identity:anon relay:off storage:disabled upload:off theme:dark off:relay,outbox,storage,notify,media,upload,count\nCommand: pnpm --filter @terrcvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort\n  ➜  Local:   http://127.0.0.1:4173/\n",
     "stderr": ""
   },
   "cleanup": {

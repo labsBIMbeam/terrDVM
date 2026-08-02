@@ -19,10 +19,10 @@ created: 2026-07-26
 |----------|-------|
 | **Framework** | Vitest 4.1.10 candidate after required SUS package verification; Chromium via `@napplet/conformance-cli@0.2.16` and installed Kehto/Paja |
 | **Config file** | `apps/napplet/vitest.config.ts` and browser harness — Wave 0 creates after package gates pass |
-| **Quick run command** | `pnpm --filter @terrdvm/napplet test:unit` |
+| **Quick run command** | `pnpm --filter @terrcvm/napplet test:unit` |
 | **Full suite command** | `pnpm verify:phase-01` (`bash scripts/verify-phase-01.sh` — manifest-driven; executes every `cases.json` case) |
-| **Production build** | `pnpm --filter @terrdvm/napplet build` |
-| **Conformance** | `pnpm --filter @terrdvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json` |
+| **Production build** | `pnpm --filter @terrcvm/napplet build` |
+| **Conformance** | `pnpm --filter @terrcvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json` |
 | **Clean-checkout gate** | `pnpm verify:clean:phase-01` (`bash scripts/verify-clean-checkout.sh`) — separate command; NOT part of the quick or full runner targets |
 | **Machine gate / sign-off** | `node scripts/phase-01-gate.mjs --require-pass` (`pnpm gate:phase-01`) · `pnpm signoff:phase-01` |
 | **Estimated runtime** | quick and full: measure in Plan 08 Task 2 (01-08-02); update with observed values — cold clean install excluded from both targets; the clean-checkout gate is timed separately |
@@ -34,7 +34,7 @@ All commands are prescribed interfaces. They remain `MISSING` until Wave 0 creat
 ## Sampling Rate
 
 - **After every TDD cycle:** run the named targeted unit test first, then the app unit suite.
-- **After every task commit:** run `pnpm --filter @terrdvm/napplet test:unit` and the app typecheck.
+- **After every task commit:** run `pnpm --filter @terrcvm/napplet test:unit` and the app typecheck.
 - **After every production-build task:** run build, `verify-dist`, and conformance against `dist`.
 - **After every plan wave:** run `pnpm verify:phase-01` (full manifest runner), including the current Paja smoke subset.
 - **After any package/source/transport change:** re-run package/provenance checks, build/conformance, denied-capability and timeout smoke.
@@ -57,13 +57,13 @@ Task IDs are final (`01-<plan>-<task>`); every provisional row was retained and 
 | 01-03-01 | 03 | 3 | SBOX-01 | T-06 remote asset/CSP | Single-file `dist/index.html` has no required sidecars, remote executable assets, or secret-like material | build/static | `node scripts/verify-dist.mjs` | ❌ W0 | ⬜ pending |
 | 01-03-01 | 03 | 3 | SBOX-03 | T-05 capability boundary | Shell/resource access is feature-detected and privileged globals are not reached outside the sole adapter | unit/static | `node scripts/verify-shell-boundary.mjs` | ❌ W0 | ⬜ pending |
 | 01-03-02 | 03 | 3 | SBOX-01, SBOX-02 | T-07 sandbox mismatch | Built artifact passes real Chromium conformance and Paja boot cases with a loopback/runtime-only request log — zero direct egress (re-run in the 01-09-01 clean checkout) | conformance/browser | `bash scripts/verify-phase-01.sh` (manifest boot cases) | ❌ W0 | ⬜ pending |
-| 01-04-01 | 04 | 4 | MAP-04 | T-02 input integrity | Non-finite, malformed, range/order, antimeridian, zero-area, and over-limit boxes fail closed (verbatim UI error copy asserted in 01-04-03) | unit + UI copy | `pnpm --filter @terrdvm/napplet test:unit -- bbox-validation` | ❌ W0 | ⬜ pending |
-| 01-04-02 | 04 | 4 | MAP-03 | T-02 | WGS84 geodesic km² is correct at equator and high latitude against an independent oracle; no degree area | unit | `pnpm --filter @terrdvm/napplet test:unit -- bbox-area` | ❌ W0 | ⬜ pending |
-| 01-04-02 | 04 | 4 | MAP-07 | — | Canonical preview DTO shows W,S,E,N, EPSG:4326, km², fixed defaults, and active source/fallback | unit/snapshot | `pnpm --filter @terrdvm/napplet test:unit -- request-preview` | ❌ W0 | ⬜ pending |
+| 01-04-01 | 04 | 4 | MAP-04 | T-02 input integrity | Non-finite, malformed, range/order, antimeridian, zero-area, and over-limit boxes fail closed (verbatim UI error copy asserted in 01-04-03) | unit + UI copy | `pnpm --filter @terrcvm/napplet test:unit -- bbox-validation` | ❌ W0 | ⬜ pending |
+| 01-04-02 | 04 | 4 | MAP-03 | T-02 | WGS84 geodesic km² is correct at equator and high latitude against an independent oracle; no degree area | unit | `pnpm --filter @terrcvm/napplet test:unit -- bbox-area` | ❌ W0 | ⬜ pending |
+| 01-04-02 | 04 | 4 | MAP-07 | — | Canonical preview DTO shows W,S,E,N, EPSG:4326, km², fixed defaults, and active source/fallback | unit/snapshot | `pnpm --filter @terrcvm/napplet test:unit -- request-preview` | ❌ W0 | ⬜ pending |
 | 01-05-01 / 01-05-02 | 05 | 5 | MAP-05, MAP-06 | T-03 endpoint/policy abuse | Two-role source policy (basemap + imagery) with exact attributed bounded contracts and no credential values; full approval requires both roles live, while approved-basemap-only may unlock MAP-01/02 Task 3 but never MAP-05/06 or Plan 06; fixture/unavailable is never completion | schema/live audit + checkpoint | `node scripts/verify-source-policy.mjs` (honest schema/blocked mode) and `node scripts/verify-source-policy.mjs --require-live` (hard Plan 06 gate) | ❌ W0 | ⬜ pending |
 | 01-05-03 | 05 | 5 | MAP-01, MAP-02 | — | Exactly one rectangle can be drawn, edited, and cleared in the built app, including the keyboard coordinate path, with a no-egress request log | Paja browser | `bash scripts/verify-phase-01.sh` (manifest cases incl. draw-edit-clear) | ❌ W0 | ⬜ pending |
-| 01-06-01 | 06 | 6 | MAP-05 | T-04 stale response | Preview is correlated to the current bbox; a late old response cannot overwrite it (built-artifact proofs: 01-06-03 live case, 01-07-01 stale-late-response) | unit | `pnpm --filter @terrdvm/napplet test:unit -- preview-correlation` | ❌ W0 | ⬜ pending |
-| 01-06-02 | 06 | 6 | MAP-06, MAP-07 | T-03 | Attribution renders in both variants, the source indicator states are truthful, and request behavior is bounded with no bulk prefetch | unit + UI | `pnpm --filter @terrdvm/napplet test:unit -- source-policy` | ❌ W0 | ⬜ pending |
+| 01-06-01 | 06 | 6 | MAP-05 | T-04 stale response | Preview is correlated to the current bbox; a late old response cannot overwrite it (built-artifact proofs: 01-06-03 live case, 01-07-01 stale-late-response) | unit | `pnpm --filter @terrcvm/napplet test:unit -- preview-correlation` | ❌ W0 | ⬜ pending |
+| 01-06-02 | 06 | 6 | MAP-06, MAP-07 | T-03 | Attribution renders in both variants, the source indicator states are truthful, and request behavior is bounded with no bulk prefetch | unit + UI | `pnpm --filter @terrcvm/napplet test:unit -- source-policy` | ❌ W0 | ⬜ pending |
 | 01-06-03 | 06 | 6 | MAP-05, SBOX-02, SBOX-03 | T-04/T-14 honesty | Built-artifact live preview: outcome derived from the rendered DOM source-row suffix/indicator, cross-checked against the two-role policy, bbox-correlated, zero direct egress; `--require-live` becomes a hard runner step | Paja browser | `bash scripts/verify-phase-01.sh` (manifest case preview-ready-live) | ❌ W0 | ⬜ pending |
 | 01-07-01 | 07 | 7 | VER-04-T1 (SBOX-02) | T-05 | Denied resource capability produces the exact actionable frozen copy with Retry, no unhandled rejection, selection/DTO intact; redacted evidence carries `ver04: VER-04-T1` | Paja degraded | `bash scripts/verify-phase-01.sh` (manifest case resource-denied) | ❌ W0 | ⬜ pending |
 | 01-07-01 | 07 | 7 | VER-04-T3 (MAP-05) | T-04/T-09 timeout | Deterministic delay produces the timeout state; a stale late response NEVER renders over a newer selection; generic failure shows only the generic copy; all with loopback-only request logs | Paja fault cases | `bash scripts/verify-phase-01.sh` (manifest cases resource-timeout, stale-late-response, preview-failed-generic) | ❌ W0 | ⬜ pending |

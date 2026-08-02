@@ -1,0 +1,4509 @@
+{
+  "$id": "terrcvm/geo-protocol/geo-vectors",
+  "version": 3,
+  "contract": "../../CONTRACT.md",
+  "readme": [
+    "DIFFERENTIAL vector suite for terrCVM's nostr geospatial protocol.",
+    "",
+    "Every rule in CONTRACT.md that either language could get wrong is pinned",
+    "here as an explicit input/output pair. Both the TypeScript builders in",
+    "packages/geo-protocol/src and the Python builders in",
+    "services/blossom-gis/src/blossom_gis/geo_protocol.py MUST reproduce every",
+    "vector exactly. `content` is compared as a STRING, byte for byte, because",
+    "it is hashed into the event id.",
+    "",
+    "This file replaces geo-protocol.json, which pinned ONE sample. A single",
+    "sample fixes one point in the input space and nothing else: it cannot see",
+    "validation, parsing, filter or number-formatting divergence, and all",
+    "eleven drift findings of the last review lived outside it. Worse, the test",
+    "that consumed it read the expected bbox out of the fixture and fed it back",
+    "into the builder, asserting the fixture equalled itself.",
+    "",
+    "CONVENTIONS",
+    "  - `expect` is the exact expected output. `reject` is an error CODE from",
+    "    the table in CONTRACT.md; the message is free, the code is not.",
+    "  - `{\"__number__\": \"<token>\"}` anywhere in a vector denotes a numeric",
+    "    literal JSON cannot carry. Tokens: NaN, Infinity, -Infinity, -0.",
+    "    Substitute the real value before feeding it to the implementation.",
+    "  - Vectors under `validation.cases` are `validation.baseInput` with the",
+    "    named keys replaced by `patch`. A patch value of null means the key is",
+    "    ABSENT, not null-valued.",
+    "  - `{\"__json__\": \"NULL\"}` is an EXPLICIT null, as distinct from the",
+    "    absent-key spelling above. CONTRACT.md 7.5 rules the two equivalent",
+    "    for `properties` and `description`; the tokens exist so a vector can",
+    "    say which spelling it fed in.",
+    "  - `grammar` pins the GRAMMAR rather than the values: the character",
+    "    classes, the whitespace set and the validation ORDER. Every rule that",
+    "    two languages spell with two different regexes lives there.",
+    "  - Filter objects are compared structurally; key order is not significant",
+    "    on the wire, but the order shown is the one CONTRACT.md mandates.",
+    "  - Cover cell lists are ORDERED: longitude outer (west to east), latitude",
+    "    inner (south to north). The order is part of the contract because the",
+    "    filter it produces is compared as a whole."
+  ],
+  "constants": {
+    "KIND_GEO_COLLECTION": 30550,
+    "KIND_GEO_ITEM": 30551,
+    "GEOHASH_PRECISION": 4,
+    "MAX_TILE_ZOOM": 22,
+    "COORDINATE_DECIMALS": 6,
+    "DATASET_SEPARATOR": ":",
+    "DEFAULT_FILTER_LIMIT": 500,
+    "MAX_FILTER_LIMIT": 500,
+    "MAX_COVER_CELLS": 128,
+    "MAX_MERCATOR_LATITUDE": 85.05112878,
+    "MAX_CREATED_AT": 2147483647,
+    "MAX_SAFE_INTEGER": 9007199254740991,
+    "MAX_DATASET_LENGTH": 64,
+    "GEOHASH_ALPHABET": "0123456789bcdefghjkmnpqrstuvwxyz"
+  },
+  "socialGeohashLadder": {
+    "note": "NOT governed by the single-precision rule above. Kinds 1, 1063, 30315 and 31923 carry a LADDER of g tags — every prefix of the precision-6 geohash, shortest first. Nostr tag filters are exact string matches, so a client querying precision 5 (presence.ts:175) or precision 2/3/4 by viewport span (presence.ts:205-214) can never match a lone precision-4 tag. Collapsing these to one p4 tag is what silently killed live presence and the geo-note feed.",
+    "kinds": [
+      1,
+      1063,
+      30315,
+      31923
+    ],
+    "precisions": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "example": {
+      "lat": 48.26125565204099,
+      "lon": 8.822021484375,
+      "expectedTags": [
+        [
+          "g",
+          "u"
+        ],
+        [
+          "g",
+          "u0"
+        ],
+        [
+          "g",
+          "u0w"
+        ],
+        [
+          "g",
+          "u0w6"
+        ],
+        [
+          "g",
+          "u0w68"
+        ],
+        [
+          "g",
+          "u0w68c"
+        ]
+      ]
+    },
+    "coverageArithmetic": [
+      "A p4 cell is 20 bits: 10 lon + 10 lat = 0.3515625 x 0.17578125 deg",
+      "= 39.1 x 19.4 km at the equator, 27.7 x 19.5 km at 45N.",
+      "Continental Europe (-25,34,45,72) needs 201 x 217 = 43617 p4 cells.",
+      "The whole world needs 992200. cellsFor() caps at 48 — 0.1% coverage,",
+      "with no error anywhere. That is why the ladder exists."
+    ]
+  },
+  "numberFormat": {
+    "canonicalNumber": [
+      {
+        "value": 0,
+        "expected": "0",
+        "note": "zero"
+      },
+      {
+        "value": {
+          "__number__": "-0"
+        },
+        "expected": "0",
+        "note": "negative zero normalises to 0"
+      },
+      {
+        "value": 1,
+        "expected": "1",
+        "note": "integral float"
+      },
+      {
+        "value": -1,
+        "expected": "-1",
+        "note": "negative integral"
+      },
+      {
+        "value": 412,
+        "expected": "412",
+        "note": "integral float 412.0 and int 412 serialise alike"
+      },
+      {
+        "value": 65536,
+        "expected": "65536",
+        "note": "power of two"
+      },
+      {
+        "value": 9007199254740991,
+        "expected": "9007199254740991",
+        "note": "2^53-1, the largest safe integer"
+      },
+      {
+        "value": -9007199254740991,
+        "expected": "-9007199254740991",
+        "note": "-(2^53-1)"
+      },
+      {
+        "value": 0.5,
+        "expected": "0.5",
+        "note": "exact binary fraction"
+      },
+      {
+        "value": 0.1,
+        "expected": "0.1",
+        "note": "shortest round-trip, not the exact binary value"
+      },
+      {
+        "value": 0.30000000000000004,
+        "expected": "0.30000000000000004",
+        "note": "0.1+0.2; 17 significant digits"
+      },
+      {
+        "value": 123.456,
+        "expected": "123.456",
+        "note": "ordinary decimal"
+      },
+      {
+        "value": 0.0001,
+        "expected": "0.0001",
+        "note": "JS and Python both print positionally here"
+      },
+      {
+        "value": 1e-05,
+        "expected": "0.00001",
+        "note": "PYTHON DIVERGES: repr gives '1e-05'"
+      },
+      {
+        "value": 1e-06,
+        "expected": "0.000001",
+        "note": "PYTHON DIVERGES: repr gives '1e-06'"
+      },
+      {
+        "value": 1e-07,
+        "expected": "0.0000001",
+        "note": "BOTH DIVERGE: JS '1e-7', Python '1e-07'"
+      },
+      {
+        "value": 2.5e-09,
+        "expected": "0.0000000025",
+        "note": "deep subnormal-adjacent"
+      },
+      {
+        "value": -1.234e-06,
+        "expected": "-0.000001234",
+        "note": "negative, inside the old silently-wrong window"
+      },
+      {
+        "value": 1e+16,
+        "expected": "10000000000000000",
+        "note": "PYTHON DIVERGES: repr gives '1e+16', JS prints positionally"
+      },
+      {
+        "value": 1e+21,
+        "expected": "1000000000000000000000",
+        "note": "JS DIVERGES: String() gives '1e+21'"
+      },
+      {
+        "value": 1.2345678901234568e+20,
+        "expected": "123456789012345680000",
+        "note": "JS positional, Python exponent"
+      },
+      {
+        "value": 1e-300,
+        "expected": "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+        "note": "300 leading zeros; still positional"
+      },
+      {
+        "value": 1e+300,
+        "expected": "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "note": "301 digits; still positional"
+      },
+      {
+        "value": 5e-324,
+        "expected": "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005",
+        "note": "smallest positive subnormal double"
+      },
+      {
+        "value": 1.7976931348623157e+308,
+        "expected": "179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "note": "largest finite double"
+      },
+      {
+        "value": 2.2250738585072014e-308,
+        "expected": "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072014",
+        "note": "smallest positive normal double"
+      },
+      {
+        "value": {
+          "__number__": "NaN"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "NaN has no JSON form"
+      },
+      {
+        "value": {
+          "__number__": "Infinity"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "Infinity has no JSON form"
+      },
+      {
+        "value": {
+          "__number__": "-Infinity"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "-Infinity has no JSON form"
+      }
+    ],
+    "canonicalCoordinate": [
+      {
+        "value": 0,
+        "expected": "0",
+        "note": "zero"
+      },
+      {
+        "value": {
+          "__number__": "-0"
+        },
+        "expected": "0",
+        "note": "negative zero normalises to 0"
+      },
+      {
+        "value": -180,
+        "expected": "-180",
+        "note": "west limit"
+      },
+      {
+        "value": 180,
+        "expected": "180",
+        "note": "east limit"
+      },
+      {
+        "value": -90,
+        "expected": "-90",
+        "note": "south limit"
+      },
+      {
+        "value": 90,
+        "expected": "90",
+        "note": "north limit"
+      },
+      {
+        "value": 85.05112878,
+        "expected": "85.051129",
+        "note": "Web Mercator north cut-off, 7th digit rounds up"
+      },
+      {
+        "value": -85.05112878,
+        "expected": "-85.051129",
+        "note": "Web Mercator south cut-off"
+      },
+      {
+        "value": 8.811035156250002,
+        "expected": "8.811035",
+        "note": "z14 tile west edge"
+      },
+      {
+        "value": 48.25394114463431,
+        "expected": "48.253941",
+        "note": "z14 tile south edge"
+      },
+      {
+        "value": 8.58306884765625e-05,
+        "expected": "0.000086",
+        "note": "z22 tile span at the equator: the 1e-6..1e-4 window"
+      },
+      {
+        "value": 8.58306884765304e-05,
+        "expected": "0.000086",
+        "note": "the same window, different low bits, same output"
+      },
+      {
+        "value": 0.0078125,
+        "expected": "0.007812",
+        "note": "EXACT TIE 7812.5 -> half-even DOWN to 7812"
+      },
+      {
+        "value": 0.0234375,
+        "expected": "0.023438",
+        "note": "EXACT TIE 23437.5 -> half-even UP to 23438"
+      },
+      {
+        "value": 0.0390625,
+        "expected": "0.039062",
+        "note": "EXACT TIE 39062.5 -> half-even DOWN"
+      },
+      {
+        "value": 0.0546875,
+        "expected": "0.054688",
+        "note": "EXACT TIE 54687.5 -> half-even UP"
+      },
+      {
+        "value": -0.0078125,
+        "expected": "-0.007812",
+        "note": "tie, negative: magnitude rounds half-even, sign is separate"
+      },
+      {
+        "value": 1.5e-06,
+        "expected": "0.000002",
+        "note": "tie at the last kept digit -> 0.000002"
+      },
+      {
+        "value": 5e-07,
+        "expected": "0",
+        "note": "exactly half of the last kept unit -> half-even to 0"
+      },
+      {
+        "value": -5e-07,
+        "expected": "0",
+        "note": "and the negative collapses to 0, not -0"
+      },
+      {
+        "value": 5.000001e-07,
+        "expected": "0.000001",
+        "note": "just above half -> 0.000001"
+      },
+      {
+        "value": 1e-07,
+        "expected": "0",
+        "note": "far below the grid -> 0"
+      },
+      {
+        "value": 1.0,
+        "expected": "1",
+        "note": "integral coordinate loses its '.0'"
+      },
+      {
+        "value": -1e-06,
+        "expected": "-0.000001",
+        "note": "smallest representable negative coordinate"
+      },
+      {
+        "value": {
+          "__number__": "NaN"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "NaN has no JSON form"
+      },
+      {
+        "value": {
+          "__number__": "Infinity"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "Infinity has no JSON form"
+      },
+      {
+        "value": {
+          "__number__": "-Infinity"
+        },
+        "reject": "NUMBER_NOT_FINITE",
+        "note": "-Infinity has no JSON form"
+      }
+    ]
+  },
+  "buildCollection": [
+    {
+      "name": "terrain-black-forest",
+      "note": "the canonical sample; integral 8.0 must print as '8', never '8.0'",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30550,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "terrain"
+          ],
+          [
+            "title",
+            "terrCVM terrain tiles"
+          ],
+          [
+            "bbox",
+            "8",
+            "47.9",
+            "9.5",
+            "48.6"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "license",
+            "CC-BY-4.0"
+          ],
+          [
+            "source",
+            "Copernicus DEM GLO-30"
+          ],
+          [
+            "server",
+            "https://blossom.example"
+          ]
+        ],
+        "content": "Terrain heightfield tiles (TFT2) for the northern Black Forest."
+      }
+    },
+    {
+      "name": "world-extent",
+      "note": "full Mercator extent, empty description, createdAt 0 is legal",
+      "input": {
+        "dataset": "imagery-2024",
+        "title": "Global imagery 2024",
+        "bbox": [
+          -180.0,
+          -85.05112878,
+          180.0,
+          85.05112878
+        ],
+        "mimeType": "image/webp",
+        "license": "https://example.org/licence",
+        "source": "Sentinel-2 L2A",
+        "server": "https://blossom.example",
+        "description": "",
+        "createdAt": 0
+      },
+      "expect": {
+        "kind": 30550,
+        "created_at": 0,
+        "tags": [
+          [
+            "d",
+            "imagery-2024"
+          ],
+          [
+            "title",
+            "Global imagery 2024"
+          ],
+          [
+            "bbox",
+            "-180",
+            "-85.051129",
+            "180",
+            "85.051129"
+          ],
+          [
+            "m",
+            "image/webp"
+          ],
+          [
+            "license",
+            "https://example.org/licence"
+          ],
+          [
+            "source",
+            "Sentinel-2 L2A"
+          ],
+          [
+            "server",
+            "https://blossom.example"
+          ]
+        ],
+        "content": ""
+      }
+    },
+    {
+      "name": "half-even-ties",
+      "note": "pins ROUND_HALF_EVEN; toFixed(6) would give 0.007813 and 0.039063 here",
+      "input": {
+        "dataset": "tie.probe",
+        "title": "Rounding tie probe",
+        "bbox": [
+          0.0078125,
+          0.0234375,
+          0.0390625,
+          0.0546875
+        ],
+        "mimeType": "application/octet-stream",
+        "license": "CC0-1.0",
+        "source": "synthetic",
+        "server": "https://blossom.example",
+        "description": "Four exact 6-dp ties: down, up, down, up.",
+        "createdAt": 1700000000
+      },
+      "expect": {
+        "kind": 30550,
+        "created_at": 1700000000,
+        "tags": [
+          [
+            "d",
+            "tie.probe"
+          ],
+          [
+            "title",
+            "Rounding tie probe"
+          ],
+          [
+            "bbox",
+            "0.007812",
+            "0.023438",
+            "0.039062",
+            "0.054688"
+          ],
+          [
+            "m",
+            "application/octet-stream"
+          ],
+          [
+            "license",
+            "CC0-1.0"
+          ],
+          [
+            "source",
+            "synthetic"
+          ],
+          [
+            "server",
+            "https://blossom.example"
+          ]
+        ],
+        "content": "Four exact 6-dp ties: down, up, down, up."
+      }
+    },
+    {
+      "name": "unicode-title",
+      "note": "collection content is a RAW string, never JSON; non-ASCII passes through",
+      "input": {
+        "dataset": "dem-at",
+        "title": "Höhenmodell Österreich — 1 m",
+        "bbox": [
+          9.53,
+          46.37,
+          17.16,
+          49.02
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "data.gv.at",
+        "server": "https://blossom.example",
+        "description": "Ganz Österreich, 1 m Auflösung — é bleibt roh.",
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30550,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "dem-at"
+          ],
+          [
+            "title",
+            "Höhenmodell Österreich — 1 m"
+          ],
+          [
+            "bbox",
+            "9.53",
+            "46.37",
+            "17.16",
+            "49.02"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "license",
+            "CC-BY-4.0"
+          ],
+          [
+            "source",
+            "data.gv.at"
+          ],
+          [
+            "server",
+            "https://blossom.example"
+          ]
+        ],
+        "content": "Ganz Österreich, 1 m Auflösung — é bleibt roh."
+      }
+    },
+    {
+      "name": "minimum-extent",
+      "note": "single-character dataset; extent exactly at the 1e-6 grid",
+      "input": {
+        "dataset": "p",
+        "title": "One micro-degree",
+        "bbox": [
+          -1e-06,
+          -1e-06,
+          1e-06,
+          1e-06
+        ],
+        "mimeType": "application/octet-stream",
+        "license": "CC0-1.0",
+        "source": "synthetic",
+        "server": "https://blossom.example",
+        "description": "The narrowest extent that survives quantisation.",
+        "createdAt": 1
+      },
+      "expect": {
+        "kind": 30550,
+        "created_at": 1,
+        "tags": [
+          [
+            "d",
+            "p"
+          ],
+          [
+            "title",
+            "One micro-degree"
+          ],
+          [
+            "bbox",
+            "-0.000001",
+            "-0.000001",
+            "0.000001",
+            "0.000001"
+          ],
+          [
+            "m",
+            "application/octet-stream"
+          ],
+          [
+            "license",
+            "CC0-1.0"
+          ],
+          [
+            "source",
+            "synthetic"
+          ],
+          [
+            "server",
+            "https://blossom.example"
+          ]
+        ],
+        "content": "The narrowest extent that survives quantisation."
+      }
+    },
+    {
+      "name": "dataset-empty",
+      "input": {
+        "dataset": "",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-uppercase",
+      "input": {
+        "dataset": "Terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-colon",
+      "input": {
+        "dataset": "terr:ain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-space",
+      "input": {
+        "dataset": "terr ain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-untrimmed",
+      "input": {
+        "dataset": " terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-non-ascii",
+      "input": {
+        "dataset": "terräin",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-nfd",
+      "input": {
+        "dataset": "terräin",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-trailing-dash",
+      "input": {
+        "dataset": "terrain-",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "dataset-too-long",
+      "input": {
+        "dataset": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "DATASET_GRAMMAR"
+    },
+    {
+      "name": "title-empty",
+      "input": {
+        "dataset": "terrain",
+        "title": "",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "TEXT_EMPTY"
+    },
+    {
+      "name": "title-untrimmed",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrain ",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "TEXT_EMPTY"
+    },
+    {
+      "name": "bbox-antimeridian",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          170.0,
+          -10.0,
+          -170.0,
+          10.0
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_ANTIMERIDIAN"
+    },
+    {
+      "name": "bbox-inverted",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          48.6,
+          9.5,
+          47.9
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_INVERTED"
+    },
+    {
+      "name": "bbox-out-of-range",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          95.0
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_OUT_OF_RANGE"
+    },
+    {
+      "name": "bbox-degenerate-width",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          8.0,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_DEGENERATE"
+    },
+    {
+      "name": "bbox-degenerate-height",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          47.9
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_DEGENERATE"
+    },
+    {
+      "name": "bbox-degenerate-after-rounding",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          -5e-07,
+          -5e-07,
+          5e-07,
+          5e-07
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_DEGENERATE"
+    },
+    {
+      "name": "bbox-not-finite",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          {
+            "__number__": "Infinity"
+          }
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "BBOX_NOT_FINITE"
+    },
+    {
+      "name": "mime-empty",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "MIME_GRAMMAR"
+    },
+    {
+      "name": "mime-no-subtype",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600
+      },
+      "reject": "MIME_GRAMMAR"
+    },
+    {
+      "name": "created-at-negative",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": -1
+      },
+      "reject": "CREATED_AT_RANGE"
+    },
+    {
+      "name": "created-at-float",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600.5
+      },
+      "reject": "CREATED_AT_RANGE"
+    },
+    {
+      "name": "created-at-milliseconds",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 1767225600000
+      },
+      "reject": "CREATED_AT_RANGE"
+    },
+    {
+      "name": "created-at-overflow",
+      "input": {
+        "dataset": "terrain",
+        "title": "terrCVM terrain tiles",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "license": "CC-BY-4.0",
+        "source": "Copernicus DEM GLO-30",
+        "server": "https://blossom.example",
+        "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+        "createdAt": 2147483648
+      },
+      "reject": "CREATED_AT_RANGE"
+    }
+  ],
+  "buildItem": [
+    {
+      "name": "terrain-z14",
+      "note": "the canonical sample; bbox is DERIVED from the tile, never supplied",
+      "input": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 14,
+          "x": 8593,
+          "y": 5677
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {
+          "buildings": 412,
+          "vertices": 16641
+        },
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "terrain:14/8593/5677"
+          ],
+          [
+            "g",
+            "u0w6"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:terrain"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[8.811035,48.253941,8.833008,48.268569],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{\"buildings\":412,\"vertices\":16641}}"
+      }
+    },
+    {
+      "name": "integral-float-tile",
+      "note": "z/x/y arriving as 14.0/8593.0/5677.0 must produce the SAME event as 14/8593/5677. JavaScript cannot tell the two apart; Python str() would have written 'terrain:14.0/8593.0/5677.0'. Integrality is a test on the VALUE, and the d tag is built from the integer.",
+      "input": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 14.0,
+          "x": 8593.0,
+          "y": 5677.0
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {
+          "buildings": 412,
+          "vertices": 16641
+        },
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "terrain:14/8593/5677"
+          ],
+          [
+            "g",
+            "u0w6"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:terrain"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[8.811035,48.253941,8.833008,48.268569],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{\"buildings\":412,\"vertices\":16641}}"
+      }
+    },
+    {
+      "name": "world-tile-z0",
+      "note": "z0/0/0: the whole world; centre (0,0) sits on every geohash division, which the half-open >= rule resolves upward",
+      "input": {
+        "dataset": "imagery-2024",
+        "tile": {
+          "z": 0,
+          "x": 0,
+          "y": 0
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "image/webp",
+        "size": 1,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {},
+        "createdAt": 0
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 0,
+        "tags": [
+          [
+            "d",
+            "imagery-2024:0/0/0"
+          ],
+          [
+            "g",
+            "s000"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:imagery-2024"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "image/webp"
+          ],
+          [
+            "size",
+            "1"
+          ]
+        ],
+        "content": "{\"bbox\":[-180,-85.051129,180,85.051129],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{}}"
+      }
+    },
+    {
+      "name": "z22-equator-north-of-prime-meridian",
+      "note": "THE 1e-6..1e-4 WINDOW. Raw bbox is [0, 0, 8.58306884765625e-05, 8.58306884765304e-05]; TS canonicalJson used to emit 0.000086 and Python 8.6e-05 for the same event. Both now emit 0.000086.",
+      "input": {
+        "dataset": "probe",
+        "tile": {
+          "z": 22,
+          "x": 2097152,
+          "y": 2097151
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {},
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "probe:22/2097152/2097151"
+          ],
+          [
+            "g",
+            "s000"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:probe"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[0,0,0.000086,0.000086],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{}}"
+      }
+    },
+    {
+      "name": "z22-equator-south-of-prime-meridian",
+      "note": "the tile directly below: south is negative and in the window, north is exactly 0. Its g cell differs from its northern neighbour's, which is the equator crossing doing its job.",
+      "input": {
+        "dataset": "probe",
+        "tile": {
+          "z": 22,
+          "x": 2097152,
+          "y": 2097152
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {},
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "probe:22/2097152/2097152"
+          ],
+          [
+            "g",
+            "kpbp"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:probe"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[0,-0.000086,0.000086,0],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{}}"
+      }
+    },
+    {
+      "name": "z22-antimeridian-corner",
+      "note": "deepest zoom at the far corner of the grid",
+      "input": {
+        "dataset": "probe",
+        "tile": {
+          "z": 22,
+          "x": 4194303,
+          "y": 4194303
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {},
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "probe:22/4194303/4194303"
+          ],
+          [
+            "g",
+            "pbzu"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:probe"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[179.999914,-85.051129,180,-85.051121],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{}}"
+      }
+    },
+    {
+      "name": "sub-micro-properties",
+      "note": "BELOW 1e-6. At MAX_TILE_ZOOM=22 the narrowest tile spans 8.583e-5 deg, so a bbox coordinate can never land below 1e-6 except by rounding to exactly 0 — the sub-1e-6 regime is reachable only through `properties`, which are NOT quantised. TS canonicalJson used to THROW on every value here; Python emitted 5e-07.",
+      "input": {
+        "dataset": "probe",
+        "tile": {
+          "z": 22,
+          "x": 2097152,
+          "y": 2097151
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {
+          "epsilon": 5e-07,
+          "tiny": 1e-07,
+          "tinier": 2.5e-09,
+          "smallest": 1e-300,
+          "drift": 0.30000000000000004,
+          "integral": 412,
+          "safeMax": 9007199254740991,
+          "negZero": {
+            "__number__": "-0"
+          },
+          "zero": 0,
+          "flag": true,
+          "absent": null,
+          "label": "münchen",
+          "escapes": "tab\there/nl\nhere/quote\"/backslash\\/bell\u0007",
+          "separators": "line para sep",
+          "nested": {
+            "b": [
+              1,
+              2.5
+            ],
+            "a": {
+              "deep": -1e-05
+            }
+          }
+        },
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "probe:22/2097152/2097151"
+          ],
+          [
+            "g",
+            "s000"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:probe"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[0,0,0.000086,0.000086],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{\"absent\":null,\"drift\":0.30000000000000004,\"epsilon\":0.0000005,\"escapes\":\"tab\\there/nl\\nhere/quote\\\"/backslash\\\\/bell\\u0007\",\"flag\":true,\"integral\":412,\"label\":\"münchen\",\"negZero\":0,\"nested\":{\"a\":{\"deep\":-0.00001},\"b\":[1,2.5]},\"safeMax\":9007199254740991,\"separators\":\"line para sep\",\"smallest\":0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001,\"tinier\":0.0000000025,\"tiny\":0.0000001,\"zero\":0}}"
+      }
+    },
+    {
+      "name": "fractional-datetime",
+      "note": "sub-second acquisition instants are preserved verbatim, digit for digit",
+      "input": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 14,
+          "x": 8593,
+          "y": 5677
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "application/vnd.terrcvm.tft2",
+        "size": 65536,
+        "datetime": "2024-02-29T23:59:59.250Z",
+        "properties": {
+          "vertices": 16641
+        },
+        "createdAt": 1709251199
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1709251199,
+        "tags": [
+          [
+            "d",
+            "terrain:14/8593/5677"
+          ],
+          [
+            "g",
+            "u0w6"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:terrain"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "application/vnd.terrcvm.tft2"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[8.811035,48.253941,8.833008,48.268569],\"datetime\":\"2024-02-29T23:59:59.250Z\",\"properties\":{\"vertices\":16641}}"
+      }
+    },
+    {
+      "name": "second-dataset-same-tile",
+      "note": "THE REASON FOR THE DATASET PREFIX. Same publisher, same tile, different dataset: identical (kind, pubkey) but a distinct d, so the two events coexist instead of annihilating each other.",
+      "input": {
+        "dataset": "imagery-2024",
+        "tile": {
+          "z": 14,
+          "x": 8593,
+          "y": 5677
+        },
+        "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+        "mimeType": "image/webp",
+        "size": 65536,
+        "datetime": "2026-01-01T00:00:00Z",
+        "properties": {},
+        "createdAt": 1767225600
+      },
+      "expect": {
+        "kind": 30551,
+        "created_at": 1767225600,
+        "tags": [
+          [
+            "d",
+            "imagery-2024:14/8593/5677"
+          ],
+          [
+            "g",
+            "u0w6"
+          ],
+          [
+            "a",
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:imagery-2024"
+          ],
+          [
+            "x",
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+          ],
+          [
+            "url",
+            "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+          ],
+          [
+            "m",
+            "image/webp"
+          ],
+          [
+            "size",
+            "65536"
+          ]
+        ],
+        "content": "{\"bbox\":[8.811035,48.253941,8.833008,48.268569],\"datetime\":\"2026-01-01T00:00:00Z\",\"properties\":{}}"
+      }
+    }
+  ],
+  "parseItemD": [
+    {
+      "input": "terrain:14/8593/5677",
+      "expected": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 14,
+          "x": 8593,
+          "y": 5677
+        }
+      },
+      "note": "the canonical d"
+    },
+    {
+      "input": "terrain:0/0/0",
+      "expected": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 0,
+          "x": 0,
+          "y": 0
+        }
+      },
+      "note": "z0 is legal"
+    },
+    {
+      "input": "terrain:22/4194303/4194303",
+      "expected": {
+        "dataset": "terrain",
+        "tile": {
+          "z": 22,
+          "x": 4194303,
+          "y": 4194303
+        }
+      },
+      "note": "the ceiling: z22 and the last tile in the grid"
+    },
+    {
+      "input": "terrain-v2:14/8593/5677",
+      "expected": {
+        "dataset": "terrain-v2",
+        "tile": {
+          "z": 14,
+          "x": 8593,
+          "y": 5677
+        }
+      },
+      "note": "'-' is legal in a dataset"
+    },
+    {
+      "input": "terrain.v2:14/1/1",
+      "expected": {
+        "dataset": "terrain.v2",
+        "tile": {
+          "z": 14,
+          "x": 1,
+          "y": 1
+        }
+      },
+      "note": "'.' is legal"
+    },
+    {
+      "input": "terrain_v2:14/1/1",
+      "expected": {
+        "dataset": "terrain_v2",
+        "tile": {
+          "z": 14,
+          "x": 1,
+          "y": 1
+        }
+      },
+      "note": "'_' is legal"
+    },
+    {
+      "input": "p:1/1/1",
+      "expected": {
+        "dataset": "p",
+        "tile": {
+          "z": 1,
+          "x": 1,
+          "y": 1
+        }
+      },
+      "note": "one-character dataset"
+    },
+    {
+      "input": "a:b:14/1/1",
+      "expected": null,
+      "note": "TWO colons. TS lastIndexOf gave {dataset:'a:b'}, Python partition gave None. Now both reject: exactly one ':' is required."
+    },
+    {
+      "input": "terrain:v2:14/1/1",
+      "expected": null,
+      "note": "same shape, realistic name; rejected for the same reason"
+    },
+    {
+      "input": "terrain:14/1/1:extra",
+      "expected": null,
+      "note": "trailing colon segment"
+    },
+    {
+      "input": "terrain",
+      "expected": null,
+      "note": "no separator at all"
+    },
+    {
+      "input": "terrain:",
+      "expected": null,
+      "note": "separator but no tile"
+    },
+    {
+      "input": ":14/1/1",
+      "expected": null,
+      "note": "empty dataset"
+    },
+    {
+      "input": "terrain 1:14/1/1",
+      "expected": null,
+      "note": "whitespace in the dataset"
+    },
+    {
+      "input": " terrain:14/1/1",
+      "expected": null,
+      "note": "leading space"
+    },
+    {
+      "input": "terrain:14/1/1 ",
+      "expected": null,
+      "note": "trailing space"
+    },
+    {
+      "input": "terrain:14/1/1\n",
+      "expected": null,
+      "note": "trailing newline"
+    },
+    {
+      "input": "TERRAIN:14/1/1",
+      "expected": null,
+      "note": "uppercase dataset"
+    },
+    {
+      "input": "-terrain:14/1/1",
+      "expected": null,
+      "note": "dataset must start alphanumeric"
+    },
+    {
+      "input": "terrain-:14/1/1",
+      "expected": null,
+      "note": "dataset must end alphanumeric"
+    },
+    {
+      "input": "terräin:14/1/1",
+      "expected": null,
+      "note": "non-ASCII dataset"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:14/1/1",
+      "expected": null,
+      "note": "dataset over 64 characters"
+    },
+    {
+      "input": "terrain:23/0/0",
+      "expected": null,
+      "note": "z above MAX_TILE_ZOOM (22)"
+    },
+    {
+      "input": "terrain:31/0/0",
+      "expected": null,
+      "note": "the old Python ceiling of 30 is gone too"
+    },
+    {
+      "input": "terrain:-1/0/0",
+      "expected": null,
+      "note": "negative zoom"
+    },
+    {
+      "input": "terrain:14/-1/1",
+      "expected": null,
+      "note": "negative x"
+    },
+    {
+      "input": "terrain:22/4194304/0",
+      "expected": null,
+      "note": "x equals the span, one past the last tile"
+    },
+    {
+      "input": "terrain:14/16384/0",
+      "expected": null,
+      "note": "x out of range for z14"
+    },
+    {
+      "input": "terrain:14/0/16384",
+      "expected": null,
+      "note": "y out of range for z14"
+    },
+    {
+      "input": "terrain:014/1/1",
+      "expected": null,
+      "note": "leading zero is not a canonical integer"
+    },
+    {
+      "input": "terrain:14/01/1",
+      "expected": null,
+      "note": "leading zero in x"
+    },
+    {
+      "input": "terrain:+14/1/1",
+      "expected": null,
+      "note": "explicit sign"
+    },
+    {
+      "input": "terrain:14/x/1",
+      "expected": null,
+      "note": "non-numeric x"
+    },
+    {
+      "input": "terrain:1e1/0/0",
+      "expected": null,
+      "note": "exponent notation"
+    },
+    {
+      "input": "terrain:14.0/1/1",
+      "expected": null,
+      "note": "decimal zoom"
+    },
+    {
+      "input": "terrain:14/1",
+      "expected": null,
+      "note": "only two tile components"
+    },
+    {
+      "input": "terrain:14/1/1/1",
+      "expected": null,
+      "note": "four tile components"
+    },
+    {
+      "input": "terrain:14/1/1/",
+      "expected": null,
+      "note": "trailing slash"
+    },
+    {
+      "input": "terrain:/14/1/1",
+      "expected": null,
+      "note": "leading slash"
+    },
+    {
+      "input": "terrain:١٤/1/1",
+      "expected": null,
+      "note": "Arabic-Indic digits are not ASCII digits"
+    },
+    {
+      "input": "",
+      "expected": null,
+      "note": "empty string"
+    }
+  ],
+  "grammar": {
+    "readme": [
+      "GRAMMAR vectors. The suite above pins VALUES; this section pins the",
+      "GRAMMAR that produces them \u2014 every place where the two languages spell",
+      "one rule with two different character classes.",
+      "",
+      "Each case is `validation.baseInput` (builder: \"item\") or",
+      "`grammar.collectionBaseInput` (builder: \"collection\") with the named keys",
+      "replaced by `patch`, exactly like `validation.cases`. A patch value of",
+      "null means the key is ABSENT; `{\"__json__\": \"NULL\"}` means an explicit",
+      "null, which CONTRACT.md 7.5 rules is the same thing.",
+      "",
+      "Lone surrogates travel as `{\"__string__\": \"<TOKEN>\"}`, never as a raw",
+      "\\udXXX escape: the escape is legal JSON that both parsers accept, but the",
+      "TypeScript suite imports this file through a bundler that refuses it, and",
+      "a vector one side cannot even load pins nothing.",
+      "",
+      "The `order-*` cases each carry TWO defects. They pin WHICH error code",
+      "wins, because CONTRACT.md 14 makes the code normative and 14.1 makes the",
+      "checking order normative with it."
+    ],
+    "whitespace": [
+      "0009",
+      "000A",
+      "000B",
+      "000C",
+      "000D",
+      "001C",
+      "001D",
+      "001E",
+      "001F",
+      "0020",
+      "0085",
+      "00A0",
+      "1680",
+      "2000",
+      "2001",
+      "2002",
+      "2003",
+      "2004",
+      "2005",
+      "2006",
+      "2007",
+      "2008",
+      "2009",
+      "200A",
+      "2028",
+      "2029",
+      "202F",
+      "205F",
+      "3000",
+      "FEFF"
+    ],
+    "collectionBaseInput": {
+      "dataset": "terrain",
+      "title": "terrCVM terrain tiles",
+      "bbox": [
+        8,
+        47.9,
+        9.5,
+        48.6
+      ],
+      "mimeType": "application/vnd.terrcvm.tft2",
+      "license": "CC-BY-4.0",
+      "source": "Copernicus DEM GLO-30",
+      "server": "https://blossom.example",
+      "description": "Terrain heightfield tiles (TFT2) for the northern Black Forest.",
+      "createdAt": 1767225600
+    },
+    "cases": [
+      {
+        "name": "title-leading-bom",
+        "builder": "collection",
+        "patch": {
+          "title": "\ufeffterrCVM terrain tiles"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+FEFF is whitespace to JS \\s and to trim, and to neither Python \\s nor strip"
+      },
+      {
+        "name": "title-trailing-bom",
+        "builder": "collection",
+        "patch": {
+          "title": "terrCVM terrain tiles\ufeff"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 the same character at the other edge"
+      },
+      {
+        "name": "license-trailing-nel",
+        "builder": "collection",
+        "patch": {
+          "license": "CC-BY-4.0\u0085"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+0085 is whitespace to Python and to neither JS \\s nor trim"
+      },
+      {
+        "name": "source-leading-file-separator",
+        "builder": "collection",
+        "patch": {
+          "source": "\u001cCopernicus DEM GLO-30"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+001C..U+001F are whitespace to Python only"
+      },
+      {
+        "name": "server-trailing-unit-separator",
+        "builder": "collection",
+        "patch": {
+          "server": "https://blossom.example\u001f"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+001F, the other end of the C0 separator block"
+      },
+      {
+        "name": "title-only-bom",
+        "builder": "collection",
+        "patch": {
+          "title": "\ufeff"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 a whole-string whitespace title is empty in one language and not the other"
+      },
+      {
+        "name": "license-only-nel",
+        "builder": "collection",
+        "patch": {
+          "license": "\u0085"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 whole-string, the Python-side member"
+      },
+      {
+        "name": "title-leading-nbsp",
+        "builder": "collection",
+        "patch": {
+          "title": "\u00a0terrCVM terrain tiles"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+00A0 is whitespace to both, and must stay rejected"
+      },
+      {
+        "name": "server-trailing-ideographic-space",
+        "builder": "collection",
+        "patch": {
+          "server": "https://blossom.example\u3000"
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 U+3000 is whitespace to both"
+      },
+      {
+        "name": "title-interior-bom",
+        "builder": "collection",
+        "patch": {
+          "title": "terrCVM\ufeffterrain"
+        },
+        "accepted": true,
+        "reason": "the whitespace rule is an EDGE rule; the interior is unrestricted"
+      },
+      {
+        "name": "title-leading-zero-width-space",
+        "builder": "collection",
+        "patch": {
+          "title": "\u200bterrCVM terrain tiles"
+        },
+        "accepted": true,
+        "reason": "U+200B is whitespace to NEITHER language, so it must be accepted by both"
+      },
+      {
+        "name": "title-trailing-mongolian-vowel-separator",
+        "builder": "collection",
+        "patch": {
+          "title": "terrCVM terrain tiles\u180e"
+        },
+        "accepted": true,
+        "reason": "U+180E stopped being whitespace in Unicode 6.3; neither language treats it as such now"
+      },
+      {
+        "name": "url-trailing-bom",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2\ufeff"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 JS \\S rejects U+FEFF, Python \\S accepts it"
+      },
+      {
+        "name": "url-trailing-nel",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2\u0085"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 Python \\S rejects U+0085, JS \\S accepts it"
+      },
+      {
+        "name": "url-interior-file-separator",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/\u001ca.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 U+001C, Python-only whitespace"
+      },
+      {
+        "name": "url-trailing-record-separator",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2\u001e"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 U+001E, Python-only whitespace"
+      },
+      {
+        "name": "url-interior-nbsp",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/\u00a0a.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 U+00A0 is whitespace to both"
+      },
+      {
+        "name": "url-interior-line-separator",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/\u2028a.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 U+2028 is whitespace to both"
+      },
+      {
+        "name": "url-scheme-only",
+        "builder": "item",
+        "patch": {
+          "url": "https://"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 the authority is not optional; https?:// alone is not a fetchable blob"
+      },
+      {
+        "name": "url-interior-zero-width-space",
+        "builder": "item",
+        "patch": {
+          "url": "https://blossom.example/\u200ba.tft2"
+        },
+        "accepted": true,
+        "reason": "U+200B is whitespace to neither language, so the URL grammar must let it through"
+      },
+      {
+        "name": "datetime-arabic-indic-digits",
+        "builder": "item",
+        "patch": {
+          "datetime": "\u0662\u0660\u0662\u0666-\u0660\u0661-\u0660\u0661T\u0660\u0660:\u0660\u0660:\u0660\u0660Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 Python \\d is Unicode-aware and int() parses these, so Python built the event"
+      },
+      {
+        "name": "datetime-devanagari-digits",
+        "builder": "item",
+        "patch": {
+          "datetime": "\u0968\u0966\u0968\u096c-\u0966\u0967-\u0966\u0967T\u0966\u0966:\u0966\u0966:\u0966\u0966Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 a second Nd script, to show the first was not a special case"
+      },
+      {
+        "name": "datetime-fullwidth-digits",
+        "builder": "item",
+        "patch": {
+          "datetime": "\uff12\uff10\uff12\uff16-\uff10\uff11-\uff10\uff11T\uff10\uff10:\uff10\uff10:\uff10\uff10Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 fullwidth digits are Nd too"
+      },
+      {
+        "name": "datetime-mixed-script-digits",
+        "builder": "item",
+        "patch": {
+          "datetime": "2026-01-\u09681T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 one Devanagari digit inside an otherwise ASCII instant"
+      },
+      {
+        "name": "datetime-arabic-indic-fraction",
+        "builder": "item",
+        "patch": {
+          "datetime": "2026-01-01T00:00:00.\u0665Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 the fractional group is the same class and the same bug"
+      },
+      {
+        "name": "datetime-arabic-indic-year",
+        "builder": "item",
+        "patch": {
+          "datetime": "\u0662\u0660\u0662\u0666-01-01T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 a single non-ASCII group is enough"
+      },
+      {
+        "name": "datetime-superscript-digits",
+        "builder": "item",
+        "patch": {
+          "datetime": "\u00b2\u2070\u00b2\u2076-01-01T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 category No, not Nd: rejected by both, and it pins the boundary"
+      },
+      {
+        "name": "dataset-combining-acute",
+        "builder": "item",
+        "patch": {
+          "dataset": "terrai\u0301n"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR \u2014 dataset is ASCII-only, which is what removes the normalisation question"
+      },
+      {
+        "name": "properties-key-combining-acute",
+        "builder": "item",
+        "patch": {
+          "properties": {
+            "ho\u0308he": 1
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR \u2014 a combining mark is not [A-Za-z0-9_.-]"
+      },
+      {
+        "name": "title-combining-acute",
+        "builder": "collection",
+        "patch": {
+          "title": "terrCVM\u0301 tiles"
+        },
+        "accepted": true,
+        "reason": "title is unrestricted Unicode; only the dataset name is normalisation-free by construction"
+      },
+      {
+        "name": "title-astral-pair",
+        "builder": "collection",
+        "patch": {
+          "title": "terrCVM \ud83d\uddfb tiles"
+        },
+        "accepted": true,
+        "reason": "a WELL-FORMED surrogate pair must survive the lone-surrogate gate"
+      },
+      {
+        "name": "title-lone-surrogate",
+        "builder": "collection",
+        "patch": {
+          "title": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 a tag value that cannot be UTF-8 encoded is not an event"
+      },
+      {
+        "name": "license-lone-surrogate",
+        "builder": "collection",
+        "patch": {
+          "license": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 same rule, license tag"
+      },
+      {
+        "name": "source-lone-surrogate",
+        "builder": "collection",
+        "patch": {
+          "source": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 same rule, source tag"
+      },
+      {
+        "name": "server-lone-surrogate",
+        "builder": "collection",
+        "patch": {
+          "server": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 same rule, server tag"
+      },
+      {
+        "name": "description-lone-surrogate",
+        "builder": "collection",
+        "patch": {
+          "description": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 content was already gated here; the tags were not"
+      },
+      {
+        "name": "url-lone-surrogate",
+        "builder": "item",
+        "patch": {
+          "url": {
+            "__string__": "URL_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 \\S accepts a surrogate, so the URL grammar alone never caught this"
+      },
+      {
+        "name": "dataset-lone-surrogate",
+        "builder": "item",
+        "patch": {
+          "dataset": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR \u2014 an ASCII-only grammar catches it first and reports its own code"
+      },
+      {
+        "name": "properties-explicit-null",
+        "builder": "item",
+        "patch": {
+          "properties": {
+            "__json__": "NULL"
+          }
+        },
+        "accepted": true,
+        "reason": "null, undefined and None all mean ABSENT, and absent means {}"
+      },
+      {
+        "name": "description-explicit-null",
+        "builder": "collection",
+        "patch": {
+          "description": {
+            "__json__": "NULL"
+          }
+        },
+        "accepted": true,
+        "reason": "the same rule for the other optional field: absent means the empty string"
+      },
+      {
+        "name": "description-absent",
+        "builder": "collection",
+        "patch": {
+          "description": null
+        },
+        "accepted": true,
+        "reason": "a missing key is the third spelling of absent"
+      },
+      {
+        "name": "description-not-a-string",
+        "builder": "collection",
+        "patch": {
+          "description": 42
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 the type failure of a text field, never STRING_NOT_SCALAR"
+      },
+      {
+        "name": "properties-array",
+        "builder": "item",
+        "patch": {
+          "properties": [
+            1,
+            2
+          ]
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR \u2014 an array is not a property bag, and it is not absent either"
+      },
+      {
+        "name": "datetime-explicit-null",
+        "builder": "item",
+        "patch": {
+          "datetime": {
+            "__json__": "NULL"
+          }
+        },
+        "accepted": false,
+        "reason": "DATETIME_REQUIRED \u2014 absent is NOT defaulted here; section 8.1 stands"
+      },
+      {
+        "name": "bbox-boolean-coordinate",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            8,
+            47.9,
+            9.5,
+            true
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_NOT_FINITE \u2014 float(True) is 1.0 in Python and Number.isFinite(true) is false in JS"
+      },
+      {
+        "name": "bbox-string-coordinate",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            8,
+            47.9,
+            "9.5",
+            48.6
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_NOT_FINITE \u2014 float(\"9.5\") coerces in Python; JS refuses"
+      },
+      {
+        "name": "order-bbox-finite-before-range",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            200,
+            0,
+            {
+              "__number__": "Infinity"
+            },
+            10
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_NOT_FINITE \u2014 a non-number is checked before its range"
+      },
+      {
+        "name": "order-bbox-range-before-antimeridian",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            200,
+            0,
+            100,
+            10
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_OUT_OF_RANGE \u2014 200 is not a longitude, so west > east says nothing about it"
+      },
+      {
+        "name": "order-bbox-range-before-inverted",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            8,
+            95,
+            9.5,
+            47.9
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_OUT_OF_RANGE \u2014 the same rule on the latitude axis"
+      },
+      {
+        "name": "order-bbox-antimeridian-before-inverted",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            10,
+            50,
+            5,
+            10
+          ]
+        },
+        "accepted": false,
+        "reason": "BBOX_ANTIMERIDIAN \u2014 longitude relation before latitude relation"
+      },
+      {
+        "name": "order-created-at-before-dataset",
+        "builder": "collection",
+        "patch": {
+          "createdAt": -1,
+          "dataset": ""
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE \u2014 created_at is emitted before the tags, so it is validated first"
+      },
+      {
+        "name": "order-dataset-before-title",
+        "builder": "collection",
+        "patch": {
+          "dataset": "",
+          "title": ""
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR \u2014 the d tag precedes the title tag"
+      },
+      {
+        "name": "order-title-before-bbox",
+        "builder": "collection",
+        "patch": {
+          "title": "",
+          "bbox": [
+            8,
+            47.9,
+            8,
+            48.6
+          ]
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 the title tag precedes the bbox tag"
+      },
+      {
+        "name": "order-bbox-before-mime",
+        "builder": "collection",
+        "patch": {
+          "bbox": [
+            8,
+            47.9,
+            8,
+            48.6
+          ],
+          "mimeType": ""
+        },
+        "accepted": false,
+        "reason": "BBOX_DEGENERATE \u2014 the bbox tag precedes the m tag; Python checked it third and JS last"
+      },
+      {
+        "name": "order-mime-before-license",
+        "builder": "collection",
+        "patch": {
+          "mimeType": "",
+          "license": ""
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR \u2014 the m tag precedes the license tag"
+      },
+      {
+        "name": "order-server-before-description",
+        "builder": "collection",
+        "patch": {
+          "server": " https://blossom.example",
+          "description": {
+            "__string__": "TEXT_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "TEXT_EMPTY \u2014 every tag precedes content"
+      },
+      {
+        "name": "order-scalar-before-trim",
+        "builder": "collection",
+        "patch": {
+          "title": {
+            "__string__": "TEXT_LEADING_SPACE_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 well-formedness is a precondition of every other string check"
+      },
+      {
+        "name": "order-created-at-before-dataset-item",
+        "builder": "item",
+        "patch": {
+          "createdAt": -1,
+          "dataset": ""
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE \u2014 the same first position on the item"
+      },
+      {
+        "name": "order-dataset-before-tile",
+        "builder": "item",
+        "patch": {
+          "dataset": "",
+          "tile": {
+            "z": 99,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR \u2014 the item d is <dataset>:<z>/<x>/<y>, so the dataset comes first"
+      },
+      {
+        "name": "order-tile-before-pubkey",
+        "builder": "item",
+        "patch": {
+          "tile": {
+            "z": 99,
+            "x": 0,
+            "y": 0
+          },
+          "pubkey": "short"
+        },
+        "accepted": false,
+        "reason": "TILE_ZOOM_RANGE \u2014 the d tag precedes the a tag; Python checked the dataset first and JS the pubkey"
+      },
+      {
+        "name": "order-pubkey-before-url",
+        "builder": "item",
+        "patch": {
+          "pubkey": "short",
+          "url": ""
+        },
+        "accepted": false,
+        "reason": "HEX64 \u2014 the a tag precedes the url tag"
+      },
+      {
+        "name": "order-sha256-before-url",
+        "builder": "item",
+        "patch": {
+          "sha256": "nothex",
+          "url": ""
+        },
+        "accepted": false,
+        "reason": "HEX64 \u2014 the x tag precedes the url tag"
+      },
+      {
+        "name": "order-url-before-mime",
+        "builder": "item",
+        "patch": {
+          "url": "",
+          "mimeType": ""
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR \u2014 the url tag precedes the m tag"
+      },
+      {
+        "name": "order-mime-before-size",
+        "builder": "item",
+        "patch": {
+          "mimeType": "",
+          "size": 0
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR \u2014 the m tag precedes the size tag"
+      },
+      {
+        "name": "order-size-before-datetime",
+        "builder": "item",
+        "patch": {
+          "size": 0,
+          "datetime": "yesterday"
+        },
+        "accepted": false,
+        "reason": "SIZE_RANGE \u2014 the size tag precedes content"
+      },
+      {
+        "name": "order-datetime-before-properties",
+        "builder": "item",
+        "patch": {
+          "datetime": "yesterday",
+          "properties": {
+            "a b": 1
+          }
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR \u2014 inside content the keys sort bbox, datetime, properties"
+      },
+      {
+        "name": "order-url-scalar-before-grammar",
+        "builder": "item",
+        "patch": {
+          "url": {
+            "__string__": "URL_BAD_SCHEME_WITH_LONE_SURROGATE"
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR \u2014 well-formedness precedes the url grammar too"
+      }
+    ]
+  },
+  "validation": {
+    "baseInput": {
+      "dataset": "terrain",
+      "tile": {
+        "z": 14,
+        "x": 8593,
+        "y": 5677
+      },
+      "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "url": "https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2",
+      "mimeType": "application/vnd.terrcvm.tft2",
+      "size": 65536,
+      "datetime": "2026-01-01T00:00:00Z",
+      "properties": {
+        "buildings": 412
+      },
+      "createdAt": 1767225600
+    },
+    "cases": [
+      {
+        "name": "baseline",
+        "patch": {},
+        "accepted": true,
+        "reason": "the base input is valid"
+      },
+      {
+        "name": "sha256-not-hex",
+        "patch": {
+          "sha256": "nothex"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "sha256-uppercase",
+        "patch": {
+          "sha256": "FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "sha256-63-chars",
+        "patch": {
+          "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba987654321"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "sha256-65-chars",
+        "patch": {
+          "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210a"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "sha256-all-zero",
+        "patch": {
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "accepted": true,
+        "reason": "a legal, if unusual, digest"
+      },
+      {
+        "name": "size-zero",
+        "patch": {
+          "size": 0
+        },
+        "accepted": false,
+        "reason": "SIZE_RANGE — a zero-byte blob is a publish bug"
+      },
+      {
+        "name": "size-negative",
+        "patch": {
+          "size": -5
+        },
+        "accepted": false,
+        "reason": "SIZE_RANGE"
+      },
+      {
+        "name": "size-fractional",
+        "patch": {
+          "size": 1.5
+        },
+        "accepted": false,
+        "reason": "SIZE_RANGE"
+      },
+      {
+        "name": "size-one",
+        "patch": {
+          "size": 1
+        },
+        "accepted": true,
+        "reason": "one byte is the minimum"
+      },
+      {
+        "name": "size-unsafe-integer",
+        "patch": {
+          "size": 9007199254740992
+        },
+        "accepted": false,
+        "reason": "SIZE_RANGE — beyond 2^53-1"
+      },
+      {
+        "name": "size-safe-max",
+        "patch": {
+          "size": 9007199254740991
+        },
+        "accepted": true,
+        "reason": "exactly 2^53-1"
+      },
+      {
+        "name": "datetime-missing",
+        "patch": {
+          "datetime": null
+        },
+        "accepted": false,
+        "reason": "DATETIME_REQUIRED — Python used to default it to iso_datetime(created_at); the fixture masked that because createdAt 1767225600 renders to exactly '2026-01-01T00:00:00Z'"
+      },
+      {
+        "name": "datetime-empty",
+        "patch": {
+          "datetime": ""
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-prose",
+        "patch": {
+          "datetime": "yesterday"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-offset",
+        "patch": {
+          "datetime": "2026-01-01T00:00:00+01:00"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR — UTC 'Z' only, so the string sorts lexicographically"
+      },
+      {
+        "name": "datetime-lowercase-z",
+        "patch": {
+          "datetime": "2026-01-01T00:00:00z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-space-separator",
+        "patch": {
+          "datetime": "2026-01-01 00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-date-only",
+        "patch": {
+          "datetime": "2026-01-01"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-fractional",
+        "patch": {
+          "datetime": "2026-01-01T00:00:00.123456789Z"
+        },
+        "accepted": true,
+        "reason": "1..9 fractional digits are kept verbatim"
+      },
+      {
+        "name": "datetime-too-many-fraction-digits",
+        "patch": {
+          "datetime": "2026-01-01T00:00:00.1234567890Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_GRAMMAR"
+      },
+      {
+        "name": "datetime-month-13",
+        "patch": {
+          "datetime": "2026-13-01T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_CALENDAR"
+      },
+      {
+        "name": "datetime-feb-30",
+        "patch": {
+          "datetime": "2026-02-30T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_CALENDAR"
+      },
+      {
+        "name": "datetime-leap-day",
+        "patch": {
+          "datetime": "2024-02-29T00:00:00Z"
+        },
+        "accepted": true,
+        "reason": "2024 is a leap year"
+      },
+      {
+        "name": "datetime-non-leap-day",
+        "patch": {
+          "datetime": "2100-02-29T00:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_CALENDAR — 2100 is not a leap year"
+      },
+      {
+        "name": "datetime-hour-24",
+        "patch": {
+          "datetime": "2026-01-01T24:00:00Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_CALENDAR"
+      },
+      {
+        "name": "datetime-leap-second",
+        "patch": {
+          "datetime": "2016-12-31T23:59:60Z"
+        },
+        "accepted": false,
+        "reason": "DATETIME_CALENDAR — second 60 is rejected; no unix second maps to it"
+      },
+      {
+        "name": "url-empty",
+        "patch": {
+          "url": ""
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR"
+      },
+      {
+        "name": "url-no-scheme",
+        "patch": {
+          "url": "blossom.example/x.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR"
+      },
+      {
+        "name": "url-untrimmed",
+        "patch": {
+          "url": " https://blossom.example/fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR"
+      },
+      {
+        "name": "url-internal-space",
+        "patch": {
+          "url": "https://blossom.example/a b.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR"
+      },
+      {
+        "name": "url-http",
+        "patch": {
+          "url": "http://blossom.example/a.tft2"
+        },
+        "accepted": true,
+        "reason": "plain http is allowed"
+      },
+      {
+        "name": "url-non-http-scheme",
+        "patch": {
+          "url": "ftp://blossom.example/a.tft2"
+        },
+        "accepted": false,
+        "reason": "URL_GRAMMAR — the blob must be fetchable by a browser client"
+      },
+      {
+        "name": "created-at-negative",
+        "patch": {
+          "createdAt": -1
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE"
+      },
+      {
+        "name": "created-at-fractional",
+        "patch": {
+          "createdAt": 1767225600.5
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE"
+      },
+      {
+        "name": "created-at-milliseconds",
+        "patch": {
+          "createdAt": 1767225600000
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE — the ceiling exists to catch Date.now() passed unscaled"
+      },
+      {
+        "name": "created-at-zero",
+        "patch": {
+          "createdAt": 0
+        },
+        "accepted": true,
+        "reason": "the unix epoch is a legal publish instant"
+      },
+      {
+        "name": "created-at-ceiling",
+        "patch": {
+          "createdAt": 2147483647
+        },
+        "accepted": true,
+        "reason": "2^31-1"
+      },
+      {
+        "name": "created-at-over-ceiling",
+        "patch": {
+          "createdAt": 2147483648
+        },
+        "accepted": false,
+        "reason": "CREATED_AT_RANGE"
+      },
+      {
+        "name": "zoom-23",
+        "patch": {
+          "tile": {
+            "z": 23,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_ZOOM_RANGE — TS rejected this, Python accepted it up to z30"
+      },
+      {
+        "name": "zoom-25",
+        "patch": {
+          "tile": {
+            "z": 25,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_ZOOM_RANGE"
+      },
+      {
+        "name": "zoom-31",
+        "patch": {
+          "tile": {
+            "z": 31,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_ZOOM_RANGE"
+      },
+      {
+        "name": "zoom-negative",
+        "patch": {
+          "tile": {
+            "z": -1,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_ZOOM_RANGE"
+      },
+      {
+        "name": "zoom-fractional",
+        "patch": {
+          "tile": {
+            "z": 14.0,
+            "x": 1,
+            "y": 1
+          }
+        },
+        "accepted": true,
+        "reason": "14.0 IS the integer 14 in JavaScript; integrality is a value test, not a type test"
+      },
+      {
+        "name": "zoom-22-max",
+        "patch": {
+          "tile": {
+            "z": 22,
+            "x": 4194303,
+            "y": 4194303
+          }
+        },
+        "accepted": true,
+        "reason": "the ceiling"
+      },
+      {
+        "name": "x-equals-span",
+        "patch": {
+          "tile": {
+            "z": 14,
+            "x": 16384,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_XY_RANGE"
+      },
+      {
+        "name": "y-equals-span",
+        "patch": {
+          "tile": {
+            "z": 14,
+            "x": 0,
+            "y": 16384
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_XY_RANGE"
+      },
+      {
+        "name": "x-negative",
+        "patch": {
+          "tile": {
+            "z": 14,
+            "x": -1,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_XY_RANGE"
+      },
+      {
+        "name": "x-fractional",
+        "patch": {
+          "tile": {
+            "z": 14,
+            "x": 1.5,
+            "y": 0
+          }
+        },
+        "accepted": false,
+        "reason": "TILE_XY_RANGE"
+      },
+      {
+        "name": "pubkey-short",
+        "patch": {
+          "pubkey": "short"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "pubkey-uppercase",
+        "patch": {
+          "pubkey": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
+        },
+        "accepted": false,
+        "reason": "HEX64"
+      },
+      {
+        "name": "pubkey-npub",
+        "patch": {
+          "pubkey": "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+        },
+        "accepted": false,
+        "reason": "HEX64 — the a tag carries hex, never bech32"
+      },
+      {
+        "name": "dataset-empty",
+        "patch": {
+          "dataset": ""
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-whitespace",
+        "patch": {
+          "dataset": "terr ain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-tab",
+        "patch": {
+          "dataset": "terr\tain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-untrimmed",
+        "patch": {
+          "dataset": "terrain "
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-colon",
+        "patch": {
+          "dataset": "terr:ain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-slash",
+        "patch": {
+          "dataset": "terr/ain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-uppercase",
+        "patch": {
+          "dataset": "Terrain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-nfc",
+        "patch": {
+          "dataset": "terräin"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR — non-ASCII is rejected outright, which is why no Unicode normalisation step is needed anywhere"
+      },
+      {
+        "name": "dataset-nfd",
+        "patch": {
+          "dataset": "terräin"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR — the NFD spelling of the same name, rejected identically"
+      },
+      {
+        "name": "dataset-leading-dot",
+        "patch": {
+          "dataset": ".terrain"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-64-chars",
+        "patch": {
+          "dataset": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "accepted": true,
+        "reason": "the length ceiling"
+      },
+      {
+        "name": "dataset-65-chars",
+        "patch": {
+          "dataset": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "accepted": false,
+        "reason": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "dataset-digits-only",
+        "patch": {
+          "dataset": "2024"
+        },
+        "accepted": true,
+        "reason": "digits alone are a legal name"
+      },
+      {
+        "name": "mime-empty",
+        "patch": {
+          "mimeType": ""
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR"
+      },
+      {
+        "name": "mime-no-subtype",
+        "patch": {
+          "mimeType": "application"
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR"
+      },
+      {
+        "name": "mime-untrimmed",
+        "patch": {
+          "mimeType": " image/png"
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR"
+      },
+      {
+        "name": "mime-with-parameter",
+        "patch": {
+          "mimeType": "text/plain; charset=utf-8"
+        },
+        "accepted": false,
+        "reason": "MIME_GRAMMAR — the m tag is a bare type/subtype"
+      },
+      {
+        "name": "properties-empty",
+        "patch": {
+          "properties": {}
+        },
+        "accepted": true,
+        "reason": "the default"
+      },
+      {
+        "name": "properties-omitted",
+        "patch": {
+          "properties": null
+        },
+        "accepted": true,
+        "reason": "absent means {}"
+      },
+      {
+        "name": "properties-nested",
+        "patch": {
+          "properties": {
+            "a": {
+              "b": [
+                1,
+                2,
+                {
+                  "c": null
+                }
+              ]
+            }
+          }
+        },
+        "accepted": true,
+        "reason": "arbitrary nesting is fine"
+      },
+      {
+        "name": "properties-key-with-space",
+        "patch": {
+          "properties": {
+            "a b": 1
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR"
+      },
+      {
+        "name": "properties-key-non-ascii",
+        "patch": {
+          "properties": {
+            "höhe": 1
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR — ASCII keys make JS UTF-16 sort and Python code-point sort provably identical"
+      },
+      {
+        "name": "properties-key-astral",
+        "patch": {
+          "properties": {
+            "🗻": 1
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR — this is the exact key class where the two sort orders diverge: JS compares surrogate code units, Python compares code points"
+      },
+      {
+        "name": "properties-key-empty",
+        "patch": {
+          "properties": {
+            "": 1
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_KEY_GRAMMAR"
+      },
+      {
+        "name": "properties-nan",
+        "patch": {
+          "properties": {
+            "n": {
+              "__number__": "NaN"
+            }
+          }
+        },
+        "accepted": false,
+        "reason": "NUMBER_NOT_FINITE"
+      },
+      {
+        "name": "properties-infinity",
+        "patch": {
+          "properties": {
+            "n": {
+              "__number__": "Infinity"
+            }
+          }
+        },
+        "accepted": false,
+        "reason": "NUMBER_NOT_FINITE"
+      },
+      {
+        "name": "properties-huge",
+        "patch": {
+          "properties": {
+            "n": 1e+300
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_NUMBER_RANGE — canonicalNumber can serialise it, but |v| > 2^53-1 does not survive every JSON consumer, so the property gate refuses it"
+      },
+      {
+        "name": "properties-tiny",
+        "patch": {
+          "properties": {
+            "n": 1e-300
+          }
+        },
+        "accepted": true,
+        "reason": "small magnitudes are fine; only the safe-integer ceiling is capped"
+      },
+      {
+        "name": "properties-unsafe-integer",
+        "patch": {
+          "properties": {
+            "n": 9007199254740992
+          }
+        },
+        "accepted": false,
+        "reason": "PROPERTY_NUMBER_RANGE"
+      },
+      {
+        "name": "properties-safe-integer",
+        "patch": {
+          "properties": {
+            "n": 9007199254740991
+          }
+        },
+        "accepted": true,
+        "reason": "2^53-1"
+      },
+      {
+        "name": "properties-negative-zero",
+        "patch": {
+          "properties": {
+            "n": {
+              "__number__": "-0"
+            }
+          }
+        },
+        "accepted": true,
+        "reason": "serialises as 0"
+      },
+      {
+        "name": "properties-lone-surrogate",
+        "patch": {
+          "properties": {
+            "n": {
+              "__string__": "LONE_SURROGATE_D800"
+            }
+          }
+        },
+        "accepted": false,
+        "reason": "STRING_NOT_SCALAR — JS would escape it, Python cannot even hold it"
+      }
+    ]
+  },
+  "filters": {
+    "catalog": [
+      {
+        "name": "defaults",
+        "input": {},
+        "expect": {
+          "kinds": [
+            30550
+          ],
+          "limit": 500
+        },
+        "note": "Python's collection_filter defaulted to 200, TS catalog() to 500"
+      },
+      {
+        "name": "authors",
+        "input": {
+          "authors": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "aaaabbbbccccddddeeeeffff00001111aaaabbbbccccddddeeeeffff00001111"
+          ]
+        },
+        "expect": {
+          "kinds": [
+            30550
+          ],
+          "authors": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "aaaabbbbccccddddeeeeffff00001111aaaabbbbccccddddeeeeffff00001111"
+          ],
+          "limit": 500
+        },
+        "note": "authors is copied, never aliased"
+      },
+      {
+        "name": "explicit-limit",
+        "input": {
+          "limit": 25
+        },
+        "expect": {
+          "kinds": [
+            30550
+          ],
+          "limit": 25
+        }
+      },
+      {
+        "name": "limit-zero",
+        "input": {
+          "limit": 0
+        },
+        "reject": "FILTER_LIMIT_RANGE"
+      },
+      {
+        "name": "limit-above-relay-ceiling",
+        "input": {
+          "limit": 501
+        },
+        "reject": "FILTER_LIMIT_RANGE",
+        "note": "strfry silently CLAMPS above 500; refusing is the only way a caller can tell a full page from a truncated one"
+      },
+      {
+        "name": "limit-fractional",
+        "input": {
+          "limit": 10.5
+        },
+        "reject": "FILTER_LIMIT_RANGE"
+      }
+    ],
+    "nearby": [
+      {
+        "name": "single-viewport",
+        "input": {
+          "bbox": [
+            8.8,
+            48.25,
+            8.83,
+            48.26
+          ]
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#g": [
+            "u0w6"
+          ],
+          "limit": 500
+        },
+        "coverCellCount": 1
+      },
+      {
+        "name": "scoped-to-one-collection",
+        "input": {
+          "bbox": [
+            8.8,
+            48.25,
+            8.83,
+            48.26
+          ],
+          "collection": {
+            "pubkey": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "dataset": "terrain"
+          }
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#g": [
+            "u0w6"
+          ],
+          "#a": [
+            "30550:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:terrain"
+          ],
+          "limit": 500
+        },
+        "note": "#g plus #a is two tag keys; strfry's maxTagsPerFilter default is 3"
+      },
+      {
+        "name": "dataset-extent",
+        "input": {
+          "bbox": [
+            8.0,
+            47.9,
+            9.5,
+            48.6
+          ]
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#g": [
+            "u0t8",
+            "u0t9",
+            "u0td",
+            "u0te",
+            "u0ts",
+            "u0tb",
+            "u0tc",
+            "u0tf",
+            "u0tg",
+            "u0tu",
+            "u0w0",
+            "u0w1",
+            "u0w4",
+            "u0w5",
+            "u0wh",
+            "u0w2",
+            "u0w3",
+            "u0w6",
+            "u0w7",
+            "u0wk",
+            "u0w8",
+            "u0w9",
+            "u0wd",
+            "u0we",
+            "u0ws",
+            "u0wb",
+            "u0wc",
+            "u0wf",
+            "u0wg",
+            "u0wu"
+          ],
+          "limit": 500
+        },
+        "coverCellCount": 30,
+        "note": "WIDER THAN ONE CELL — this is the case corner-sampling missed"
+      },
+      {
+        "name": "degenerate-point-viewport",
+        "input": {
+          "bbox": [
+            8.822021484375,
+            48.26125565204099,
+            8.822021484375,
+            48.26125565204099
+          ]
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#g": [
+            "u0w6"
+          ],
+          "limit": 500
+        },
+        "note": "west == east is LEGAL for a viewport (a point query) even though it is illegal for a collection extent"
+      },
+      {
+        "name": "explicit-limit",
+        "input": {
+          "bbox": [
+            8.8,
+            48.25,
+            8.83,
+            48.26
+          ],
+          "limit": 1
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#g": [
+            "u0w6"
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "name": "too-wide-europe",
+        "input": {
+          "bbox": [
+            -25.0,
+            34.0,
+            45.0,
+            72.0
+          ]
+        },
+        "expect": null,
+        "coverCellCount": 43617,
+        "note": "null is a ROUTING signal, not an error: fall back to catalog()"
+      },
+      {
+        "name": "too-wide-world",
+        "input": {
+          "bbox": [
+            -180.0,
+            -90.0,
+            180.0,
+            90.0
+          ]
+        },
+        "expect": null,
+        "coverCellCount": 1048576
+      },
+      {
+        "name": "max-cells-override-refuses",
+        "input": {
+          "bbox": [
+            8.0,
+            47.9,
+            9.5,
+            48.6
+          ],
+          "maxCells": 4
+        },
+        "expect": null
+      },
+      {
+        "name": "antimeridian",
+        "input": {
+          "bbox": [
+            170.0,
+            -10.0,
+            -170.0,
+            10.0
+          ]
+        },
+        "reject": "BBOX_ANTIMERIDIAN",
+        "note": "a wrap would enumerate the whole globe MINUS the viewport; the caller splits into [170,-10,180,10] and [-180,-10,-170,10]"
+      }
+    ],
+    "exactTile": [
+      {
+        "name": "defaults",
+        "input": {
+          "dataset": "terrain",
+          "tile": {
+            "z": 14,
+            "x": 8593,
+            "y": 5677
+          }
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#d": [
+            "terrain:14/8593/5677"
+          ],
+          "limit": 500
+        },
+        "note": "limit is 500, NOT 1: (kind, pubkey, d) lets several publishers hold the same d, and limit 1 would hide all but one"
+      },
+      {
+        "name": "single-author",
+        "input": {
+          "dataset": "terrain",
+          "tile": {
+            "z": 14,
+            "x": 8593,
+            "y": 5677
+          },
+          "authors": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ]
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "authors": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ],
+          "#d": [
+            "terrain:14/8593/5677"
+          ],
+          "limit": 500
+        }
+      },
+      {
+        "name": "z0",
+        "input": {
+          "dataset": "imagery-2024",
+          "tile": {
+            "z": 0,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "expect": {
+          "kinds": [
+            30551
+          ],
+          "#d": [
+            "imagery-2024:0/0/0"
+          ],
+          "limit": 500
+        }
+      },
+      {
+        "name": "bad-dataset",
+        "input": {
+          "dataset": "terr ain",
+          "tile": {
+            "z": 14,
+            "x": 8593,
+            "y": 5677
+          }
+        },
+        "reject": "DATASET_GRAMMAR"
+      },
+      {
+        "name": "bad-zoom",
+        "input": {
+          "dataset": "terrain",
+          "tile": {
+            "z": 23,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "reject": "TILE_ZOOM_RANGE"
+      }
+    ]
+  },
+  "geohash": {
+    "cellToGeohash": [
+      {
+        "ix": 0,
+        "iy": 0,
+        "precision": 4,
+        "expected": "0000"
+      },
+      {
+        "ix": 1023,
+        "iy": 1023,
+        "precision": 4,
+        "expected": "zzzz"
+      },
+      {
+        "ix": 512,
+        "iy": 512,
+        "precision": 4,
+        "expected": "s000"
+      },
+      {
+        "ix": 537,
+        "iy": 786,
+        "precision": 4,
+        "expected": "u0w6"
+      }
+    ],
+    "gridSize": [
+      {
+        "precision": 1,
+        "lonCells": 8,
+        "latCells": 4
+      },
+      {
+        "precision": 2,
+        "lonCells": 32,
+        "latCells": 32
+      },
+      {
+        "precision": 3,
+        "lonCells": 256,
+        "latCells": 128
+      },
+      {
+        "precision": 4,
+        "lonCells": 1024,
+        "latCells": 1024
+      },
+      {
+        "precision": 5,
+        "lonCells": 8192,
+        "latCells": 4096
+      },
+      {
+        "precision": 6,
+        "lonCells": 32768,
+        "latCells": 32768
+      }
+    ],
+    "encode": [
+      {
+        "lat": 57.64911,
+        "lon": 10.40744,
+        "precision": 11,
+        "expected": "u4pruydqqvj",
+        "note": "the canonical geohash.org reference vector"
+      },
+      {
+        "lat": 48.26125565204099,
+        "lon": 8.822021484375,
+        "precision": 4,
+        "expected": "u0w6",
+        "note": "centre of tile z14/8593/5677"
+      },
+      {
+        "lat": 48.26125565204099,
+        "lon": 8.822021484375,
+        "precision": 12,
+        "expected": "u0w68c8n0n05",
+        "note": "the same point at full precision"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 1,
+        "expected": "s",
+        "note": "null island; every division is hit exactly, and >= resolves upward"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 2,
+        "expected": "s0"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 3,
+        "expected": "s00"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 4,
+        "expected": "s000"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 5,
+        "expected": "s0000"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 6,
+        "expected": "s00000"
+      },
+      {
+        "lat": -90.0,
+        "lon": -180.0,
+        "precision": 4,
+        "expected": "0000",
+        "note": "the south-west corner of the world"
+      },
+      {
+        "lat": 90.0,
+        "lon": 180.0,
+        "precision": 4,
+        "expected": "zzzz",
+        "note": "the north-east corner; both maxima take the >= branch"
+      },
+      {
+        "lat": -0.17578125,
+        "lon": -0.3515625,
+        "precision": 4,
+        "expected": "7zzz",
+        "note": "exactly on a p4 division from below"
+      },
+      {
+        "lat": 51.5074,
+        "lon": -0.1278,
+        "precision": 5,
+        "expected": "gcpvj",
+        "note": "London"
+      },
+      {
+        "lat": -33.8688,
+        "lon": 151.2093,
+        "precision": 6,
+        "expected": "r3gx2f",
+        "note": "Sydney"
+      },
+      {
+        "lat": 85.05112878,
+        "lon": 0.0,
+        "precision": 4,
+        "expected": "up05",
+        "note": "the Web Mercator north cut-off"
+      },
+      {
+        "lat": 4.2915344238281e-05,
+        "lon": 4.2915344238281e-05,
+        "precision": 4,
+        "expected": "s000",
+        "note": "centre of z22 tile 2097152/2097151"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 0,
+        "reject": "GEOHASH_PRECISION_RANGE"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 13,
+        "reject": "GEOHASH_PRECISION_RANGE"
+      },
+      {
+        "lat": 0.0,
+        "lon": 0.0,
+        "precision": 4.5,
+        "reject": "GEOHASH_PRECISION_RANGE"
+      },
+      {
+        "lat": 91.0,
+        "lon": 0.0,
+        "precision": 4,
+        "reject": "LATLON_RANGE"
+      },
+      {
+        "lat": -91.0,
+        "lon": 0.0,
+        "precision": 4,
+        "reject": "LATLON_RANGE"
+      },
+      {
+        "lat": 0.0,
+        "lon": 181.0,
+        "precision": 4,
+        "reject": "LATLON_RANGE"
+      }
+    ],
+    "cover": [
+      {
+        "name": "single-cell",
+        "bbox": [
+          8.8,
+          48.25,
+          8.83,
+          48.26
+        ],
+        "expectedCellCount": 1,
+        "expectedCells": [
+          "u0w6"
+        ],
+        "note": "0.03 x 0.01 deg — smaller than one p4 cell, but it still straddles a boundary"
+      },
+      {
+        "name": "wider-than-one-cell",
+        "bbox": [
+          8.0,
+          47.9,
+          9.5,
+          48.6
+        ],
+        "expectedCellCount": 30,
+        "expectedCells": [
+          "u0t8",
+          "u0t9",
+          "u0td",
+          "u0te",
+          "u0ts",
+          "u0tb",
+          "u0tc",
+          "u0tf",
+          "u0tg",
+          "u0tu",
+          "u0w0",
+          "u0w1",
+          "u0w4",
+          "u0w5",
+          "u0wh",
+          "u0w2",
+          "u0w3",
+          "u0w6",
+          "u0w7",
+          "u0wk",
+          "u0w8",
+          "u0w9",
+          "u0wd",
+          "u0we",
+          "u0ws",
+          "u0wb",
+          "u0wc",
+          "u0wf",
+          "u0wg",
+          "u0wu"
+        ],
+        "note": "1.5 x 0.7 deg: 5 columns x 5 rows. Corner sampling returned at most 4 of these 25 and reported success."
+      },
+      {
+        "name": "point",
+        "bbox": [
+          8.822021484375,
+          48.26125565204099,
+          8.822021484375,
+          48.26125565204099
+        ],
+        "expectedCellCount": 1,
+        "expectedCells": [
+          "u0w6"
+        ],
+        "note": "degenerate viewport, west == east and south == north"
+      },
+      {
+        "name": "polar-above-mercator",
+        "bbox": [
+          -0.2,
+          84.5,
+          0.2,
+          89.9
+        ],
+        "expectedCellCount": 64,
+        "expectedCells": [
+          "gzpb",
+          "gzpc",
+          "gzpf",
+          "gzpg",
+          "gzpu",
+          "gzpv",
+          "gzpy",
+          "gzpz",
+          "gzrb",
+          "gzrc",
+          "gzrf",
+          "gzrg",
+          "gzru",
+          "gzrv",
+          "gzry",
+          "gzrz",
+          "gzxb",
+          "gzxc",
+          "gzxf",
+          "gzxg",
+          "gzxu",
+          "gzxv",
+          "gzxy",
+          "gzxz",
+          "gzzb",
+          "gzzc",
+          "gzzf",
+          "gzzg",
+          "gzzu",
+          "gzzv",
+          "gzzy",
+          "gzzz",
+          "up00",
+          "up01",
+          "up04",
+          "up05",
+          "up0h",
+          "up0j",
+          "up0n",
+          "up0p",
+          "up20",
+          "up21",
+          "up24",
+          "up25",
+          "up2h",
+          "up2j",
+          "up2n",
+          "up2p",
+          "up80",
+          "up81",
+          "up84",
+          "up85",
+          "up8h",
+          "up8j",
+          "up8n",
+          "up8p",
+          "upb0",
+          "upb1",
+          "upb4",
+          "upb5",
+          "upbh",
+          "upbj",
+          "upbn",
+          "upbp"
+        ],
+        "note": "reaches past the Web Mercator cut-off of 85.05112878. Covering clamps to the GEOHASH domain (+/-90), not to the Mercator one — presence and geo-notes exist above 85 even though tiles do not. The extra rows simply come back empty."
+      },
+      {
+        "name": "polar-cap",
+        "bbox": [
+          -0.2,
+          89.9,
+          0.2,
+          90.0
+        ],
+        "expectedCellCount": 2,
+        "expectedCells": [
+          "gzzz",
+          "upbp"
+        ],
+        "note": "touching the north pole exactly"
+      },
+      {
+        "name": "south-west-corner",
+        "bbox": [
+          -180.0,
+          -90.0,
+          -179.9,
+          -89.9
+        ],
+        "expectedCellCount": 1,
+        "expectedCells": [
+          "0000"
+        ],
+        "note": "the origin cell of the grid"
+      },
+      {
+        "name": "antimeridian-west-half",
+        "bbox": [
+          179.9,
+          -0.1,
+          180.0,
+          0.1
+        ],
+        "expectedCellCount": 2,
+        "expectedCells": [
+          "rzzz",
+          "xbpb"
+        ],
+        "note": "the western half of a straddling viewport, after the caller splits it. Longitude 180 lands in the LAST column (index 1023) because the encoder's cells are half-open and the top edge has nowhere above it to go."
+      },
+      {
+        "name": "antimeridian-east-half",
+        "bbox": [
+          -180.0,
+          -0.1,
+          -179.9,
+          0.1
+        ],
+        "expectedCellCount": 2,
+        "expectedCells": [
+          "2pbp",
+          "8000"
+        ],
+        "note": "and the eastern half, starting at column 0. The two halves share no cell, so the union is an exact cover of the seam."
+      },
+      {
+        "name": "austria",
+        "bbox": [
+          9.53,
+          46.37,
+          17.16,
+          49.02
+        ],
+        "expectedCellCount": 352,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "alps",
+        "bbox": [
+          5.0,
+          43.5,
+          16.0,
+          48.0
+        ],
+        "expectedCellCount": 864,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "europe",
+        "bbox": [
+          -25.0,
+          34.0,
+          45.0,
+          72.0
+        ],
+        "expectedCellCount": 43617,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "world",
+        "bbox": [
+          -180.0,
+          -90.0,
+          180.0,
+          90.0
+        ],
+        "expectedCellCount": 1048576,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "world-mercator-band",
+        "bbox": [
+          -180.0,
+          -85.05112878,
+          180.0,
+          85.05112878
+        ],
+        "expectedCellCount": 991232,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "antimeridian-west-half-wide",
+        "bbox": [
+          170.0,
+          -10.0,
+          180.0,
+          10.0
+        ],
+        "expectedCellCount": 3306,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "antimeridian-east-half-wide",
+        "bbox": [
+          -180.0,
+          -10.0,
+          -170.0,
+          10.0
+        ],
+        "expectedCellCount": 3306,
+        "cellsOmitted": true,
+        "acceptedByNearby": false,
+        "note": "count only — the list is too large to pin and too large for any relay to accept"
+      },
+      {
+        "name": "antimeridian",
+        "bbox": [
+          170.0,
+          -10.0,
+          -170.0,
+          10.0
+        ],
+        "reject": "BBOX_ANTIMERIDIAN"
+      },
+      {
+        "name": "inverted",
+        "bbox": [
+          8.0,
+          48.6,
+          9.5,
+          47.9
+        ],
+        "reject": "BBOX_INVERTED"
+      },
+      {
+        "name": "lat-out-of-range",
+        "bbox": [
+          -0.2,
+          84.5,
+          0.2,
+          95.0
+        ],
+        "reject": "BBOX_OUT_OF_RANGE"
+      },
+      {
+        "name": "lon-out-of-range",
+        "bbox": [
+          -181.0,
+          -10.0,
+          10.0,
+          10.0
+        ],
+        "reject": "BBOX_OUT_OF_RANGE"
+      },
+      {
+        "name": "not-finite",
+        "bbox": [
+          0.0,
+          0.0,
+          {
+            "__number__": "Infinity"
+          },
+          10.0
+        ],
+        "reject": "BBOX_NOT_FINITE"
+      }
+    ]
+  },
+  "supersession": {
+    "note": "Which of several events sharing (kind, pubkey, d) is the head. NIP-01 leaves the tie unspecified; this protocol does not.",
+    "rule": "highest created_at wins; on a tie the LOWEST event id wins",
+    "cases": [
+      {
+        "name": "newer-wins",
+        "events": [
+          {
+            "id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "created_at": 100
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "created_at": 101
+          }
+        ],
+        "expectedHeadId": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "name": "tie-lowest-id",
+        "events": [
+          {
+            "id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "created_at": 100
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "created_at": 100
+          },
+          {
+            "id": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+            "created_at": 100
+          }
+        ],
+        "expectedHeadId": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "createdAtMonotonicity": {
+    "note": "nextCreatedAt(lastPublished, nowSeconds) is the ONLY place a publisher may derive created_at for an addressable event. A skewed or rewound clock otherwise writes a head that can never be superseded, and the publisher still sees OK from the relay.",
+    "rule": "max(nowSeconds, lastPublished + 1)",
+    "cases": [
+      {
+        "last": null,
+        "now": 1767225600,
+        "expected": 1767225600
+      },
+      {
+        "last": 1767225600,
+        "now": 1767225601,
+        "expected": 1767225601
+      },
+      {
+        "last": 1767225600,
+        "now": 1767225600,
+        "expected": 1767225601
+      },
+      {
+        "last": 1767225600,
+        "now": 1767000000,
+        "expected": 1767225601
+      },
+      {
+        "last": 2147483647,
+        "now": 1767225600,
+        "reject": "CREATED_AT_RANGE"
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 import { loadApprovedBytes } from '../shell/resource-client';
-import type { Footprint } from './extrude';
-import type { BBox4326 } from '../bbox/validate';
+import type { Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * OpenStreetMap building footprints via Overpass.

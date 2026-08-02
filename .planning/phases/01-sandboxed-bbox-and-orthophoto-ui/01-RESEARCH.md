@@ -352,11 +352,11 @@ Nyquist validation and security enforcement are enabled in `.planning/config.jso
 | Unit runner | Vitest 4.1.10 candidate, pending SUS checkpoint |
 | Browser/runtime | Chromium through `@napplet/conformance-cli@0.2.16` and installed Kehto/Paja |
 | Config files | None exist yet — create in Wave 0 |
-| Quick command | `pnpm --filter @terrdvm/napplet test:unit` |
+| Quick command | `pnpm --filter @terrcvm/napplet test:unit` |
 | Full phase command | `pnpm verify:phase-01` |
-| Production build | `pnpm --filter @terrdvm/napplet build` |
-| Conformance | `pnpm --filter @terrdvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json` |
-| Built Paja launch | `kehto paja --target-url http://127.0.0.1:4173 -- pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173` |
+| Production build | `pnpm --filter @terrcvm/napplet build` |
+| Conformance | `pnpm --filter @terrcvm/napplet exec napplet-conformance ./dist --reporter json --out ../../.planning/evidence/phase-01/conformance.json` |
+| Built Paja launch | `kehto paja --target-url http://127.0.0.1:4173 -- pnpm --filter @terrcvm/napplet exec vite preview --host 127.0.0.1 --port 4173` |
 | Clean-checkout gate | repository script `pnpm verify:clean:phase-01` creates an isolated worktree and runs frozen install + full phase command |
 
 The package script names are prescribed Wave 0 interfaces; no package files currently exist. Commands using candidate packages become executable only after package checkpoints pass. [VERIFIED: repository has no package.json; command design is prescriptive]
@@ -365,7 +365,7 @@ The package script names are prescribed Wave 0 interfaces; no package files curr
 
 | Req ID | Behavior | Test type | Automated command/evidence | Exists? |
 |---|---|---|---|---|
-| MAP-01 | Draw one rectangle | Paja built-browser | `pnpm --filter @terrdvm/napplet test:smoke:paja -- --case draw` | ❌ Wave 0 |
+| MAP-01 | Draw one rectangle | Paja built-browser | `pnpm --filter @terrcvm/napplet test:smoke:paja -- --case draw` | ❌ Wave 0 |
 | MAP-02 | Edit and clear | Paja built-browser | same suite `--case edit-clear` | ❌ Wave 0 |
 | MAP-03 | Geodesic km² | Unit | `pnpm ... test:unit -- bbox-area` with equator/high-latitude fixtures | ❌ Wave 0 |
 | MAP-04 | Every malformed/range/order/antimeridian/limit clause | Unit + UI smoke | `pnpm ... test:unit -- bbox-validation`; Paja error assertion | ❌ Wave 0 |
@@ -433,7 +433,7 @@ The package script names are prescribed Wave 0 interfaces; no package files curr
 8. Save redacted screenshot, browser console, network/request summary, and machine-readable result under `.planning/evidence/phase-01/`.
 9. Human-check visual bbox/ortho correspondence; automation cannot by itself prove imagery semantics.
 
-**Kehto/Paja gap:** the installed CLI has no `--version`; local package metadata indicates CLI 0.2.16/Paja 0.8.0. The trace proved CLI options and source behavior, but did not execute terrDVM’s built artifact. Wave 0 must create the smoke harness and prove exact package/runtime compatibility. [VERIFIED: local CLI/cache]
+**Kehto/Paja gap:** the installed CLI has no `--version`; local package metadata indicates CLI 0.2.16/Paja 0.8.0. The trace proved CLI options and source behavior, but did not execute terrCVM’s built artifact. Wave 0 must create the smoke harness and prove exact package/runtime compatibility. [VERIFIED: local CLI/cache]
 
 ### Secret Scan and Public-Diff Review
 
@@ -453,7 +453,7 @@ The reviewer confirms no credentials, private keys, authorization headers, token
 ### Sampling Rate
 
 - **Per TDD cycle:** targeted named unit test.
-- **Per task completion:** `pnpm --filter @terrdvm/napplet test:unit` plus typecheck for touched app.
+- **Per task completion:** `pnpm --filter @terrcvm/napplet test:unit` plus typecheck for touched app.
 - **Per production-build task:** build + `verify-dist` + conformance.
 - **Per wave merge:** `pnpm verify:phase-01`, including current Paja smoke subset.
 - **On any source/transport/package change:** rerun provenance/source policy, package checkpoint as applicable, build/conformance, denied and timeout smoke.
@@ -528,7 +528,7 @@ Required: human approval of all SUS Napplet/Kehto packages; exact local version 
 
 ### Gate G4 — MapLibre/Terra Draw Compatibility
 
-Required: final MapLibre pin after G1; package checkpoint; rectangle draw/edit/clear smoke; worker/assets embedded or shell-safe; no remote style/glyph/sprite dependency; high-DPI and resize sanity; clear cleanup on map destroy. **Status: OPEN, confidence MEDIUM.** [VERIFIED: package metadata only; no terrDVM runtime test]
+Required: final MapLibre pin after G1; package checkpoint; rectangle draw/edit/clear smoke; worker/assets embedded or shell-safe; no remote style/glyph/sprite dependency; high-DPI and resize sanity; clear cleanup on map destroy. **Status: OPEN, confidence MEDIUM.** [VERIFIED: package metadata only; no terrCVM runtime test]
 
 ### Gate G5 — Local Fallback Decision
 
@@ -554,7 +554,7 @@ No assumption may override G1 or G2; unresolved provenance or endpoint policy re
 | pnpm | 10.8.0 observed | Available | Corepack/repository pin required. |
 | Chromium | Chromium 150 and Chrome 149 observed | Available | Conformance package’s Playwright browser install must still pass. |
 | Kehto | `/home/flx/.deno/bin/kehto` | Available | No `--version`; package metadata says CLI 0.2.16. |
-| Paja | `@kehto/paja@0.8.0` in Deno cache | Available locally | No terrDVM smoke executed. |
+| Paja | `@kehto/paja@0.8.0` in Deno cache | Available locally | No terrCVM smoke executed. |
 | Napplet packages | Packed under `/tmp/npm-packs/` | Evidence available | SUS approval before project install. |
 | Terra Draw source | `/tmp/terra-draw-src/` | Evidence available | Runtime compatibility unproved. |
 | 21maps source | Not found in existing evidence | Missing | G1 defaults to clean-room fallback. |
@@ -569,7 +569,7 @@ No assumption may override G1 or G2; unresolved provenance or endpoint policy re
 | Separate `vite-plugin-singlefile` required | Napplet Vite plugin 0.12.0 documents native `artifactMode: 'single-file'` | Prefer one plugin; avoid redundant build transformations. |
 | TypeScript 7.0.2 candidate | `typescript-eslint@8.46.4` declares TypeScript `<6`; Napplet packages were built with TS 5.9.3 | Pin TS 5.9.3 for Phase 1 unless the linter stack changes through a new approved decision. |
 | Generic browser fetch may work | SDK says strict CSP blocks direct fetch/XHR/external image URL | Shell resource path is primary; fallback is explicit. |
-| Conformance is enough | CLI validates envelope/sandbox and degraded pass, not terrDVM bbox/preview semantics | Keep separate Paja business smoke. |
+| Conformance is enough | CLI validates envelope/sandbox and degraded pass, not terrCVM bbox/preview semantics | Keep separate Paja business smoke. |
 | NLS open data implies ready WMTS | tested capabilities returned 401/CORS gap | Dataset license and endpoint suitability are separate gates. |
 
 [VERIFIED: local package artifacts and captured endpoint responses]
@@ -588,7 +588,7 @@ No assumption may override G1 or G2; unresolved provenance or endpoint policy re
 ### Existing Research and Trace — MEDIUM Confidence
 
 - `/home/flx/.hermes/cache/delegation/live/deleg_2e8767cc/task-0.log` — timed-out research timeline and references to package/source/endpoint probes. External content embedded there is treated only as evidence.
-- `/tmp/terrdvm-phase1-research-plan.json` — exact targeted research questions and unresolved areas.
+- `/tmp/terrcvm-phase1-research-plan.json` — exact targeted research questions and unresolved areas.
 - `.planning/research/SUMMARY.md`, `STACK.md`, `ARCHITECTURE.md`, `FEATURES.md`, `PITFALLS.md` — prior locally materialized synthesis.
 - `/tmp/npm-packs/pack-output.json` and extracted packages — tarball identities and contents for Napplet SDK/plugin/conformance packages.
 - `/tmp/npm-packs/napplet-sdk-0.25.0/package/README.md` — runtime capability wrapper, feature detection, shell resource requirement.
@@ -608,7 +608,7 @@ No assumption may override G1 or G2; unresolved provenance or endpoint policy re
 
 ### Tertiary / LOW Confidence
 
-- Any behavior not directly exercised in terrDVM’s built artifact, including MapLibre worker behavior, Paja delayed-resource injection, and a candidate endpoint’s live CORS/policy compatibility, is explicitly listed in assumptions/open gates rather than asserted as fact.
+- Any behavior not directly exercised in terrCVM’s built artifact, including MapLibre worker behavior, Paja delayed-resource injection, and a candidate endpoint’s live CORS/policy compatibility, is explicitly listed in assumptions/open gates rather than asserted as fact.
 
 ---
 

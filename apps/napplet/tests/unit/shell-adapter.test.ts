@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TIMEOUT_S } from '../../src/config/defaults';
+import { TIMEOUT_S } from '@terrcvm/terrain-engine/config/defaults';
 import {
   PreviewError,
   getResourceCapability,

@@ -312,7 +312,7 @@ function classifyRequest(rawUrl, allowedOrigins) {
   if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
     return { classification: 'browser-internal-non-network', origin: null, allowed: true };
   }
-  if (rawUrl.startsWith('terrdvm://')) {
+  if (rawUrl.startsWith('terrcvm://')) {
     return { classification: 'browser-internal-custom-protocol', origin: null, allowed: true };
   }
   try {

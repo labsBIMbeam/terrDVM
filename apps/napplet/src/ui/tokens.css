@@ -948,27 +948,40 @@ body {
   z-index: 60;
 }
 
-/* The intro film plays muted, full screen; a click skips into the app. */
-.start-video {
+/* The intro stage: a full-bleed layer ui/intro.ts draws into. Empty until the
+   user picks an entry option, and emptied again when the intro ends. */
+.start-stage {
   block-size: 100%;
   inline-size: 100%;
   inset: 0;
-  object-fit: cover;
   position: absolute;
 }
 
-.start-screen > :not(.start-video) {
+.start-actions {
+  animation: start-fade 0.9s ease-out both 0.45s;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.start-skip {
+  opacity: 0.75;
+}
+
+.start-screen > :not(.start-stage) {
   position: relative;
   transition: opacity 0.8s ease;
   z-index: 1;
 }
 
-/* Cinema mode: the film runs, the menu steps aside until the user stirs. */
-.start-screen.is-cinema {
+/* While the intro runs it owns the screen and the menu steps aside; a click
+   anywhere skips it. */
+.start-screen.is-intro {
   cursor: pointer;
 }
 
-.start-screen.is-cinema > :not(.start-video) {
+.start-screen.is-intro > :not(.start-stage) {
   /* Entrance animations use fill:both and would pin opacity otherwise. */
   animation: none;
   opacity: 0;
@@ -1013,10 +1026,13 @@ body {
 }
 
 .start-enter {
-  animation: start-fade 0.9s ease-out both 0.45s, start-pulse 2.4s ease-in-out infinite 1.4s;
   font-size: 1.05rem;
   padding-block: 12px;
   padding-inline: 34px;
+}
+
+.button-primary.start-enter {
+  animation: start-pulse 2.4s ease-in-out infinite 1.4s;
 }
 
 @keyframes start-rise {
@@ -1070,6 +1086,7 @@ body {
   .start-screen::before,
   .start-kicker,
   .start-title,
+  .start-actions,
   .start-enter,
   .start-crab {
     animation: none;

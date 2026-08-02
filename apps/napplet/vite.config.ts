@@ -12,7 +12,7 @@ export default defineConfig({
       artifactMode: 'single-file',
       nappletType: 'terrdvm',
       requires: ['resource'],
-      title: 'terrDVM',
+      title: 'terrCVM',
     }),
   ],
 });

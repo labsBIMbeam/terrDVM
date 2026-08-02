@@ -65,7 +65,7 @@ coverage:
     requirement: SBOX-03
     verification:
       - kind: unit
-        ref: "pnpm --filter @terrdvm/napplet test:unit — 7/7 pass"
+        ref: "pnpm --filter @terrcvm/napplet test:unit — 7/7 pass"
         status: pass
     human_judgment: false
   - id: D2

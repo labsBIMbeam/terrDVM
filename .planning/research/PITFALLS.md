@@ -39,8 +39,8 @@ The current official NIP-90 is `draft`, `optional`, and explicitly `unrecommende
 
 **How to avoid:**
 - In Phase 2, choose exactly one request kind in `5000–5999` and therefore one result kind at request + 1000. Record the rationale without attempting broader standardization.
-- Define a small versioned terrDVM request profile: schema version, bbox order, bbox CRS, output MIME, resolution choice, maximum area/pixels, and optional provider target.
-- Treat NIP-90 as the carrier and terrDVM’s strict schema as the executable contract.
+- Define a small versioned terrCVM request profile: schema version, bbox order, bbox CRS, output MIME, resolution choice, maximum area/pixels, and optional provider target.
+- Treat NIP-90 as the carrier and terrCVM’s strict schema as the executable contract.
 - Reject unknown versions, duplicate singleton tags, unsupported input types, conflicting parameters, and unrecognized output MIME values.
 - Emit kind `7000` `payment-required` before halting for payment, then explicit `processing`, `success`, or `error` feedback as applicable.
 - If the implementation supports bolt11 only, state that honestly; do not imply generic zap-path interoperability.
@@ -71,7 +71,7 @@ A Nostr event has several separable checks: canonical serialization, SHA-256 eve
 - Verify canonical NIP-01 serialization, event ID, signature, lowercase fixed-length IDs/pubkeys, integer timestamp/kind, and string-only tag elements in the DVM boundary.
 - Derive requester identity only from the verified event pubkey, never from a `p` tag or client-supplied account field.
 - Apply a narrow timestamp window suitable for local and public relays, with an explicit clock-skew error.
-- Parse the verified event into an immutable application command, then apply terrDVM schema and resource limits before creating a job or invoice.
+- Parse the verified event into an immutable application command, then apply terrCVM schema and resource limits before creating a job or invoice.
 - Record the exact request event JSON/id used for result correlation; never reconstruct a “similar” request later.
 - Test wrong ID, wrong signature, wrong kind, duplicate tags, future timestamp, oversized content, malformed bbox, and unknown schema version.
 
@@ -500,7 +500,7 @@ Shortcuts that appear reasonable in a demo but undermine a paid, signed, verifia
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| NIP-01 signing | Trusting pubkey/tags or relay acceptance | Verify canonical ID and Schnorr signature, then strict terrDVM schema |
+| NIP-01 signing | Trusting pubkey/tags or relay acceptance | Verify canonical ID and Schnorr signature, then strict terrCVM schema |
 | NIP-90 | Treating optional/draft fields as stable business semantics | Freeze one request/result pair and versioned terrain profile in Phase 2 |
 | Multi-relay subscriptions | Creating work per event callback | Dedupe by verified request event ID; persist idempotent state |
 | Relay publish | Treating websocket send as stored | Inspect relay `OK`; accept identical `duplicate` as already stored; capture readback |
@@ -668,7 +668,7 @@ Shortcuts that appear reasonable in a demo but undermine a paid, signed, verifia
 ## Roadmap Research Flags
 
 - **Phase 1 needs deeper research:** exact 21maps v0 source/license/provenance; exact orthophoto endpoint and terms; actual shell `resource` policy for map tiles/images/styles; antimeridian policy; built MapLibre behavior under opaque-origin single-file sandbox.
-- **Phase 2 needs deeper research:** exact terrain request kind; terrDVM tag/schema profile; installed LNbits/Phoenixd version and least-privileged credential path; actual relay set; signer capability; bolt11 versus full kind-7000 UX; invoice replacement/late-payment policy.
+- **Phase 2 needs deeper research:** exact terrain request kind; terrCVM tag/schema profile; installed LNbits/Phoenixd version and least-privileged credential path; actual relay set; signer capability; bolt11 versus full kind-7000 UX; invoice replacement/late-payment policy.
 - **Phase 3 must not be researched into implementation before Phase 2 acceptance:** after the paid dummy gate, resolve the exact WCS endpoint/version/coverage/CRS/format/nodata contract, hard byte/pixel/time budgets, and licensed bounded fixtures.
 - **Phase 4 needs deeper research:** actual Blossom server BUD support, authorization/retention/CORS/redirect behavior, shell upload/resource capability, and viewer limits on target hardware.
 - **Conference gap:** local strfry is documented, but total WCS outage and real Lightning settlement without usable connectivity do not have an authorized fake substitute. Resolve this explicitly in phase discussion and rehearsal; do not alter the fallback law silently.
@@ -734,7 +734,7 @@ All URLs were checked or their current repositories/packages were inspected on 2
 
 ## Remaining Gaps
 
-1. Exact terrDVM NIP-90 request kind and versioned tag schema are intentionally still open for Phase 2 discussion.
+1. Exact terrCVM NIP-90 request kind and versioned tag schema are intentionally still open for Phase 2 discussion.
 2. The exact 21maps v0 source, license, and provenance were not available in this repository.
 3. The exact orthophoto and WMS/WCS endpoints, coverage IDs, CRS/axis conventions, data licenses, quotas, and CORS behavior remain unknown.
 4. The installed Napplet shell/runtime capability set and exact production CSP were not exercised; only current published package behavior was verified.
@@ -744,5 +744,5 @@ All URLs were checked or their current repositories/packages were inspected on 2
 8. Broad current web search was unavailable, so claims about prevalence across third-party demos remain LOW confidence; the failure mechanisms themselves are grounded in official sources.
 
 ---
-*Pitfalls research for: terrDVM paid Nostr terrain/GIS Data Vending Machine demo*
+*Pitfalls research for: terrCVM paid Nostr terrain/GIS Data Vending Machine demo*
 *Researched: 2026-07-26*

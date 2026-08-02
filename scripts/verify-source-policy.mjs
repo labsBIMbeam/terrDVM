@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const POLICY_PATH = resolve(ROOT, 'apps/napplet/src/config/source-policy.json');
+const POLICY_PATH = resolve(ROOT, 'packages/terrain-engine/src/config/source-policy.json');
 const EVIDENCE_PATH = resolve(ROOT, '.planning/evidence/phase-01/source-candidates.json');
 const REQUIRED_ROLES = ['basemap', 'imagery'];
 const REQUIRED_FIELDS = [

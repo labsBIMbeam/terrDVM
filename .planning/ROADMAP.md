@@ -1,8 +1,8 @@
-# Roadmap: terrDVM
+# Roadmap: terrCVM
 
 ## Overview
 
-terrDVM ships as a fixed four-phase vertical slice: a sandboxed bbox/orthophoto Napplet defines the bounded request and proves the production sandbox transport; the paid DVM dummy-delivery loop proves signed request → real invoice → trusted settlement → hash-verified retrievable dummy GLB before any terrain work exists; the bounded terrain processor then replaces the dummy producer behind the same port without touching payment or delivery semantics; finally Blossom replication and the built-Napplet viewer distribute and render the already-verified bytes. Phase order is non-negotiable (`bbox/ortho UI → paid DVM dummy delivery → terrain processor → Blossom/viewer`), Phase 3 opens only on recorded DUM-04 executable evidence, and every fallback activation is recorded rather than silent.
+terrCVM ships as a fixed four-phase vertical slice: a sandboxed bbox/orthophoto Napplet defines the bounded request and proves the production sandbox transport; the paid DVM dummy-delivery loop proves signed request → real invoice → trusted settlement → hash-verified retrievable dummy GLB before any terrain work exists; the bounded terrain processor then replaces the dummy producer behind the same port without touching payment or delivery semantics; finally Blossom replication and the built-Napplet viewer distribute and render the already-verified bytes. Phase order is non-negotiable (`bbox/ortho UI → paid DVM dummy delivery → terrain processor → Blossom/viewer`), Phase 3 opens only on recorded DUM-04 executable evidence, and every fallback activation is recorded rather than silent.
 
 ## Phases
 

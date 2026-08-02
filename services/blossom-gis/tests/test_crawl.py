@@ -379,3 +379,108 @@ class TestRasterLayers:
         assert len(records) == 3
         assert all("sha256" in record for record in records)
         index.close()
+
+
+class TestTruncationIsFailure:
+    """Overpass `out <n>` is a hard cap that returns no `remark`.
+
+    A truncated tile is indistinguishable from a complete one downstream — same
+    z/x/y, plausible size, valid TFT2 — so if it were marked done it would be
+    served forever as the truth about that place. Measured on 14/7422/6618
+    (Funchal): the old default cap of 5000 discarded 3,830 of 8,830 ways, 43%
+    of the tile, silently.
+    """
+
+    def _fake_upstream(self, element_count: int, monkeypatch) -> None:
+        """Stand in for urlopen with a response holding exactly N ways."""
+        import json as json_module
+        from contextlib import contextmanager
+
+        from blossom_gis import crawl as crawl_module
+
+        ring = [
+            {"lat": 32.65, "lon": -16.92},
+            {"lat": 32.65, "lon": -16.919},
+            {"lat": 32.651, "lon": -16.919},
+        ]
+        payload = json_module.dumps(
+            {
+                "elements": [
+                    {"type": "way", "tags": {"building": "yes"}, "geometry": ring}
+                    for _ in range(element_count)
+                ]
+            }
+        ).encode()
+
+        class _Response:
+            def read(self) -> bytes:
+                return payload
+
+        @contextmanager
+        def fake_urlopen(request, timeout=None):
+            yield _Response()
+
+        monkeypatch.setattr(crawl_module.urllib.request, "urlopen", fake_urlopen)
+
+    def test_hitting_the_cap_raises_instead_of_returning_a_partial_tile(
+        self, monkeypatch
+    ) -> None:
+        from blossom_gis.crawl import TileTruncatedError, fetch_tile
+
+        self._fake_upstream(50, monkeypatch)
+        with pytest.raises(TileTruncatedError) as excinfo:
+            fetch_tile(TILE, limit=50)
+        assert "50" in str(excinfo.value)
+
+    def test_one_element_under_the_cap_is_a_complete_tile(self, monkeypatch) -> None:
+        from blossom_gis.crawl import fetch_tile
+
+        self._fake_upstream(49, monkeypatch)
+        tile = fetch_tile(TILE, limit=50)
+        assert len(tile.buildings) == 49
+
+    def test_a_truncated_tile_is_never_marked_done(
+        self, queue: CrawlQueue, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The whole point: fail closed, so the crawl reports the gap."""
+        from blossom_gis.crawl import fetch_tile, run
+
+        self._fake_upstream(50, monkeypatch)
+        queue.seed("madeira", MADEIRA, 11, ("features",))
+        store = BlobStore(tmp_path / "blobs")
+        index = BlobIndex(tmp_path / "index.sqlite")
+
+        class NoWait(RateLimiter):
+            def wait(self) -> None:
+                return None
+
+            @staticmethod
+            def available_slots(timeout_s: float = 15) -> int | None:
+                return 2
+
+        records = list(
+            run(
+                queue=queue, store=store, index=index, region="madeira",
+                max_tiles=2, limiter=NoWait(), raster_limiter=NoWait(),
+                fetcher=lambda tile: fetch_tile(tile, limit=50),
+                raster_fetcher=lambda tile: pytest.fail("no raster expected here"),
+            )
+        )
+
+        assert len(records) == 2
+        assert all("error" in record and "sha256" not in record for record in records)
+        progress = queue.progress("madeira")
+        assert progress.get("done", 0) == 0
+        assert progress["failed"] == 2
+        # Nothing reached the corpus either — a partial tile must not be stored.
+        assert not any((tmp_path / "blobs").rglob("*")) or store.read("0" * 64) is None
+        index.close()
+
+    def test_the_default_cap_is_above_a_dense_city_tile(self) -> None:
+        """14/7422/6618 holds 8,830 ways. A default below that truncates Funchal."""
+        import inspect
+
+        from blossom_gis.crawl import fetch_tile
+
+        default = inspect.signature(fetch_tile).parameters["limit"].default
+        assert default > 8830

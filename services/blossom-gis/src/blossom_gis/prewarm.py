@@ -68,7 +68,7 @@ def prewarm_selection(
     """Hit every endpoint the client will, so demo runs come from disk."""
 
     def default_fetch(url: str, timeout_s: float) -> bytes:
-        request = urllib.request.Request(url, headers={"User-Agent": "terrDVM-prewarm/0.1"})
+        request = urllib.request.Request(url, headers={"User-Agent": "terrCVM-prewarm/0.1"})
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
             return response.read()
 

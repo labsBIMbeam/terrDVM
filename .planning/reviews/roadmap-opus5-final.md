@@ -1,6 +1,6 @@
 VERDICT: PASS
 
-Closure review of the terrDVM roadmap against the prior REVISE (`.planning/reviews/roadmap-opus5.md`). Read-only; no files modified, no commits, no planning, no service contact. Scope limited to the two blocking findings, the three non-blocking recommendations, and non-damage to the previously passing structure.
+Closure review of the terrCVM roadmap against the prior REVISE (`.planning/reviews/roadmap-opus5.md`). Read-only; no files modified, no commits, no planning, no service contact. Scope limited to the two blocking findings, the three non-blocking recommendations, and non-damage to the previously passing structure.
 
 ## Unresolved blockers
 

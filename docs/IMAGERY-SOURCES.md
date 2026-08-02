@@ -1,5 +1,10 @@
 # European orthophoto sources
 
+> Elevation is surveyed separately in [`ELEVATION-SOURCES.md`](ELEVATION-SOURCES.md).
+> Different question, different answer: an orthophoto service says nothing
+> about whether the same authority publishes a bare-earth DTM.
+
+
 Survey of aerial-imagery services at architectural resolution (≤0.30 m/px),
 researched 2026-07-29 for filling the gaps the z7 coverage sweep measured:
 Esri's z19 is city-centric, and only 43 of 218 European land cells qualify.

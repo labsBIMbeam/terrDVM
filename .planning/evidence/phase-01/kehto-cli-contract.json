@@ -70,7 +70,7 @@
     "runtime_origin": "http://127.0.0.1:5197",
     "preview_origin": "http://127.0.0.1:4173"
   },
-  "launch_command": "[USER_DENO_BIN]/kehto paja --target-url http://127.0.0.1:4173 --host 127.0.0.1 --port 5197 --identity-mode anonymous --relay-mode disabled --storage-mode disabled --cache-mode disabled --upload-mode disabled --media disabled --notifications disabled --capability resource:on --acl-mode deny --firewall-mode deny -- pnpm --filter @terrdvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
+  "launch_command": "[USER_DENO_BIN]/kehto paja --target-url http://127.0.0.1:4173 --host 127.0.0.1 --port 5197 --identity-mode anonymous --relay-mode disabled --storage-mode disabled --cache-mode disabled --upload-mode disabled --media disabled --notifications disabled --capability resource:on --acl-mode deny --firewall-mode deny -- pnpm --filter @terrcvm/napplet exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
   "launch_argv_templates": {
     "normal": [
       "[USER_DENO_BIN]/kehto",
@@ -104,7 +104,7 @@
       "--",
       "pnpm",
       "--filter",
-      "@terrdvm/napplet",
+      "@terrcvm/napplet",
       "exec",
       "vite",
       "preview",
@@ -146,7 +146,7 @@
       "--",
       "pnpm",
       "--filter",
-      "@terrdvm/napplet",
+      "@terrcvm/napplet",
       "exec",
       "vite",
       "preview",

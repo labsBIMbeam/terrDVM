@@ -14,15 +14,15 @@ import {
   tileUrlFor,
   validateSourceRequest,
   type SourceRole,
-} from './source';
-import { getRegion, viewBoundsTuple, type Region } from '../config/regions';
-import { coverageFor } from '../config/coverage';
+} from '@terrcvm/terrain-engine/map/source';
+import { getRegion, viewBoundsTuple, type Region } from '@terrcvm/terrain-engine/config/regions';
+import { coverageFor } from '@terrcvm/terrain-engine/config/coverage';
 import { fetchPlacements } from '../job/collection';
-import cities from '../config/cities.json';
-import { addCoverageOverlay, type CoverageOverlay } from './coverage-overlay';
-import type { BBox4326 } from '../bbox/validate';
+import cities from '@terrcvm/terrain-engine/config/cities.json';
+import { addCoverageOverlay, type CoverageOverlay } from '@terrcvm/terrain-engine/map/coverage-overlay';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
-const PROTOCOL = 'terrdvm';
+const PROTOCOL = 'terrcvm';
 const TILE_PATH = /^\/(\d+)\/(\d+)\/(\d+)\/?$/;
 const TILE_DEADLINE_MS = 15_000;
 const MAX_TILE_BYTES = 1_000_000;
@@ -151,7 +151,7 @@ function bboxFromFeature(feature: PolygonFeature): BBox4326 {
 function rectangleFeature(bbox: BBox4326): PolygonFeature {
   const [west, south, east, north] = bbox;
   return {
-    id: 'terrdvm-selection',
+    id: 'terrcvm-selection',
     type: 'Feature',
     properties: {},
     geometry: {
@@ -256,7 +256,7 @@ export function createMapView(
     },
   });
 
-  let noteFeatures: LabelFeature[] = [];
+  const noteFeatures: LabelFeature[] = [];
 
   const noteMarker = (id: string, text: string, lon: number, lat: number): void => {
     const source = map.getSource('notes') as maplibregl.GeoJSONSource | undefined;

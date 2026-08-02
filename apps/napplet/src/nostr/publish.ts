@@ -49,6 +49,19 @@ export function isApprovedPlacementEventUrl(candidate: string): boolean {
   );
 }
 
+export function isApprovedCalendarEventUrl(candidate: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (url.origin !== collectionOrigin() || url.pathname !== '/calendar/event') return false;
+  return [...url.searchParams.keys()].every(
+    (key) => key === 'title' || key === 'at' || key === 'starts' || key === 'description',
+  );
+}
+
 export function isApprovedPresenceEventUrl(candidate: string): boolean {
   let url: URL;
   try {
@@ -85,6 +98,34 @@ export async function buildPresenceEvent(
   const event = JSON.parse(await blob.text()) as UnsignedEvent;
   if (event.kind !== 30315 || !Array.isArray(event.tags)) {
     throw new Error('Server returned an unexpected status shape.');
+  }
+  return event;
+}
+
+/**
+ * Ask the server for the unsigned NIP-52 calendar event (kind 31923): the
+ * map message grown into a meetup with venue, start time and geo tags.
+ */
+export async function buildCalendarEvent(
+  title: string,
+  lon: number,
+  lat: number,
+  startsAt: number,
+  description = '',
+): Promise<UnsignedEvent> {
+  const url = new URL(`${COLLECTION_SERVICE.baseUrl}/calendar/event`);
+  url.searchParams.set('title', title);
+  url.searchParams.set('at', `${lon.toFixed(6)},${lat.toFixed(6)}`);
+  url.searchParams.set('starts', String(startsAt));
+  if (description) url.searchParams.set('description', description);
+  const blob = await loadApprovedBytes(url.toString(), {
+    deadlineMs: 15_000,
+    isAllowed: isApprovedCalendarEventUrl,
+    signal: undefined,
+  });
+  const event = JSON.parse(await blob.text()) as UnsignedEvent;
+  if (event.kind !== 31923 || !Array.isArray(event.tags)) {
+    throw new Error('Server returned an unexpected calendar shape.');
   }
   return event;
 }

@@ -3,8 +3,19 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const sourceRoot = join(repositoryRoot, 'apps', 'napplet', 'src');
-const shellRoot = join(sourceRoot, 'shell');
+
+/**
+ * Every source root that must respect the boundary.
+ *
+ * Apps get one privileged directory — `<root>/shell` — where `window.napplet`
+ * and `@napplet/sdk` may be touched. Shared packages get none at all: they are
+ * transport-free by construction, so a shell import there is always a bug.
+ */
+const sourceRoots = [
+  { root: join(repositoryRoot, 'apps', 'napplet', 'src'), shell: 'shell' },
+  { root: join(repositoryRoot, 'packages', 'terrain-engine', 'src'), shell: null },
+  { root: join(repositoryRoot, 'packages', 'geo-protocol', 'src'), shell: null },
+];
 const findings = [];
 
 async function inventory(directory) {
@@ -102,40 +113,51 @@ function addMatches(path, source, pattern, description) {
   }
 }
 
-let files;
-try {
-  files = await inventory(sourceRoot);
-} catch (error) {
-  console.error('verify-shell-boundary: FAILED');
-  console.error(`- SOLE_SHELL_BOUNDARY_SCAN_ERROR: ${String(error)}`);
-  process.exit(1);
-}
+let scanned = 0;
+for (const { root, shell } of sourceRoots) {
+  const shellRoot = shell === null ? null : join(root, shell);
+  const permitted =
+    shellRoot === null
+      ? 'nowhere in a shared package — it is transport-free by construction'
+      : `only under ${relative(repositoryRoot, shellRoot).split(sep).join('/')}/`;
 
-for (const path of files) {
-  const normalizedPath = resolve(path);
-  const insideShell =
-    normalizedPath === shellRoot || normalizedPath.startsWith(`${shellRoot}${sep}`);
-  if (insideShell) continue;
+  let files;
+  try {
+    files = await inventory(root);
+  } catch (error) {
+    console.error('verify-shell-boundary: FAILED');
+    console.error(`- SOLE_SHELL_BOUNDARY_SCAN_ERROR: ${String(error)}`);
+    process.exit(1);
+  }
+  scanned += files.length;
 
-  const source = stripComments(await readFile(path, 'utf8'));
-  addMatches(
-    path,
-    source,
-    /\bwindow\s*\.\s*napplet\b/g,
-    'window.napplet access is permitted only under apps/napplet/src/shell/',
-  );
-  addMatches(
-    path,
-    source,
-    /\bimport\s*(?:\(\s*)?['"]@napplet\/sdk(?:\/[^'"]*)?['"]/g,
-    '@napplet/sdk import is permitted only under apps/napplet/src/shell/',
-  );
-  addMatches(
-    path,
-    source,
-    /\b(?:import|export)\b[\s\S]{0,500}?\bfrom\s*['"]@napplet\/sdk(?:\/[^'"]*)?['"]/g,
-    '@napplet/sdk import is permitted only under apps/napplet/src/shell/',
-  );
+  for (const path of files) {
+    const normalizedPath = resolve(path);
+    const insideShell =
+      shellRoot !== null &&
+      (normalizedPath === shellRoot || normalizedPath.startsWith(`${shellRoot}${sep}`));
+    if (insideShell) continue;
+
+    const source = stripComments(await readFile(path, 'utf8'));
+    addMatches(
+      path,
+      source,
+      /\bwindow\s*\.\s*napplet\b/g,
+      `window.napplet access is permitted ${permitted}`,
+    );
+    addMatches(
+      path,
+      source,
+      /\bimport\s*(?:\(\s*)?['"]@napplet\/sdk(?:\/[^'"]*)?['"]/g,
+      `@napplet/sdk import is permitted ${permitted}`,
+    );
+    addMatches(
+      path,
+      source,
+      /\b(?:import|export)\b[\s\S]{0,500}?\bfrom\s*['"]@napplet\/sdk(?:\/[^'"]*)?['"]/g,
+      `@napplet/sdk import is permitted ${permitted}`,
+    );
+  }
 }
 
 if (findings.length > 0) {
@@ -146,5 +168,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `verify-shell-boundary: PASS (${files.length} source files scanned; shell is the sole privileged boundary)`,
+  `verify-shell-boundary: PASS (${scanned} source files across ${sourceRoots.length} roots scanned; shell is the sole privileged boundary)`,
 );

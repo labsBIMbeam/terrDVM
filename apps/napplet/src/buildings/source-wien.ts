@@ -1,7 +1,7 @@
 import { loadApprovedBytes } from '../shell/resource-client';
 import { COLLECTION_SERVICE, collectionOrigin } from '../job/collection';
-import type { Footprint } from './extrude';
-import type { BBox4326 } from '../bbox/validate';
+import type { Footprint } from '@terrcvm/terrain-engine/buildings/extrude';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * Vienna's building-body model (Baukörpermodell, FMZKBKMOGD) through the

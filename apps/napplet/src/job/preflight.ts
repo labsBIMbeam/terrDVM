@@ -1,9 +1,13 @@
 import { loadApprovedBytes } from '../shell/resource-client';
 import { cachedOsmUrl, isApprovedCachedOsmUrl } from './collection';
 import { ORTHO_SERVICE, isApprovedOrthoUrl } from './ortho';
-import { DEM_SOURCE, chooseDemZoom } from '../terrain/dem';
+import { chooseDemZoom } from '@terrcvm/terrain-engine/terrain/dem';
+import {
+  chooseElevationSource,
+  type ElevationSource,
+} from '@terrcvm/terrain-engine/terrain/elevation-sources';
 import { TERRAIN_GRID_N } from '../terrain/generate';
-import type { BBox4326 } from '../bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * Pre-flight availability for a selection, answered before any generation:
@@ -22,20 +26,44 @@ export type OrthoPlan = {
   notes: string[];
 };
 
+export type TerrainPlan = {
+  zoom: number;
+  mPerPx: number;
+  /** Which source that resolution comes from, and what it is allowed to be used for. */
+  sourceName: string;
+  license: string;
+  /** `dtm` is bare earth. Worth saying out loud: the fallback is not. */
+  model: ElevationSource['model'];
+};
+
 export type PreflightReport = {
-  terrain: { zoom: number; mPerPx: number };
+  terrain: TerrainPlan;
   /** null: the collection server did not answer — stated, not guessed. */
   ortho: OrthoPlan | null;
   streets: number | null;
   waterways: number | null;
 };
 
-export function demResolution(bbox: BBox4326): { zoom: number; mPerPx: number } {
-  const zoom = chooseDemZoom(bbox, TERRAIN_GRID_N);
+/**
+ * What terrain this selection would actually get, from which source.
+ *
+ * The source has to be resolved here rather than assumed: a 30 m DSM and a
+ * 0.5 m bare-earth DTM give the same picture in the viewport and a 65 m
+ * difference in the model, so "how sharp" is not answerable without naming
+ * where the numbers come from.
+ */
+export function demResolution(bbox: BBox4326, region?: string): TerrainPlan {
+  const source = chooseElevationSource(region ?? null, bbox);
+  const zoom = chooseDemZoom(bbox, TERRAIN_GRID_N, source);
   const midLat = ((bbox[1] + bbox[3]) / 2) * (Math.PI / 180);
-  const mPerPx =
-    (EARTH_CIRCUMFERENCE_M * Math.cos(midLat)) / (2 ** zoom * DEM_SOURCE.tileSize);
-  return { zoom, mPerPx };
+  const mPerPx = (EARTH_CIRCUMFERENCE_M * Math.cos(midLat)) / (2 ** zoom * source.tileSize);
+  return {
+    zoom,
+    mPerPx,
+    sourceName: source.name,
+    license: source.license,
+    model: source.model,
+  };
 }
 
 export function countQuery(bbox: BBox4326, key: 'highway' | 'waterway'): string {
@@ -106,5 +134,5 @@ export async function runPreflight(
       .catch(() => null),
   ]);
 
-  return { terrain: demResolution(bbox), ortho, streets, waterways };
+  return { terrain: demResolution(bbox, region), ortho, streets, waterways };
 }

@@ -34,7 +34,7 @@ export function createInvoicePlaceholder(areaKm2: number): LightningInvoicePlace
   return {
     placeholder: true,
     amountSats,
-    memo: `terrDVM terrain job — ${areaKm2.toFixed(1)} km²`,
-    paymentRequest: `ln-invoice-placeholder-${amountSats}sats-terrdvm-demo-not-payable`,
+    memo: `terrCVM terrain job — ${areaKm2.toFixed(1)} km²`,
+    paymentRequest: `ln-invoice-placeholder-${amountSats}sats-terrcvm-demo-not-payable`,
   };
 }

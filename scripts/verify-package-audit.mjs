@@ -126,7 +126,7 @@ if (approval) {
   if (JSON.stringify(approval.lockfile_mutation) !== JSON.stringify({ plan: '01-02', count: 1 })) {
     errors.push('approval lockfile_mutation must authorize exactly one mutation in Plan 01-02');
   }
-  if (approval.chromium_command !== 'pnpm --filter @terrdvm/napplet exec playwright install chromium') {
+  if (approval.chromium_command !== 'pnpm --filter @terrcvm/napplet exec playwright install chromium') {
     errors.push('approval chromium_command drifted from the exact authorized command');
   }
   if (approval.host_or_extra_package_mutation_approved !== false) {
@@ -238,7 +238,7 @@ for (const [pin, row] of rows) {
 const requiredText = [
   '## Direct Playwright and Chromium provisioning',
   '`"playwright": "^1.59.1"`',
-  'pnpm --filter @terrdvm/napplet exec playwright install chromium',
+  'pnpm --filter @terrcvm/napplet exec playwright install chromium',
   '`playwright install --with-deps`',
   '**NOT APPROVED**',
   '## Existing Kehto/Paja installation (audited, NOT project-installed)',

@@ -13,9 +13,9 @@ import {
   type RoadFeature,
   type WaterwayClass,
   type WaterwayFeature,
-} from './types';
+} from '@terrcvm/terrain-engine/features/types';
 import { heightFromTags, isApprovedBuildingsUrl, OSM_BUILDINGS_SOURCE } from '../buildings/source-osm';
-import type { BBox4326 } from '../bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 /**
  * One Overpass round trip for both layers.

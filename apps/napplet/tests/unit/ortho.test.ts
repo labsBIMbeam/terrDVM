@@ -7,7 +7,7 @@ import {
   orthoMetaUrl,
   parseOrthoMeta,
 } from '../../src/job/ortho';
-import type { BBox4326 } from '../../src/bbox/validate';
+import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
 
 const FUNCHAL: BBox4326 = [-16.92, 32.64, -16.9, 32.66];
 

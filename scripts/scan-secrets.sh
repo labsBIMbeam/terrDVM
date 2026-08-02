@@ -14,7 +14,7 @@ command -v gitleaks >/dev/null 2>&1 || fail 'gitleaks 8.30.1 is required but was
 actual_version="$(gitleaks version 2>/dev/null | tr -d '\r\n')"
 [[ "$actual_version" == "$expected_version" ]] || fail "required gitleaks ${expected_version}; found a different version"
 
-tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/terrdvm-gitleaks.XXXXXX")"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/terrcvm-gitleaks.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 scan_root="$tmp_dir/repository-files"
 report_path="$tmp_dir/gitleaks-report.json"

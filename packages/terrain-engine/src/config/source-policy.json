@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "requirement": "MAP-05/MAP-06",
+  "target_region": "Madeira and Porto Santo",
+  "generated_at": "2026-07-27T13:04:42.166Z",
+  "roles": {
+    "basemap": {
+      "role": "basemap",
+      "status": "live-verified",
+      "evidence_candidate_id": "openstreetmap-standard-madeira",
+      "evidence_path": ".planning/evidence/phase-01/source-candidates.json",
+      "failed_fields": [],
+      "contract": {
+        "scheme": "https",
+        "host": "tile.openstreetmap.org",
+        "port": 443,
+        "path_template": "/{z}/{x}/{y}.png",
+        "layer": "OpenStreetMap Standard",
+        "coverage_id": "Global including Madeira",
+        "tile_matrix": "WebMercatorQuad",
+        "crs": "EPSG:3857",
+        "bbox_order": "slippy z/x/y; app bbox remains W,S,E,N EPSG:4326",
+        "format": "image/png",
+        "auth": {
+          "required": false,
+          "credential_reference": null
+        },
+        "cors_shell_behavior": "Access-Control-Allow-Origin: * required on sample; runtime routes through the sole shell adapter with the identifying terrCVM User-Agent",
+        "attribution": "© OpenStreetMap contributors",
+        "dataset_terms": "OpenStreetMap data licensed under ODbL; visible attribution and license link required",
+        "endpoint_terms": "OSMF Standard tile policy: identifying User-Agent, valid web Referer where applicable, cache headers honored, no bulk download/scraping/prefetch",
+        "rate_limits": {
+          "provider_published": "No numeric public quota; best-effort service with no SLA",
+          "application_limit": "Madeira viewport visible tiles only; no prefetch/scraping; maximum 16 concurrent requests; cache response headers honored"
+        },
+        "max_response_bytes": 1000000,
+        "timeout_ms": 15000,
+        "redirects": {
+          "max": 0,
+          "policy": "fail closed on any redirect"
+        },
+        "coverage_bounds": {
+          "west": -180,
+          "south": -85.05112878,
+          "east": 180,
+          "north": 85.05112878
+        },
+        "outage_behavior": "fail closed to named source-unavailable state; never substitute a fixture as live",
+        "capture_date": "2026-07-27T13:04:42.166Z",
+        "status": "live-verified"
+      }
+    },
+    "imagery": {
+      "role": "imagery",
+      "status": "live-verified",
+      "evidence_candidate_id": "esri-world-imagery-madeira",
+      "evidence_path": ".planning/evidence/phase-01/source-candidates.json",
+      "failed_fields": [],
+      "contract": {
+        "scheme": "https",
+        "host": "server.arcgisonline.com",
+        "port": 443,
+        "path_template": "/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        "layer": "World_Imagery",
+        "coverage_id": "Global imagery including Madeira",
+        "tile_matrix": "ArcGIS Online/Bing Maps/Google Maps",
+        "crs": "EPSG:3857",
+        "bbox_order": "ArcGIS tile z/y/x; normalized app bbox remains W,S,E,N EPSG:4326",
+        "format": "image/jpeg",
+        "auth": {
+          "required": false,
+          "credential_reference": null
+        },
+        "cors_shell_behavior": "Access-Control-Allow-Origin: * observed on metadata and Madeira sample; production routes only through sole shell adapter",
+        "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+        "dataset_terms": "Esri service terms and attribution requirements apply; official Products and Services Terms of Use captured live",
+        "endpoint_terms": "Official ArcGIS World Imagery MapServer metadata; selected-bbox/visible-tile use only, no bulk prefetch or scraping",
+        "rate_limits": {
+          "provider_published": "No numeric public quota captured",
+          "application_limit": "Madeira viewport selected/visible tiles only; maximum 16 concurrent requests; no prefetch/scraping"
+        },
+        "max_response_bytes": 1000000,
+        "timeout_ms": 15000,
+        "redirects": {
+          "max": 0,
+          "policy": "fail closed on any redirect"
+        },
+        "coverage_bounds": {
+          "west": -180,
+          "south": -85.05112878,
+          "east": 180,
+          "north": 85.05112878
+        },
+        "outage_behavior": "fail closed to named source-unavailable state; never substitute TEST FIXTURE as live",
+        "capture_date": "2026-07-27T13:04:42.166Z",
+        "status": "live-verified"
+      }
+    }
+  }
+}

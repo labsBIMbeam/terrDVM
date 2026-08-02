@@ -129,7 +129,25 @@ needed. For the project's local-relay fallback mode, point the publisher at
 - Uploads are written to a temporary file and atomically renamed, so a crash can never
   leave truncated bytes at a valid hash path.
 - Deletion is restricted to the original uploader.
+- `POST /placements` requires the same kind-24242 event as `PUT /upload`, bound to the
+  placed blob's hash by its `x` tag. The stored `pubkey` is the **verified signer**, never
+  a value from the request body, and the dedup key is `(pubkey, name)` so one publisher
+  cannot evict another's placement by reusing a character name.
 - No credentials, keys, or signer material belong in this repository.
+
+### ⚠ Do not expose this server publicly
+
+Two known issues in the blob routes are **deliberately not fixed here**, because blob
+storage is migrating to [hzrd149/blossom-server](https://github.com/hzrd149/blossom-server),
+which resolves both for free. Bind to localhost (or put it behind an authenticated
+reverse proxy) until that migration lands.
+
+| Issue | What it allows | Resolved by |
+|---|---|---|
+| **No uploader allowlist** on `PUT /upload` | `authorize()` proves only that *some* valid nostr key signed the request. Anyone can mint a keypair offline, so anyone can fill the disk. | blossom-server ships uploader auth |
+| **Client `Content-Type` stored verbatim** and replayed on `GET /<sha256>`, with `allow_origins=["*"]` and no `X-Content-Type-Options: nosniff` | Stored XSS: upload HTML, declare it `text/html`, serve it same-origin from this host. | blossom-server derives the media type from the bytes, not the request |
+
+Both sites carry a matching `WARNING` comment in `app.py`.
 
 ## Crawler
 
@@ -151,6 +169,20 @@ and the next run continues.
 Failures are retried up to four times, after which the tile is marked exhausted
 so one bad tile can never block the queue.
 
+### Truncation is a failure, not a result
+
+Overpass's `out <n>` is a **hard cap that returns no `remark`**: ask for 5000 and a
+tile holding 8830 ways comes back as exactly 5000, with nothing in the payload to say
+so. A truncated tile is then indistinguishable from a complete one — same `z/x/y`,
+plausible size, valid TFT2 — and once marked done it is served forever as the truth
+about that place.
+
+So `fetch_tile` compares the element count against the cap and **raises
+`TileTruncatedError`** when they are equal. The tile is marked failed, retried, and finally
+reported as exhausted; it is never stored. Measured on `14/7422/6618` (Funchal): the
+old default cap of 5000 discarded 3,830 of 8,830 ways — 43% of the tile — silently.
+The default is now 20000, which is a runaway guard, not a working limit.
+
 ### Scheduling
 
 Nothing here needs a long-running process. Run it on a timer:
@@ -158,8 +190,8 @@ Nothing here needs a long-running process. Run it on a timer:
 **Windows Task Scheduler**
 
 ```powershell
-schtasks /Create /TN "terrdvm-crawl-madeira" /SC MINUTE /MO 10 ^
-  /TR "G:\Github\terrDVM\services\blossom-gis\.venv\Scripts\python.exe -m blossom_gis.cli run --region madeira --max-tiles 5"
+schtasks /Create /TN "terrcvm-crawl-madeira" /SC MINUTE /MO 10 ^
+  /TR "G:\Github\terrCVM\services\blossom-gis\.venv\Scripts\python.exe -m blossom_gis.cli run --region madeira --max-tiles 5"
 ```
 
 **cron**

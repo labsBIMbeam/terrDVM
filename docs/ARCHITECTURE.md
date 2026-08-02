@@ -1,4 +1,4 @@
-# terrDVM architecture
+# terrCVM architecture
 
 Two halves that never share a process:
 
@@ -23,19 +23,30 @@ is the collector; the client is a reader. That is the whole role split.
 
 Buildings, roads and land use in one binary tile, keyed by slippy tile `z/x/y`.
 
-Measured on real Funchal data (1,457 buildings + 1,541 roads):
+Measured on tile **14/7422/6618** (Funchal), fetched with no `out` cap —
+8,830 ways, yielding 4,668 buildings + 3,826 roads + 139 land-use areas
+(8,633 features):
 
 | Format | Size | Ratio |
 |---|---|---|
-| GeoJSON | 786.4 kB | 1× |
-| GeoJSON + gzip | 135.3 kB | 5.8× |
-| **TFT2** | **51.3 kB** | **15.3×** |
+| GeoJSON | 2,272.4 kB | 1× |
+| GeoJSON + gzip | 337.3 kB | 6.7× |
+| **TFT2** | **139.7 kB** | **16.3×** |
 
-**18 bytes per feature.** Three things do the work: coordinates quantised to a
+**16 bytes per feature.** Three things do the work: coordinates quantised to a
 tile-local 4096 grid, points delta-encoded against their predecessor, deltas
 written as zigzag varints.
 
-Two implementations exist — [`codec.ts`](../apps/napplet/src/features/codec.ts)
+> **Corrected 2026-08.** This table previously read "1,457 buildings + 1,541
+> roads → 51.3 kB, 15.3×". That figure understated the tile: the crawler asked
+> Overpass for `out geom 5000`, a silent hard cap, so 43% of the tile was never
+> seen. The *ratio* barely moved — both columns scale with feature count — but
+> the absolute size was wrong by 2.7×, and anything sized against 51.3 kB
+> (bundle budgets, cache math, per-tile transfer estimates) was wrong with it.
+> The cap is now checked and refused; see
+> [`crawl.py`](../services/blossom-gis/src/blossom_gis/crawl.py) `fetch_tile`.
+
+Two implementations exist — [`codec.ts`](../packages/terrain-engine/src/features/codec.ts)
 and [`featuretile.py`](../services/blossom-gis/src/blossom_gis/featuretile.py) —
 pinned together by a **byte-for-byte conformance test** against golden bytes
 emitted by the TypeScript encoder. This is not pedantry: the tile hash *is* the
@@ -59,8 +70,8 @@ compose into a larger scene, and nothing can be re-styled. Store source tiles;
 bake GLB per delivery.
 
 Do not compress before hashing either. The same tile at a different zlib level
-yields a different hash and therefore no deduplication. gzip only saves 29 % on
-TFT2 (51.3 → 36.2 kB), so store raw and let HTTP handle transport.
+yields a different hash and therefore no deduplication. gzip only saves 21 % on
+TFT2 (139.7 → 111.0 kB), so store raw and let HTTP handle transport.
 
 ---
 
@@ -88,7 +99,7 @@ INSPIRE mandates harmonised layer names, but only ES and IT-BZ actually use
 `OI.OrthoimageCoverage`. Everyone else is local-language: `pand`, `batiment`,
 `GebaeudeBauwerk`, `DOP`, `OrtoSat2023`. Each country needs a mapping entry —
 endpoint, layer, CRS, licence. That is clerical work, not architecture, which is
-why [`regions.ts`](../apps/napplet/src/config/regions.ts) carries a `services[]`
+why [`regions.ts`](../packages/terrain-engine/src/config/regions.ts) carries a `services[]`
 array with a **mandatory `license` field**.
 
 ### Detecting "no coverage"

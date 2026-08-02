@@ -1,6 +1,6 @@
-import { geodesicAreaKm2, validateBBox } from '../bbox/area';
-import type { BBox4326, BBoxErrorCode } from '../bbox/validate';
-import { MAX_AREA_KM2 } from '../config/defaults';
+import { geodesicAreaKm2, validateBBox } from '@terrcvm/terrain-engine/bbox/area';
+import type { BBox4326, BBoxErrorCode } from '@terrcvm/terrain-engine/bbox/validate';
+import { MAX_AREA_KM2 } from '@terrcvm/terrain-engine/config/defaults';
 import { errorCopyFor } from './copy';
 
 export const UNDO_WINDOW_MS = 10_000;

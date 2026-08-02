@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "artifact": "TEST FIXTURE",
-  "owner": "terrDVM repository; fully self-generated procedural test data",
+  "owner": "terrCVM repository; fully self-generated procedural test data",
   "license": "self-generated; no third-party imagery or asset code",
   "generator": {
     "path": "scripts/generate-ortho-fixture.mjs",

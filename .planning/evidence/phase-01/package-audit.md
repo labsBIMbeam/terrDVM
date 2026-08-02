@@ -3,7 +3,7 @@
 **Audit state:** MACHINE-VERIFIED; HUMAN-APPROVED WITH EXACT SCOPE
 
 **Install authorization:** APPROVED only within the exact scope recorded below. Plan 02 may perform the repository's one Phase 1 lockfile mutation for the 14 exact project pins and may run the one exact Chromium provisioning command. Nothing else is authorized.
-**Evidence basis:** exact-version registry metadata captured in `/tmp/terrdvm-package-metadata.json`; packed Napplet artifacts and identities in `/tmp/npm-packs/pack-output.json` and `/tmp/npm-packs/`; locally cached Kehto/Paja package manifests under `/home/flx/.cache/deno/npm/registry.npmjs.org/@kehto/`; Phase 1 research package audit. No package install or lockfile mutation was performed for this dossier.
+**Evidence basis:** exact-version registry metadata captured in `/tmp/terrcvm-package-metadata.json`; packed Napplet artifacts and identities in `/tmp/npm-packs/pack-output.json` and `/tmp/npm-packs/`; locally cached Kehto/Paja package manifests under `/home/flx/.cache/deno/npm/registry.npmjs.org/@kehto/`; Phase 1 research package audit. No package install or lockfile mutation was performed for this dossier.
 
 ## Human approval record
 
@@ -38,7 +38,7 @@ The explicit response `approved` was recorded at `2026-07-27T08:28:23Z` from `Te
     "plan": "01-02",
     "count": 1
   },
-  "chromium_command": "pnpm --filter @terrdvm/napplet exec playwright install chromium",
+  "chromium_command": "pnpm --filter @terrcvm/napplet exec playwright install chromium",
   "host_or_extra_package_mutation_approved": false,
   "prohibited": [
     "--with-deps",
@@ -108,14 +108,14 @@ The Paja smoke harness imports `playwright@1.59.1` directly and MUST NEVER impor
 Only after the blocking Task 3 approval, Plan 02 may provision Chromium with exactly:
 
 ```sh
-pnpm --filter @terrdvm/napplet exec playwright install chromium
+pnpm --filter @terrcvm/napplet exec playwright install chromium
 ```
 
 OS-dependency installation is outside this dossier. `playwright install --with-deps`, distro package installation, elevated package-manager operations, and any equivalent host mutation are **NOT APPROVED** and require their own explicit human approval.
 
 ## Existing Kehto/Paja installation (audited, NOT project-installed)
 
-`/home/flx/.deno/bin/kehto` is a Deno-generated launcher for `npm:@kehto/cli`; the local exact manifests establish `@kehto/cli@0.2.16` and cached transitive `@kehto/paja@0.8.0`, their Kehto repository paths, MIT licenses, and peer ranges. The research verdict remains **SUS** for the CLI and **UNRESOLVED** for Paja. They are never added to a terrDVM package manifest or lockfile and are never reinstalled by this project. Acceptance of smoke evidence remains a human checkpoint matter.
+`/home/flx/.deno/bin/kehto` is a Deno-generated launcher for `npm:@kehto/cli`; the local exact manifests establish `@kehto/cli@0.2.16` and cached transitive `@kehto/paja@0.8.0`, their Kehto repository paths, MIT licenses, and peer ranges. The research verdict remains **SUS** for the CLI and **UNRESOLVED** for Paja. They are never added to a terrCVM package manifest or lockfile and are never reinstalled by this project. Acceptance of smoke evidence remains a human checkpoint matter.
 
 ## Per-plan authorization boundary
 

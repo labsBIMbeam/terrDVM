@@ -12,8 +12,9 @@ dist/
 apps/napplet/dist/
 .vite/
 coverage/
-# The test-coverage rule above must not swallow shipped survey data
-!apps/napplet/src/config/coverage/
+# The test-coverage rule above must not swallow shipped survey data, wherever
+# in the workspace it lives.
+!**/src/config/coverage/
 playwright-report/
 test-results/
 
@@ -45,7 +46,7 @@ artifacts/
 !apps/napplet/tests/fixtures/**/*.glb
 
 # GSD clean-checkout and local scratch
-.terrdvm-worktree*/
+.terrcvm-worktree*/
 .scratch/
 tmp/
 .scratch/**/*.log
