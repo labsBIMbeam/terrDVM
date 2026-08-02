@@ -42,6 +42,15 @@ reducer, copy, curated places, tokens.css). Nothing engine- or protocol-shaped m
 
 ## Known leftovers
 
+- The coverage THRESHOLDS in the vitest configs were already stale on main: running
+  `vitest --coverage` in main's `apps/napplet` fails its own 85/80/85/85 gate at
+  72.85/73.98/61.94/73.33 (measured on commit 4996554). The kit inherits the same include
+  list, the same tests and therefore the same numbers (72.41/73.65/61.26/72.84) — carried
+  over unchanged because papering over a pre-existing gap inside a refactor would hide it.
+  The enforced gate (`pnpm -r test:unit`, which does not enable coverage — same as CI)
+  passes everywhere. The new `apps/field-measurement` protocol layer meets its thresholds
+  for real: 91.87/90.32/93.33/95.13.
+
 - `scripts/verify-lock-approved.mjs` still parses the phase-01 package-audit ledger whose
   location column predates the split. Updating the ledger is a `.planning/evidence` edit
   that was out of scope for this refactor; the split introduced no new third-party pins —
