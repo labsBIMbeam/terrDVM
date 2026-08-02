@@ -225,6 +225,17 @@ class CrawlQueue:
         ).fetchall()
         return [Tile(**dict(row)) for row in rows]
 
+    def result(self, region: str, kind: str, z: int, x: int, y: int) -> dict | None:
+        """The stored crawl result for one tile, or None if it was never seeded."""
+        row = self._connection.execute(
+            """
+            SELECT status, sha256, bytes, updated_at FROM crawl_items
+             WHERE region=? AND kind=? AND z=? AND x=? AND y=?
+            """,
+            (region, kind, z, x, y),
+        ).fetchone()
+        return dict(row) if row else None
+
     def mark_done(self, tile: Tile, *, sha256: str, size: int, counts: dict[str, int]) -> None:
         self._connection.execute(
             """

@@ -36,7 +36,29 @@ crawler secret from `deploy/.local/dev-crawler.secret` (override:
 `CRAWLER_SECRET_FILE`) and signs locally — only signatures cross the wire. This is
 VS-3's "write path closed" observable, runnable from day one.
 
+`verify-corpus.mjs` is the VS-3 announcement probe: both collections present with
+bbox/license/server tags, exactly two items in the `etgc` cell, and every item's `x`
+tag re-fetched from blossom-server with a matching digest — announcements and bytes
+agree end to end.
+
 Override targets with `RELAY_URL` / `BLOSSOM_URL` / `GIS_URL` when probing a remote host.
+
+## The corpus loop, end to end
+
+```bash
+export BLOSSOM_SERVER_URL=http://127.0.0.1:3000
+export CRAWLER_SECRET_FILE=deploy/.local/dev-crawler.secret   # operator-local
+cd services/blossom-gis
+uv run python -m blossom_gis.cli run      --region madeira --tile 13/3711/3309 --kinds dem
+uv run python -m blossom_gis.cli run      --region madeira --tile 14/7422/6618 --kinds features
+uv run python -m blossom_gis.cli announce --region madeira --tile 13/3711/3309 --kinds dem
+uv run python -m blossom_gis.cli announce --region madeira --tile 14/7422/6618 --kinds features
+node ../../deploy/verify-corpus.mjs
+```
+
+The DEM item is `dem:13/3711/3309` — the z14 Funchal tile's parent — because the
+engine's DEM zoom cap is 13 (z14 Terrarium is upstream interpolation, not source
+data; decided 2026-08-02). Both items share geohash cell `etgc`.
 
 ## Key handling
 

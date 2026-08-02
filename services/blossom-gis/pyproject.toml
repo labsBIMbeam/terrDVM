@@ -12,6 +12,7 @@ dependencies = [
     # texture.py and source_check.py import PIL at module scope, and app.py
     # imports texture at module scope, so this is a hard runtime dependency.
     "pillow>=11",
+    "websockets>=16.1.1",
 ]
 
 [project.optional-dependencies]

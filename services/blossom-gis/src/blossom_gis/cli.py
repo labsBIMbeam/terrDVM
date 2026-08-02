@@ -96,6 +96,16 @@ def main(argv: list[str] | None = None) -> int:
         help="also register the blob under this name in characters.json",
     )
 
+    announce_parser = sub.add_parser(
+        "announce",
+        help="publish the collection+item events for a crawled tile to the corpus relay",
+    )
+    announce_parser.add_argument("--region", required=True, choices=sorted(REGIONS))
+    announce_parser.add_argument("--tile", required=True, help="z/x/y of the crawled tile")
+    announce_parser.add_argument(
+        "--kinds", default="dem,features", help="comma-separated datasets to announce"
+    )
+
     for name in ("seed", "run", "status", "coverage"):
         p = sub.add_parser(name)
         p.add_argument("--region", required=True, choices=sorted(REGIONS))
@@ -330,6 +340,64 @@ def main(argv: list[str] | None = None) -> int:
     queue = CrawlQueue(queue_path)
 
     try:
+        if args.command == "announce":
+            import time
+
+            from .announce import assemble, publish
+            from .geo_protocol import GeoProtocolError, validate_tile
+            from .signer import load_secret, public_key_from_secret, sign_event
+
+            relay_url = os.environ.get("RELAY_URL", "ws://127.0.0.1:7777")
+            server_url = (
+                os.environ.get("BLOSSOM_PUBLIC_URL") or os.environ.get("BLOSSOM_SERVER_URL", "")
+            ).strip()
+            secret_file = os.environ.get("CRAWLER_SECRET_FILE", "").strip()
+            if not server_url or not secret_file:
+                print(
+                    "announce needs BLOSSOM_PUBLIC_URL (or BLOSSOM_SERVER_URL) for the "
+                    "server tag and CRAWLER_SECRET_FILE for signing"
+                )
+                return 2
+            try:
+                z, x, y = (int(part) for part in args.tile.split("/"))
+                validate_tile(z, x, y)
+            except (ValueError, GeoProtocolError) as error:
+                print(f"--tile must be a valid z/x/y: {error}")
+                return 2
+
+            secret = load_secret(secret_file)
+            pubkey = public_key_from_secret(secret).hex()
+            events = []
+            for kind in (k.strip() for k in args.kinds.split(",") if k.strip()):
+                row = queue.result(args.region, kind, z, x, y)
+                if not row or row["status"] != "done" or not row["sha256"]:
+                    # Only crawled, stored bytes are announced — an announcement
+                    # for bytes that do not exist would be a lie on the relay.
+                    print(f"refusing to announce {kind}:{z}/{x}/{y} — tile is not done")
+                    return 1
+                collection, item = assemble(
+                    dataset=kind,
+                    region_bbox=REGIONS[args.region],
+                    z=z,
+                    x=x,
+                    y=y,
+                    sha256=row["sha256"],
+                    size=row["bytes"],
+                    acquired_at=row["updated_at"],
+                    server=server_url,
+                    pubkey=pubkey,
+                    now=int(time.time()),
+                )
+                events.extend((sign_event(collection, secret), sign_event(item, secret)))
+
+            rejected = 0
+            for event_id, accepted, message in publish(relay_url, events):
+                status = "ok" if accepted else f"REJECTED {message}"
+                print(f"  {event_id[:12]} {status}")
+                rejected += 0 if accepted else 1
+            print(f"announced {len(events) - rejected}/{len(events)} events to {relay_url}")
+            return 1 if rejected else 0
+
         if args.command == "seed":
             kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
             count = queue.seed(args.region, REGIONS[args.region], args.zoom, kinds)
