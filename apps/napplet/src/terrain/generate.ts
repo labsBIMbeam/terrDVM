@@ -1,4 +1,3 @@
-import { loadApprovedBytes } from '../shell/resource-client';
 import {
   COLLECTION_SERVICE,
   cachedDemTileUrl,

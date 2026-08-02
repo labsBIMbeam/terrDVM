@@ -256,7 +256,7 @@ export function createMapView(
     },
   });
 
-  let noteFeatures: LabelFeature[] = [];
+  const noteFeatures: LabelFeature[] = [];
 
   const noteMarker = (id: string, text: string, lon: number, lat: number): void => {
     const source = map.getSource('notes') as maplibregl.GeoJSONSource | undefined;

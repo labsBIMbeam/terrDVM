@@ -522,7 +522,8 @@ describe('a relay cannot put an unverified marker on the map', () => {
         lon: 16.37,
         lat: 48.21,
       }) as Record<string, unknown>;
-      const { sig: _sig, ...unsigned } = good;
+      const unsigned = { ...good };
+      delete unsigned.sig;
       return [unsigned, { ...good, sig: '' }, { ...good, sig: 'not-hex'.repeat(16) }];
     };
     expect(await fetchPresences(VIENNA, 50)).toEqual([]);

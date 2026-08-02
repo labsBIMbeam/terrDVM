@@ -24,7 +24,6 @@ vi.mock('../../src/job/collection', async () => {
 import { generateTerrain } from '../../src/terrain/generate';
 import {
   SOUTH_TYROL_DTM_05M,
-  TERRARIUM,
   selectElevationSources,
 } from '@terrcvm/terrain-engine/terrain/elevation-sources';
 import type { BBox4326 } from '@terrcvm/terrain-engine/bbox/validate';
