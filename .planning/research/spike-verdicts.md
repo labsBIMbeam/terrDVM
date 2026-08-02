@@ -1,4 +1,12 @@
-# Spike verdicts — R1/R2 (VS-4 entry conditions)
+# Spike verdicts — R1/R2 (VS-4 entry conditions), plus R4
+
+## R4 — strfry addressable replacement and tag indexing
+
+**Verdict: retired `[measured]`, live on the corpus stack 2026-08-02.** Re-announcing
+the dem pair left the relay at exactly 2 collections and 2 items (the new item id
+replaced the old — addressable 30551 replacement works), and a `#d` filter for
+`dem:13/3711/3309` returns exactly the current event (single-letter tags indexed).
+The write-policy half was already proven by `probe-write-policy.mjs`.
 
 **Run:** 2026-08-02, bitbeam (Windows laptop). Provenance tags per MESH-CALCULATOR.md:
 `[measured]` observed in this run · `[blocked]` could not be executed here.
@@ -39,8 +47,11 @@ Recorded in the fallback ledger.
 
 ## R2 — real shell `outbox`/`resource` behaviour
 
-**Verdict: blocked on this host `[blocked]`** — needs the real shell. The ~30-line probe
-napplet (one outbox REQ to the corpus relay, one `resource.bytes()` to the blossom host,
-print EOSE + byte length) should run on alflx before VS-4 opens. Note the corpus stack
-the probe needs is now real: `deploy/compose.yaml`, with `verify-corpus.mjs` as the
-server-side half of the same observation.
+**Verdict: blocked on this host `[blocked]` — but the probe artifact is built and
+CONFORMANT.** `apps/shell-probe` is the ~30-line napplet: manifest requires
+`outbox` + `resource` (never `upload`), one `outbox.query` REQ to the corpus relay, one
+`resource.bytes()` of the announced dem blob, results printed on the page. Conformance
+6 passed / 0 failed / 4 skipped (manifest checks skip without a signing key);
+`boot/no-forbidden-globals` passes — the probe holds the capability discipline the
+monolith did not. Targets default to the local stack and override via a URL-encoded
+JSON location hash. One `kehto paja` run on a kehto-equipped host (alflx) closes R2.

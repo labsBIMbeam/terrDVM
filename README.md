@@ -180,7 +180,17 @@ explicit operator request:
    [`invoice.ts`](apps/napplet/src/job/invoice.ts).
 3. **A collection server exists.** `AGENTS.md` excludes a custom tile server from
    the initial slice, and Phase 4 planned a Blossom *client* against a
-   third-party server.
+   third-party server. *Partially unwound by the corpus slice:* blob bytes moved
+   to stock [hzrd149/blossom-server](https://github.com/hzrd149/blossom-server)
+   and blossom-gis is demoted to geo index + crawler — a move back toward the
+   brief.
+4. **The distribution layer runs before the payment loop too.** The corpus path
+   ([`deploy/`](deploy/), crawler write-through, kind-30550/30551 announcements —
+   originally Phase 4, ordered after payment) is built with payment still
+   skipped. Acceptable because payment gates per-delivery bakes, never the public
+   tile grid, and every event and blob is reused unchanged when the paid loop
+   lands. Condition: `invoice.ts` stays unwired and no viewer grows payment UI in
+   this slice (VERTICAL-SLICE.md, "Deviations, stated plainly").
 
 Phase-01 Paja evidence is stale as a result: it asserts the literal string
 `Source: — unavailable`, which is no longer true once imagery goes live.
