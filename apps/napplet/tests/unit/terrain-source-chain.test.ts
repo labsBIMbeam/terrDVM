@@ -86,7 +86,31 @@ describe('elevation source chain in the generator', () => {
     const asked = loadBytesCacheFirst.mock.calls.map(([url]) => url);
     expect(asked.some((url) => url.includes('/dem/it-bz-dtm-05m/'))).toBe(true);
     expect(asked.some((url) => url.includes('/dem/it-bz-dtm-25m/'))).toBe(true);
-    // Terrarium is proxied through the collection server's own /dem/{z}/{x}/{y}.
+    // The chain demotes into GLOBAL_TAIL, whose head is GEDTM30 — bare earth,
+    // and the first source that answers here. Terrarium is behind it and is
+    // never reached, which is the point: the tail is ordered, not a fallback
+    // list to be exhausted.
+    expect(asked.some((url) => url.includes('/dem/gedtm30/'))).toBe(true);
+    expect(asked.some((url) => /\/dem\/\d+\/\d+\/\d+\.png$/.test(url))).toBe(false);
+  });
+
+  it('reaches Terrarium only when the whole bare-earth tail is unavailable', async () => {
+    stubDecode();
+    loadBytesCacheFirst.mockReset();
+    loadBytesCacheFirst.mockImplementation(async (cacheUrl: string) => {
+      // Every transcoded source needs the collection server; without it only
+      // Terrarium's own direct upstream answers.
+      if (cacheUrl.includes('/dem/it-bz-') || cacheUrl.includes('/dem/gedtm30/')) {
+        throw new Error('ECONNREFUSED');
+      }
+      return new Blob([new Uint8Array(64)]);
+    });
+
+    const mesh = await generateTerrain(BOLZANO, { region: 'south-tyrol', gridN: 4 });
+
+    expect(mesh).toBeTruthy();
+    const asked = loadBytesCacheFirst.mock.calls.map(([url]) => url);
+    expect(asked.some((url) => url.includes('/dem/gedtm30/'))).toBe(true);
     expect(asked.some((url) => /\/dem\/\d+\/\d+\/\d+\.png$/.test(url))).toBe(true);
   });
 
@@ -106,11 +130,19 @@ describe('elevation source chain in the generator', () => {
     loadBytesCacheFirst.mockResolvedValue(new Blob([new Uint8Array(64)]));
 
     const madeira: BBox4326 = [-16.95, 32.63, -16.9, 32.67];
-    expect(selectElevationSources('europe', madeira)).toEqual([TERRARIUM]);
+    // Outside every national footprint the chain is the global tail alone, and
+    // its head is bare earth. "No national source here" is not a failure state.
+    expect(selectElevationSources('europe', madeira).map((s) => s.id)).toEqual([
+      'gedtm30',
+      'mapzen-terrarium',
+    ]);
+    // Mapterhorn is opt-in: it carries no DTM/DSM classification, so selection
+    // must never reach for it on its own.
+    expect(selectElevationSources('europe', madeira).map((s) => s.id)).not.toContain('mapterhorn');
 
     await generateTerrain(madeira, { region: 'europe', gridN: 4 });
     for (const [cacheUrl] of loadBytesCacheFirst.mock.calls) {
-      expect(cacheUrl).toMatch(/\/dem\/\d+\/\d+\/\d+\.png$/);
+      expect(cacheUrl).toMatch(/\/dem\/(gedtm30\/)?\d+\/\d+\/\d+\.png$/);
     }
   });
 

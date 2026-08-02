@@ -1,6 +1,6 @@
 /**
- * Elevation source registry — national bare-earth DTMs, with Terrarium as the
- * global fallback.
+ * Elevation source registry — national bare-earth DTMs over a global
+ * bare-earth base, with Terrarium as the last resort.
  *
  * ## Why this file exists
  *
@@ -33,6 +33,12 @@
  * imagery. Retrofitting licences is expensive; a source whose terms could not
  * be confirmed is not in this file at all. See `docs/ELEVATION-SOURCES.md` for
  * the survey, including the sources that were rejected and why.
+ *
+ * Since 2026-08-02 a source must also declare `verticalUncertaintyM` together
+ * with the basis of that number. `.planning/MESH-CALCULATOR.md` §4.1 makes it
+ * mandatory: a clearance verdict carries information only when σ is smaller
+ * than the clearance being tested, so a source that cannot state its σ cannot
+ * be used to answer the question at all.
  */
 
 import {
@@ -42,6 +48,7 @@ import {
   isApprovedDemUrl,
   type OriginTileEndpoint,
   type TileEndpoint,
+  type TileImageFormat,
 } from './dem';
 import type { Bounds } from '../config/regions';
 
@@ -50,6 +57,10 @@ export type ElevationSourceCode =
   | 'LICENCE_MISSING'
   /** A registry record carries no attribution string. */
   | 'ATTRIBUTION_MISSING'
+  /** A composite-licence record does not account for every source it covers. */
+  | 'COMPOSITE_LICENCE_UNRESOLVED'
+  /** A registry record declares no 1σ vertical uncertainty (MESH-CALCULATOR §4.1). */
+  | 'VERTICAL_UNCERTAINTY_UNDECLARED'
   /** A registry record is internally inconsistent (zooms, template, delivery). */
   | 'SOURCE_MALFORMED'
   /** A region chain names an id the registry does not hold. */
@@ -57,7 +68,9 @@ export type ElevationSourceCode =
   /** Selection produced no usable source at all — must not happen, guarded anyway. */
   | 'NO_SOURCE_FOR_REGION'
   /** A transcoded source was asked for a URL without a collection-server origin. */
-  | 'TRANSCODE_ORIGIN_REQUIRED';
+  | 'TRANSCODE_ORIGIN_REQUIRED'
+  /** A source that is not bare earth was asked to stand in as a bare-earth reference. */
+  | 'NOT_BARE_EARTH';
 
 /** The one failure type this module raises. Named, coded, never a bare string. */
 export class ElevationSourceError extends Error {
@@ -78,12 +91,79 @@ export class ElevationSourceError extends Error {
  * national projected CRS.
  */
 export type ElevationUpstream = {
-  readonly kind: 'xyz-png' | 'wcs' | 'stac-cog' | 'bulk-cog' | 'wmts-bil';
+  readonly kind: 'xyz-png' | 'xyz-webp' | 'wcs' | 'stac-cog' | 'bulk-cog' | 'wmts-bil';
   readonly endpoint: string;
   /** WCS coverage id / STAC collection id / null for plain tile pyramids. */
   readonly coverageId: string | null;
   /** CRS the publisher delivers in — the reprojection the transcode must do. */
   readonly crs: string;
+};
+
+/**
+ * Where a `verticalUncertaintyM` figure came from. Recorded because the number
+ * is load-bearing: MESH-CALCULATOR §4.3 turns it directly into "this question
+ * is answerable at this range and that one is not", and a vendor brochure and
+ * a measurement against LiDAR are not the same kind of claim.
+ */
+export type UncertaintyBasis =
+  /** This project measured it — see `docs/ELEVATION-SOURCES.md`. */
+  | 'measured'
+  /** Peer-reviewed figure, cited on the record. */
+  | 'published'
+  /** The publisher's own accuracy statement. */
+  | 'vendor'
+  /**
+   * Nothing published that this pass could confirm, so σ is taken as the
+   * native posting (floored at 0.3 m). Stated as an assumption, never dressed
+   * up as a vendor figure — the rule is written out at `POSTING_SIGMA`.
+   */
+  | 'assumed-from-posting'
+  /**
+   * The source is a mosaic whose per-tile provenance it does not publish, so
+   * it inherits the worst σ anything in the mosaic could have. An unknown is
+   * treated exactly as harshly as the worst known case (MESH-CALCULATOR §2.5).
+   */
+  | 'inherited-worst-case';
+
+/**
+ * The licence position of a mosaic that redistributes many upstream datasets
+ * under one endpoint.
+ *
+ * `ElevationSource` carries exactly one `license` and one `attribution`
+ * string, which is the right shape for a source with one publisher and the
+ * wrong shape for Mapterhorn's 134. Writing "various" in the licence field
+ * would be a licence failure wearing a licence's clothes, so a composite
+ * source instead has to declare the audit: what was fetched, when, its hash,
+ * how many datasets it covers, how the declared terms group, and the
+ * strongest obligation across the whole set. The single `license` string then
+ * names that audit rather than pretending to be one SPDX id, and the single
+ * `attribution` string is a credit line that discharges the obligation on its
+ * own. The reasoning is written out in `docs/ELEVATION-SOURCES.md`.
+ */
+export type CompositeLicence = {
+  /** Machine-readable manifest the audit was taken from. */
+  readonly manifestUrl: string;
+  /** ISO date the manifest was fetched and read. */
+  readonly snapshot: string;
+  /** SHA-256 of the manifest bytes as audited. A record, not a runtime check. */
+  readonly manifestSha256: string;
+  /** Datasets the mosaic redistributes. */
+  readonly sourceCount: number;
+  /** Distinct licence strings the manifest declares, before grouping. */
+  readonly distinctTerms: number;
+  /** Grouped census of those strings. Must sum to `sourceCount`. */
+  readonly families: readonly { readonly family: string; readonly count: number }[];
+  /**
+   * The strongest obligation across every declared licence in the set. This
+   * is what the credit line has to discharge.
+   */
+  readonly obligation: 'attribution';
+  /**
+   * Datasets whose licence is known by its declared *name* only — the full
+   * text was not read in the audit pass. Recorded rather than glossed, because
+   * "no non-commercial terms in the set" is only as strong as the reading.
+   */
+  readonly termsReadByNameOnly: number;
 };
 
 /** A source is a `TileEndpoint`, plus the provenance that makes it usable. */
@@ -98,13 +178,32 @@ export type ElevationSource = TileEndpoint & {
    * is.
    */
   readonly model: 'dtm' | 'dsm' | 'mixed';
-  /** Native posting of the published grid, in metres. */
+  /**
+   * Native posting of the published grid, in metres.
+   *
+   * For a mosaic of differing postings this is the posting that is present
+   * *everywhere*, not the finest one anywhere — it is the number §2.6 of the
+   * mesh-calculator spec floors profile sampling on, and over-claiming it
+   * manufactures diffraction out of interpolation.
+   */
   readonly nativeResolutionM: number;
   readonly verticalDatum: string;
+  /**
+   * 1σ vertical uncertainty of the published grid, metres. Mandatory —
+   * MESH-CALCULATOR §4.1. Enforced by `defineElevationSource`.
+   */
+  readonly verticalUncertaintyM: number;
+  /** Where that number came from. Mandatory alongside it. */
+  readonly verticalUncertaintyBasis: UncertaintyBasis;
   /** Mandatory. Enforced by `defineElevationSource`. */
   readonly license: string;
   /** Mandatory. Enforced by `defineElevationSource`. */
   readonly attribution: string;
+  /**
+   * Non-null when `license` names a composite audit rather than one publisher's
+   * terms. Enforced for internal consistency by `defineElevationSource`.
+   */
+  readonly composite: CompositeLicence | null;
   /**
    * `direct` — the browser fetches these tiles from the publisher itself.
    * `transcoded` — blossom-gis must produce them; see `docs/ELEVATION-SOURCES.md`.
@@ -112,7 +211,7 @@ export type ElevationSource = TileEndpoint & {
   readonly delivery: 'direct' | 'transcoded';
   /** Always Terrarium: the transcode re-encodes into it so one decoder serves all. */
   readonly encoding: 'terrarium';
-  readonly format: 'image/png';
+  readonly format: TileImageFormat;
   /** null for a transcoded source — the collection server supplies the origin. */
   readonly origin: {
     readonly scheme: string;
@@ -123,14 +222,49 @@ export type ElevationSource = TileEndpoint & {
   readonly timeoutMs: number;
   /** null = global coverage. */
   readonly coverage: Bounds | null;
+  /**
+   * Highest zoom present *everywhere* inside `coverage`.
+   *
+   * `null` means the pyramid is dense: every zoom up to `maxZoom` exists
+   * across the whole coverage, which is true of a transcode driven by one
+   * national raster and of Terrarium.
+   *
+   * A number means the pyramid is **sparse** above it — `maxZoom` is reachable
+   * somewhere and 404s elsewhere. Mapterhorn is the case that forced this
+   * field: verified live, z12 answers everywhere on earth, z13–z18 exist only
+   * where a finer contributing source does. Declaring `maxZoom: 18` alone
+   * would make every default request 404 outside the good footprints, which is
+   * precisely the silent-failure defect this registry exists to avoid, so
+   * `elevationEndpoint()` clamps to this value unless a caller opts in.
+   */
+  readonly denseMaxZoom: number | null;
   readonly upstream: ElevationUpstream;
   /** When and how the endpoint and licence were last confirmed live. */
   readonly verified: string;
   readonly notes: string;
 };
 
-type ElevationSourceInput = Omit<ElevationSource, 'encoding' | 'format'> &
-  Partial<Pick<ElevationSource, 'encoding' | 'format'>>;
+type ElevationSourceInput = Omit<
+  ElevationSource,
+  'encoding' | 'format' | 'composite' | 'denseMaxZoom'
+> &
+  Partial<Pick<ElevationSource, 'encoding' | 'format' | 'composite' | 'denseMaxZoom'>>;
+
+/**
+ * σ for a source with no confirmable accuracy statement: the native posting,
+ * floored at 0.3 m.
+ *
+ * Not a physical law — a stated house rule, so that `assumed-from-posting`
+ * means one checkable thing rather than a different guess per entry. It is
+ * deliberately pessimistic: an ALS DTM's real σ is usually well under its
+ * posting, so this never makes a refusal look more answerable than it is. The
+ * floor exists because no photogrammetric product is better than a few
+ * centimetres and pretending otherwise would let §4.3 claim clearance verdicts
+ * at absurd ranges.
+ */
+export function postingSigmaM(nativeResolutionM: number): number {
+  return Math.max(0.3, nativeResolutionM);
+}
 
 /**
  * Build a registry record, refusing anything that would be a liability later.
@@ -140,13 +274,77 @@ type ElevationSourceInput = Omit<ElevationSource, 'encoding' | 'format'> &
  * until somebody redistributes it.
  */
 export function defineElevationSource(input: ElevationSourceInput): ElevationSource {
-  const source: ElevationSource = { encoding: 'terrarium', format: 'image/png', ...input };
+  const source: ElevationSource = {
+    encoding: 'terrarium',
+    format: 'image/png',
+    composite: null,
+    denseMaxZoom: null,
+    ...input,
+  };
 
   if (!source.license.trim()) {
     throw new ElevationSourceError('LICENCE_MISSING', `${source.id} declares no licence`);
   }
   if (!source.attribution.trim()) {
     throw new ElevationSourceError('ATTRIBUTION_MISSING', `${source.id} declares no attribution`);
+  }
+  // "various" and its friends are what this whole registry exists to refuse:
+  // they look like a declaration and discharge no obligation at all.
+  if (/\b(various|multiple|see\s+website|tbd|unknown)\b/i.test(source.license)) {
+    throw new ElevationSourceError(
+      'COMPOSITE_LICENCE_UNRESOLVED',
+      `${source.id} names no actual terms — a mosaic must declare a composite audit instead`,
+    );
+  }
+  if (source.composite !== null) {
+    const { composite } = source;
+    const counted = composite.families.reduce((total, row) => total + row.count, 0);
+    if (composite.sourceCount < 1 || counted !== composite.sourceCount) {
+      throw new ElevationSourceError(
+        'COMPOSITE_LICENCE_UNRESOLVED',
+        `${source.id} groups ${counted} of ${composite.sourceCount} redistributed datasets`,
+      );
+    }
+    if (composite.distinctTerms < composite.families.length) {
+      throw new ElevationSourceError(
+        'COMPOSITE_LICENCE_UNRESOLVED',
+        `${source.id} claims fewer distinct terms than licence families`,
+      );
+    }
+    if (composite.termsReadByNameOnly > composite.sourceCount) {
+      throw new ElevationSourceError(
+        'COMPOSITE_LICENCE_UNRESOLVED',
+        `${source.id} reports more unread terms than datasets`,
+      );
+    }
+    if (!/^[0-9a-f]{64}$/.test(composite.manifestSha256)) {
+      throw new ElevationSourceError(
+        'COMPOSITE_LICENCE_UNRESOLVED',
+        `${source.id} does not pin the manifest bytes it audited`,
+      );
+    }
+    // The credit line has to be self-sufficient: whatever the UI prints must
+    // point a reader at the full list, offline or not.
+    if (!source.attribution.includes(composite.manifestUrl.replace(/^https?:\/\//, ''))) {
+      throw new ElevationSourceError(
+        'COMPOSITE_LICENCE_UNRESOLVED',
+        `${source.id} attribution does not lead to the per-dataset credits`,
+      );
+    }
+  }
+  if (!(source.verticalUncertaintyM > 0) || !Number.isFinite(source.verticalUncertaintyM)) {
+    throw new ElevationSourceError(
+      'VERTICAL_UNCERTAINTY_UNDECLARED',
+      `${source.id} declares no positive 1σ vertical uncertainty`,
+    );
+  }
+  if (source.denseMaxZoom !== null) {
+    if (source.denseMaxZoom < source.minZoom || source.denseMaxZoom > source.maxZoom) {
+      throw new ElevationSourceError(
+        'SOURCE_MALFORMED',
+        `${source.id} puts denseMaxZoom outside its own zoom range`,
+      );
+    }
   }
   if (!(source.nativeResolutionM > 0)) {
     throw new ElevationSourceError(
@@ -180,20 +378,42 @@ export function defineElevationSource(input: ElevationSourceInput): ElevationSou
 /**
  * Zoom at which a Web Mercator pixel first matches a source's native posting.
  *
- * `log2(C * cos(lat) / (256 * resolution))`, the same derivation that fixed
- * Terrarium's cap at 13. Recorded as a function so each `maxZoom` below can be
- * checked rather than believed.
+ * `log2(C * cos(lat) / (tileSize * resolution))`, the same derivation that
+ * fixed Terrarium's cap at 13. Recorded as a function so each `maxZoom` below
+ * can be checked rather than believed.
+ *
+ * `tileSize` is a parameter and not a constant because a 512² tile reaches the
+ * same ground sampling one zoom lower: Mapterhorn's z12 and Terrarium's z13
+ * are the same 12.7 m/px over Vienna, and comparing their zoom numbers without
+ * this term would be off by a factor of two.
  */
-export function nativeZoom(resolutionM: number, latitudeDeg: number): number {
+export function nativeZoom(resolutionM: number, latitudeDeg: number, tileSize = 256): number {
   const circumference = 40_075_016.686;
-  return Math.log2((circumference * Math.cos((latitudeDeg * Math.PI) / 180)) / (256 * resolutionM));
+  return Math.log2(
+    (circumference * Math.cos((latitudeDeg * Math.PI) / 180)) / (tileSize * resolutionM),
+  );
+}
+
+/** Ground sampling of one tile pixel, metres. The reader's version of the above. */
+export function groundResolutionM(zoom: number, latitudeDeg: number, tileSize = 256): number {
+  const circumference = 40_075_016.686;
+  return (circumference * Math.cos((latitudeDeg * Math.PI) / 180)) / (tileSize * 2 ** zoom);
 }
 
 // --- The registry ------------------------------------------------------------
 
 /**
- * The global fallback, spread from `DEM_SOURCE` so the endpoint contract has
+ * The last resort, spread from `DEM_SOURCE` so the endpoint contract has
  * exactly one copy. Everything about it stays as derived in `dem.ts`.
+ *
+ * **Demoted, not retired, on 2026-08-02.** GEDTM30 is better on every axis
+ * that matters — bare earth rather than a rooftop surface, 10.69 m σ against
+ * 14.31 m — so it now sits ahead of this in every chain. Terrarium stays as
+ * the terminal link for one reason: it is the only *direct* global source in
+ * the registry. GEDTM30 is a 432 GB COG that has to be transcoded by the
+ * collection server, so with no server running Terrarium is the only thing
+ * between the app and no terrain at all. Retiring it would trade a 14 m error
+ * for a blank screen.
  */
 export const TERRARIUM = defineElevationSource({
   id: 'mapzen-terrarium',
@@ -205,12 +425,18 @@ export const TERRARIUM = defineElevationSource({
   model: 'mixed',
   nativeResolutionM: 30,
   verticalDatum: 'EGM96 (mixed by contributing source)',
+  // This project's own measurement against the CC0 0.5 m South Tyrol LiDAR
+  // DTM on the steep bbox — better provenance than any vendor figure, because
+  // it is this grid, this interpolant and this terrain.
+  verticalUncertaintyM: 14.31,
+  verticalUncertaintyBasis: 'measured',
   license: 'Public domain / permissive per contributing source (SRTM, GMTED2010, NED)',
   attribution: DEM_SOURCE.attribution,
   delivery: 'direct',
   origin: { scheme: DEM_SOURCE.scheme, host: DEM_SOURCE.host, port: DEM_SOURCE.port },
   pathTemplate: DEM_SOURCE.pathTemplate,
   tileSize: DEM_SOURCE.tileSize,
+  format: DEM_SOURCE.format,
   minZoom: DEM_SOURCE.minZoom,
   maxZoom: DEM_SOURCE.maxZoom,
   maxResponseBytes: DEM_SOURCE.maxResponseBytes,
@@ -225,17 +451,237 @@ export const TERRARIUM = defineElevationSource({
   verified: 'in production since phase 01',
   notes:
     'Global, already Terrarium-encoded, no transcode. Kept as the last link of ' +
-    'every chain: outside national coverage it is the only thing there is.',
+    'every chain because it is the only direct global source: with no ' +
+    'collection server, GEDTM30 cannot answer and this can.',
 });
 
-/** Shared shape for the national DTMs — all transcoded, all Terrarium-encoded out. */
+/**
+ * The global bare-earth base. Adjudicated in `.planning/MESH-CALCULATOR.md`
+ * §2.2 as **the default, not a fallback**.
+ *
+ * The only globally complete, redistributable bare-earth DEM there is. A
+ * global-to-local random forest fused Copernicus DEM, ALOS World3D and object
+ * height models against ~30 billion ICESat-2 and GEDI returns, which is what
+ * lets it be a terrain model rather than a surface model everywhere at once:
+ * 10.69 m RMSE / 7.77 m std against GNSS stations, and a 25.4% RMSE reduction
+ * on Copernicus in built-up areas, 27.3% under >50% tree cover.
+ *
+ * FABDEM, FABDEM+ and FathomDEM do the same job and are all CC BY-**NC**, so
+ * they are out of this repo by the same rule that excluded them from imagery.
+ *
+ * **Distribution, checked live and stated plainly: there is no tile service.**
+ * GEDTM30 ships as one 432 GB BigTIFF COG (`Content-Length 432405638563`,
+ * `II+\0` magic, `Access-Control-Allow-Origin: *`, HTTP range requests) in
+ * EPSG:4326 with EPSG:3855/EGM2008 heights. So this entry is `transcoded` and
+ * points at the project's own documented `/dem/{source_id}/{z}/{x}/{y}.png`
+ * route, exactly as the eight national DTMs do — and exactly as with them, the
+ * route is not implemented yet, so today this link demotes to Terrarium. No
+ * URL is invented; the interface is the one this repo published.
+ *
+ * One thing makes it materially cheaper to transcode than the national DTMs,
+ * and it is worth recording: the COG is already in EPSG:4326, so the
+ * reprojection to WebMercator is closed-form. No proj datum grids, no
+ * sub-metre datum shift to get wrong — the single largest reason
+ * `docs/ELEVATION-SOURCES.md` gave for not doing this client-side does not
+ * apply here.
+ */
+export const GEDTM30 = defineElevationSource({
+  id: 'gedtm30',
+  name: 'GEDTM30 global ensemble digital terrain model',
+  country: 'XX',
+  model: 'dtm',
+  nativeResolutionM: 30,
+  verticalDatum: 'EGM2008 (EPSG:3855)',
+  verticalUncertaintyM: 10.69,
+  verticalUncertaintyBasis: 'published',
+  license: 'CC-BY-4.0',
+  attribution:
+    'Elevation: GEDTM30 — Ho, Parente, Hengl et al., OpenGeoHub Foundation, ' +
+    'CC BY 4.0 (doi:10.7717/peerj.19673)',
+  delivery: 'transcoded',
+  origin: null,
+  pathTemplate: '/dem/gedtm30/{z}/{x}/{y}.png',
+  tileSize: 256,
+  minZoom: 8,
+  // nativeZoom(30, 0) = 12.35 at the equator and lower everywhere else, so 13
+  // is the first zoom that carries the whole grid — the same cap, from the
+  // same derivation, as Terrarium's 30 m.
+  maxZoom: 13,
+  maxResponseBytes: 2_000_000,
+  timeoutMs: 45_000,
+  coverage: null,
+  denseMaxZoom: null,
+  upstream: {
+    kind: 'bulk-cog',
+    endpoint:
+      'https://s3.opengeohub.org/global/dtm/v1.2/' +
+      'gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif',
+    coverageId: 'gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2',
+    crs: 'EPSG:4326 (heights EPSG:3855 / EGM2008)',
+  },
+  verified:
+    '2026-08-02 HEAD on the v1.2 COG returned 200, image/tiff, Content-Length ' +
+    '432405638563, Accept-Ranges bytes, ACAO *; BigTIFF magic II+\\0 confirmed by ' +
+    'range request; CC-BY-4.0 and 10.69 m RMSE / 7.77 m std vs GNSS per PeerJ 19673',
+  notes:
+    'AWAITING THE SERVER-SIDE PATH. One global COG, no XYZ endpoint anywhere — ' +
+    'checked s3.opengeohub.org, the OpenLandMap STAC browser and the project ' +
+    'repository. Until /dem/gedtm30/{z}/{x}/{y}.png exists this link demotes to ' +
+    'Terrarium, which is stated here rather than hidden behind a URL that 404s.',
+});
+
+/**
+ * An opt-in resolution upgrade, and deliberately **not** part of any chain.
+ *
+ * Mapterhorn mosaics 134 open national and global elevation datasets into one
+ * Terrarium-encoded 512² pyramid, and where a national ALS product feeds it
+ * that is 0.80 m/px over Vienna at z16 against Terrarium's 12.7 m/px — a 16x
+ * improvement, direct, no transcoder, no new decoder.
+ *
+ * It is nevertheless not the global base and must not become it, for two
+ * reasons that were both verified rather than assumed.
+ *
+ * **1. It cannot tell you whether a tile is bare earth.** Its per-source
+ * metadata carries name, website, licence, producer, resolution and access
+ * year — and no DTM/DSM field. Its global filler is `glo30`, which the
+ * manifest names "COPERNICUS GLO-30": a surface model, with nothing in the
+ * record saying so. Recovering the surface type means parsing product names in
+ * four languages. A surface model silently substituted for a terrain model is
+ * the exact failure this project refuses, so this entry is `model: 'mixed'`,
+ * `requireBareEarthReference` rejects it, and MESH-CALCULATOR §2.5 keeps it to
+ * classified-DTM footprints only.
+ *
+ * **2. The pyramid is sparse, and by a lot.** Probed live at fourteen points:
+ * z12 answers everywhere on earth; above z12 a tile exists only where a
+ * contributing source is finer than glo30. Observed ceilings — Zurich z18,
+ * Vienna / Paris / London / Tokyo / Brussels / New York z16, Bolzano /
+ * Amsterdam / Sydney / Tromsø z15, Madeira z13, and Nairobi / the Amazon /
+ * the Sahara / central Siberia z12. So `maxZoom: 18` is true and useless on
+ * its own; `denseMaxZoom: 12` is what a caller can rely on, and
+ * `elevationEndpoint()` hands out the clamped contract unless the caller opts
+ * into the sparse tail. Note what z12 is worth: 512² at z12 is exactly the
+ * ground sampling of Terrarium's 256² at z13, so the *reliable* part of
+ * Mapterhorn is no sharper than what already ships. The upgrade is entirely in
+ * the sparse tail, which is why it is opt-in.
+ *
+ * One volunteer's infrastructure behind Cloudflare, with no SLA. It sits above
+ * a durable tail, never as the only source.
+ */
+export const MAPTERHORN = defineElevationSource({
+  id: 'mapterhorn',
+  name: 'Mapterhorn global terrain tiles',
+  country: 'XX',
+  model: 'mixed',
+  // The posting present *everywhere* is glo30's 30 m. The finest contributing
+  // source is 0.25 m, but claiming that as the native resolution would floor
+  // profile sampling (MESH-CALCULATOR §2.6) at a spacing the data does not
+  // support outside a handful of countries.
+  nativeResolutionM: 30,
+  verticalDatum: 'mixed by contributing source (EGM2008 for the glo30 filler)',
+  // Inherited worst case: with no per-tile provenance the mosaic can be the
+  // 30 m Copernicus DSM anywhere, and this project's measured figure for a
+  // 30 m mixed/DSM product on its own grid is Terrarium's 14.31 m. An
+  // unclassified tile is treated exactly as harshly as a DSM one, so
+  // Mapterhorn can never win a σ comparison — it buys resolution, not
+  // accuracy, until the §2.5 classification table exists.
+  verticalUncertaintyM: 14.31,
+  verticalUncertaintyBasis: 'inherited-worst-case',
+  license:
+    'Composite of 134 open datasets audited 2026-08-02 — see `composite`; ' +
+    'binding obligation across the whole set is attribution; no non-commercial, ' +
+    'share-alike or no-derivatives terms declared',
+  attribution:
+    'Elevation: © Mapterhorn — 134 open national and global elevation datasets, ' +
+    'each credited at mapterhorn.com/attribution ' +
+    '(CC BY 4.0, Licence Ouverte 2.0, dl-de/by-2.0, GSI Japan and public-domain terms)',
+  composite: {
+    manifestUrl: 'https://mapterhorn.com/attribution',
+    snapshot: '2026-08-02',
+    // sha256 of https://download.mapterhorn.com/attribution.json as audited.
+    manifestSha256: 'd2f6a2a13f3f039123d08fca3fe7b95d1164583ac4b59f23eefefc5757131376',
+    sourceCount: 134,
+    distinctTerms: 28,
+    families: [
+      { family: 'CC BY 4.0 family', count: 51 },
+      { family: 'Public domain (US Government Work / ASTER GDEM)', count: 35 },
+      { family: 'Licence Ouverte / Open Licence 2.0', count: 14 },
+      { family: 'National open-government terms', count: 11 },
+      { family: 'dl-de/by-2.0', count: 8 },
+      { family: 'GSI Japan terms of use', count: 6 },
+      { family: 'CC0 / public-domain dedication', count: 4 },
+      { family: 'dl-de/zero-2.0', count: 3 },
+      { family: 'Copernicus full, free and open', count: 1 },
+      { family: 'CC BY 2.5', count: 1 },
+    ],
+    obligation: 'attribution',
+    // Nine bespoke national open-government strings, covering 17 datasets —
+    // Japan's GSI terms, Estonia's 2025 opendata licence, the Canadian, UK,
+    // Polish and Romanian OGLs and the rest — were read as declared names,
+    // not as full legal texts.
+    termsReadByNameOnly: 17,
+  },
+  delivery: 'direct',
+  origin: { scheme: 'https', host: 'tiles.mapterhorn.com', port: 443 },
+  pathTemplate: '/{z}/{x}/{y}.webp',
+  tileSize: 512,
+  format: 'image/webp',
+  minZoom: 8,
+  maxZoom: 18,
+  denseMaxZoom: 12,
+  // Measured: 274,572 B at z12 over Vienna, 47,844 B at z16. Lossless WebP of
+  // high relief compresses worse than Terrarium's PNG, so twice the bound.
+  maxResponseBytes: 2_000_000,
+  timeoutMs: 15_000,
+  coverage: null,
+  upstream: {
+    kind: 'xyz-webp',
+    endpoint: 'https://tiles.mapterhorn.com',
+    coverageId: null,
+    crs: 'EPSG:3857',
+  },
+  verified:
+    '2026-08-02 tilejson at tiles.mapterhorn.com/tiles.json declares ' +
+    'encoding terrarium, tileSize 512, bounds global; a z16 Vienna tile is ' +
+    '47,844 B RIFF/WEBP with a VP8L (LOSSLESS) chunk at 512x512 — checked, ' +
+    'because lossy WebP would quantise the Terrarium blue channel into metres; ' +
+    'ACAO * and Cache-Control public, max-age=604800; zoom ceiling probed at ' +
+    '14 points, dense to z12, sparse to z18',
+  notes:
+    'Opt-in only: absent from every entry in REGION_ELEVATION_SOURCES, so ' +
+    'selectElevationSources can never return it. Reach it with ' +
+    'getElevationSource("mapterhorn") and an explicit chain, and take the ' +
+    'sparse tail with elevationEndpoint(source, { allowSparse: true }).',
+});
+
+/**
+ * Shared shape for the national DTMs — all transcoded, all Terrarium-encoded out.
+ *
+ * σ defaults to `postingSigmaM(nativeResolutionM)` with the basis recorded as
+ * an assumption. None of these eight publishers' accuracy statements was read
+ * in this pass, and MESH-CALCULATOR §4.1 wants a vendor figure; writing one
+ * from memory would be exactly the fabrication this registry refuses, so the
+ * assumption is declared as an assumption and `docs/ELEVATION-SOURCES.md`
+ * carries it as an open item. Any entry may override both fields once its
+ * publisher's number is confirmed.
+ */
 function transcodedDtm(
   input: Omit<
     ElevationSourceInput,
-    'delivery' | 'origin' | 'pathTemplate' | 'tileSize' | 'maxResponseBytes' | 'timeoutMs' | 'model'
-  >,
+    | 'delivery'
+    | 'origin'
+    | 'pathTemplate'
+    | 'tileSize'
+    | 'maxResponseBytes'
+    | 'timeoutMs'
+    | 'model'
+    | 'verticalUncertaintyM'
+    | 'verticalUncertaintyBasis'
+  > &
+    Partial<Pick<ElevationSource, 'verticalUncertaintyM' | 'verticalUncertaintyBasis'>>,
 ): ElevationSource {
   return defineElevationSource({
+    verticalUncertaintyM: postingSigmaM(input.nativeResolutionM),
+    verticalUncertaintyBasis: 'assumed-from-posting',
     ...input,
     model: 'dtm',
     delivery: 'transcoded',
@@ -482,6 +928,8 @@ export const ELEVATION_SOURCES: Readonly<Record<string, ElevationSource>> = Obje
   Object.fromEntries(
     [
       TERRARIUM,
+      GEDTM30,
+      MAPTERHORN,
       SOUTH_TYROL_DTM_05M,
       SOUTH_TYROL_DTM_25M,
       AUSTRIA_DTM_1M,
@@ -495,15 +943,27 @@ export const ELEVATION_SOURCES: Readonly<Record<string, ElevationSource>> = Obje
 );
 
 /**
+ * The global tail, appended to every chain in this order by
+ * `selectElevationSources` whether or not a region names it.
+ *
+ * GEDTM30 first because it is bare earth at 10.69 m σ; Terrarium last because
+ * it is the only direct source and therefore the only one that survives a
+ * missing collection server. Mapterhorn is deliberately not here — see its
+ * entry.
+ */
+const GLOBAL_TAIL: readonly ElevationSource[] = [GEDTM30, TERRARIUM];
+
+/**
  * Preferred elevation source per region, best-quality first — the same shape
  * as `REGION_SOURCES` in `texture.py`.
  *
- * Terrarium is appended by `selectElevationSources` whether or not it is named
- * here, so a chain can never end in nothing.
+ * `GLOBAL_TAIL` is appended by `selectElevationSources` whether or not it is
+ * named here, so a chain can never end in nothing.
  *
  * `madeira` is absent on purpose: see `docs/ELEVATION-SOURCES.md`. The demo's
- * own home region has no bare-earth service this project could confirm, which
- * is worth stating rather than papering over.
+ * own home region has no *national* bare-earth service this project could
+ * confirm — but since 2026-08-02 it is no longer stuck on 30 m rooftop radar
+ * either, because the tail's first link is a global bare-earth model.
  */
 export const REGION_ELEVATION_SOURCES: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'south-tyrol': ['it-bz-dtm-05m', 'it-bz-dtm-25m'],
@@ -542,13 +1002,20 @@ function covers(source: ElevationSource, bbox: readonly number[]): boolean {
 }
 
 /**
- * The ordered source chain for a region, best first, Terrarium last.
+ * The ordered source chain for a region: national DTMs first, then the global
+ * bare-earth base, then Terrarium.
  *
  * A bbox filters the chain by coverage — the `europe` region spans a continent
  * whose national services each cover one country, so without this every
- * selection would start by asking Switzerland about Poland. Terrarium is
- * always appended, so "outside every national coverage" is not a failure, it
- * is 30 m data with the accuracy note attached.
+ * selection would start by asking Switzerland about Poland. `GLOBAL_TAIL` is
+ * always appended, so "outside every national coverage" is not a failure: it
+ * is a 30 m bare-earth model with its σ attached, and behind it a 30 m mixed
+ * surface with a worse one.
+ *
+ * Mapterhorn is unreachable from here by construction. That is the spec's
+ * ruling (MESH-CALCULATOR §2.2) implemented literally rather than as a comment:
+ * a source that cannot say whether a tile is bare earth must be asked for by
+ * name, never handed out by default.
  */
 export function selectElevationSources(
   regionId: string | undefined | null,
@@ -562,8 +1029,8 @@ export function selectElevationSources(
     if (bbox && !covers(source, bbox)) continue;
     chain.push(source);
   }
-  if (!chain.some((source) => source.id === TERRARIUM.id)) {
-    chain.push(TERRARIUM);
+  for (const source of GLOBAL_TAIL) {
+    if (!chain.some((existing) => existing.id === source.id)) chain.push(source);
   }
   if (chain.length === 0) {
     throw new ElevationSourceError(
@@ -580,6 +1047,65 @@ export function chooseElevationSource(
   bbox?: readonly number[],
 ): ElevationSource {
   return selectElevationSources(regionId, bbox)[0];
+}
+
+// --- Bare-earth guard --------------------------------------------------------
+
+/** Bare earth, and only bare earth. `mixed` is not "probably fine". */
+export function isBareEarthReference(source: ElevationSource): boolean {
+  return source.model === 'dtm';
+}
+
+/**
+ * Assert that a source may stand in as bare earth, or fail with a named error.
+ *
+ * The one thing that must never happen quietly: a surface model used where a
+ * terrain model was meant. Buildings extruded from a roof, roads floating, a
+ * radio path cleared by a canopy the model thinks is a hill. `mixed` sources —
+ * Terrarium and Mapterhorn — are rejected here even though both are useful for
+ * a picture, because "useful for a picture" and "sound as a reference" are
+ * different claims.
+ */
+export function requireBareEarthReference(source: ElevationSource): ElevationSource {
+  if (!isBareEarthReference(source)) {
+    throw new ElevationSourceError(
+      'NOT_BARE_EARTH',
+      `${source.id} is model '${source.model}', so it cannot be a bare-earth reference`,
+    );
+  }
+  return source;
+}
+
+/** The best bare-earth source in a chain, or null if the chain has none. */
+export function bareEarthReference(
+  sources: readonly ElevationSource[],
+): ElevationSource | null {
+  return sources.find(isBareEarthReference) ?? null;
+}
+
+// --- Endpoints ---------------------------------------------------------------
+
+/**
+ * The tile contract a caller should actually address a source with.
+ *
+ * For every dense source this is the source itself. For a sparse pyramid it is
+ * the source with `maxZoom` clamped to `denseMaxZoom`, so the default request
+ * is one the publisher can answer everywhere it claims to cover. `allowSparse`
+ * is the opt-in: it hands back the full ceiling together with the caller's
+ * acceptance that tiles outside the good footprints will 404 and the source
+ * will demote.
+ *
+ * This is the whole of "opt-in resolution upgrade" as a two-line function
+ * rather than a convention somebody has to remember.
+ */
+export function elevationEndpoint(
+  source: ElevationSource,
+  { allowSparse = false }: { allowSparse?: boolean } = {},
+): ElevationSource {
+  if (allowSparse || source.denseMaxZoom === null || source.denseMaxZoom === source.maxZoom) {
+    return source;
+  }
+  return { ...source, maxZoom: source.denseMaxZoom };
 }
 
 // --- URLs --------------------------------------------------------------------
@@ -639,15 +1165,62 @@ export type ElevationProvenance = {
   readonly resolutionM: number;
   readonly license: string;
   readonly attribution: string;
+  /** MESH-CALCULATOR §4.1 — carried so the UI can say how sure it is. */
+  readonly verticalUncertaintyM: number;
+  readonly verticalUncertaintyBasis: UncertaintyBasis;
+  /** Non-null when the licence is an audit of many upstream datasets. */
+  readonly composite: CompositeLicence | null;
+  /** Ready to print. The line that discharges this source's obligation. */
+  readonly credit: string;
 };
 
 /**
- * The attribution row for a chain — every licence in it, in use order.
+ * The credit line for one source — what has to appear under a rendered tile.
  *
- * CC-BY and dl-de/by are infectious: the obligation travels with the derived
- * tile. A transcoded tile is a derived work of the national coverage, so the
- * licence has to reach whatever displays or stores it, which is why this is a
- * function of the chain and not of the one source that happened to answer.
+ * A composite source's `attribution` already states its terms and points at
+ * the per-dataset list, so appending the composite `license` string would
+ * print the audit summary at a reader instead of a credit. Every other source
+ * gets `attribution — license`, which is the shape CC BY 4.0 §3(a)(1) and the
+ * Licence Ouverte both ask for: name the creator, name the terms.
+ */
+export function elevationCredit(source: ElevationSource): string {
+  return source.composite === null
+    ? `${source.attribution} — ${source.license}`
+    : source.attribution;
+}
+
+/**
+ * One line crediting every source that could contribute to a result.
+ *
+ * Deduplicated and in use order. This is what a UI renders when it does not
+ * know which link of the chain answered; when it does know, credit that source
+ * alone with `elevationCredit`.
+ */
+export function elevationCreditLine(sources: readonly ElevationSource[]): string {
+  const seen = new Set<string>();
+  const credits: string[] = [];
+  for (const source of sources) {
+    const credit = elevationCredit(source);
+    if (seen.has(credit)) continue;
+    seen.add(credit);
+    credits.push(credit);
+  }
+  return credits.join(' · ');
+}
+
+/**
+ * The attribution rows for a chain — every licence in it, in use order.
+ *
+ * CC-BY, Licence Ouverte and dl-de/by are infectious: the obligation travels
+ * with the derived tile. A transcoded tile is a derived work of the national
+ * coverage, so the licence has to reach whatever displays or stores it, which
+ * is why this is a function of the chain and not of the one source that
+ * happened to answer.
+ *
+ * Each row carries its own `credit`, so a caller that *does* know which source
+ * answered can render one row and be legally complete, and a caller that does
+ * not can render `elevationCreditLine` over the lot. Neither needs to know
+ * anything about licences.
  */
 export function elevationProvenance(sources: readonly ElevationSource[]): ElevationProvenance[] {
   return sources.map((source) => ({
@@ -657,5 +1230,9 @@ export function elevationProvenance(sources: readonly ElevationSource[]): Elevat
     resolutionM: source.nativeResolutionM,
     license: source.license,
     attribution: source.attribution,
+    verticalUncertaintyM: source.verticalUncertaintyM,
+    verticalUncertaintyBasis: source.verticalUncertaintyBasis,
+    composite: source.composite,
+    credit: elevationCredit(source),
   }));
 }

@@ -10,9 +10,30 @@ import type { BBox4326 } from '../bbox/validate';
  * bitten by two copies of one algorithm drifting apart; this is the seam that
  * keeps there being one.
  */
+/**
+ * Wire format of a tile. Both entries decode through one call to
+ * `createImageBitmap`, which sniffs the bytes rather than the extension, so
+ * this field is documentation and allowlist material — not a decoder switch.
+ *
+ * `image/webp` is only admissible **lossless** (VP8L). Terrarium packs the
+ * ¹⁄₂₅₆ m fraction into the blue channel, so lossy chroma subsampling would
+ * quantise the elevation into steps of metres while still decoding cleanly.
+ * A source declaring webp has to be verified VP8L; `mapterhorn` was (see
+ * `elevation-sources.ts`).
+ */
+export type TileImageFormat = 'image/png' | 'image/webp';
+
 export type TileEndpoint = {
   readonly pathTemplate: string;
+  /**
+   * Edge length of the published tile in pixels. Read by `chooseDemZoom`, and
+   * by `sampleHeightfield` from the decoded bitmap rather than from here — a
+   * 512² tile at zoom z has exactly the ground sampling of a 256² tile at
+   * z + 1, and every function in this file already derives that rather than
+   * assuming 256.
+   */
   readonly tileSize: number;
+  readonly format: TileImageFormat;
   readonly minZoom: number;
   readonly maxZoom: number;
 };
