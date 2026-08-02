@@ -15,10 +15,16 @@ and tells you honestly where usable imagery does *not* exist.
 Working demo. The payment stage is deliberately skipped; see
 [Deviations](#deviations-from-the-original-plan).
 
-| | Tests | Coverage |
-|---|---|---|
-| `apps/napplet` | 133 | 94 % statements |
-| `services/blossom-gis` | 171 | 92 % |
+The client is three napplets — one app, one job, per the NAP spec:
+
+| Napplet | One thing |
+|---|---|
+| `apps/terrain` | Select a bbox, ask what data exists there, generate an honest 3D model, inspect and export it |
+| `apps/player` | Be somewhere: presence, geo notes, the globe console, avatar placement, the walkable world |
+| `apps/field-measurement` | Record a FIELD-PROTOCOL site visit: field sheet, `rangetest.csv` ingest, window classification |
+
+Shared client modules (the shell adapter, verification, the generation
+pipeline, the map view) live in `packages/napplet-kit`.
 
 ## Quick start
 
@@ -26,7 +32,7 @@ Working demo. The payment stage is deliberately skipped; see
 
 ```bash
 corepack pnpm install
-corepack pnpm --filter @terrcvm/napplet dev
+corepack pnpm --filter @terrcvm/napplet-terrain dev   # or -player / -field-measurement
 ```
 
 Then open `http://localhost:5173/?region=south-tyrol` to switch regions.
@@ -67,8 +73,10 @@ The narrower gates, all runnable on their own:
 | `corepack pnpm verify:lock-approved` | Lockfile against the approved set |
 
 CI (`.github/workflows/ci.yml`) runs the Node and Python jobs on every push and
-pull request. It deliberately omits a build step — see the comment at the top of
-the workflow.
+pull request, including a build of all three napplet artifacts; each app's build
+also runs `scripts/verify-dist.mjs` (single-file, self-contained, no direct
+browser network authority). `napplet-conformance` runs locally per app:
+`corepack pnpm --filter <app> test:conformance`.
 
 ## What it does
 
@@ -177,7 +185,7 @@ explicit operator request:
 1. **The terrain processor runs before the payment loop.** The core invariant
    ordered these the other way round.
 2. **The payment gate is skipped.** The placeholder is kept, unwired, in
-   [`invoice.ts`](apps/napplet/src/job/invoice.ts).
+   [`invoice.ts`](apps/terrain/src/job/invoice.ts).
 3. **A collection server exists.** `AGENTS.md` excludes a custom tile server from
    the initial slice, and Phase 4 planned a Blossom *client* against a
    third-party server.
