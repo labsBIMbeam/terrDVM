@@ -96,6 +96,11 @@ def main(argv: list[str] | None = None) -> int:
         help="also register the blob under this name in characters.json",
     )
 
+    sub.add_parser(
+        "estimate",
+        help="print the corpus size projection against the 40 GB hosting gate (VS-6)",
+    )
+
     announce_parser = sub.add_parser(
         "announce",
         help="publish the collection+item events for a crawled tile to the corpus relay",
@@ -136,6 +141,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     blob_dir, index_path, queue_path = _paths()
+
+    if args.command == "estimate":
+        from .estimate import render_report
+
+        print(render_report())
+        return 0
 
     if args.command == "character":
         import time
