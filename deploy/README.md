@@ -29,6 +29,13 @@ node verify-stack.mjs       # VS-1 exit conditions
    not a router error.
 3. `GET /` on blossom-gis answers `200`.
 
+`probe-write-policy.mjs` proves the trust model live rather than by configuration
+review: an event signed by the crawler key gets `OK true`, the same shape signed by a
+throwaway key gets `OK false` with the policy's `blocked:` message. It reads the
+crawler secret from `deploy/.local/dev-crawler.secret` (override:
+`CRAWLER_SECRET_FILE`) and signs locally — only signatures cross the wire. This is
+VS-3's "write path closed" observable, runnable from day one.
+
 Override targets with `RELAY_URL` / `BLOSSOM_URL` / `GIS_URL` when probing a remote host.
 
 ## Key handling
@@ -59,7 +66,15 @@ re-run `verify-stack.mjs` against the tailnet URLs.
 
 ## Iteration notes
 
-Pinned images: `dockurr/strfry:1.1.1`, `ghcr.io/hzrd149/blossom-server:6.2.0`. Two spots
-were written from upstream docs and must be confirmed at first bring-up (then this note
-updated): the blossom-server config schema (`config.template.yml`) and its in-container
-config path (`/app/config.yml` in `compose.yaml`).
+Pinned images: `dockurr/strfry:1.1.1`, `ghcr.io/hzrd149/blossom-server:6.2.0`.
+
+**Confirmed at first bring-up (2026-08-02, WSL2 docker):** the blossom-server config
+schema in `config.template.yml` and the `/app/config.yml` mount path are correct — the
+booted server logs `storage rules active (1 rules …)` and BUD-11 auth required, and the
+container's `/app/config.yml` shows the rendered pubkey. strfry loads `/etc/strfry.conf`
+and the python3 plugin runs in the `dockurr/strfry` (alpine) image.
+
+**WSL2 quirk:** the WSL VM idles out between interactions; the next `wsl` call revives
+it and docker's `restart: unless-stopped` brings all three containers back within
+seconds. Probes that hit a dead socket mean the VM is waking — `docker compose up -d`
+first, then probe. Irrelevant on alflx.

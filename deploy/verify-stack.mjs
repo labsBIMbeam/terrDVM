@@ -89,4 +89,6 @@ await checkGisRoot();
 
 const failed = results.filter((r) => !r.pass);
 console.log(failed.length === 0 ? '\nVS-1 probe: all checks pass' : `\nVS-1 probe: ${failed.length} check(s) failing`);
-process.exit(failed.length === 0 ? 0 : 1);
+// exitCode rather than process.exit(): a hard exit races libuv's websocket
+// teardown on Windows and crashes node after the results have printed.
+process.exitCode = failed.length === 0 ? 0 : 1;
