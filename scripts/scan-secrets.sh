@@ -41,14 +41,16 @@ const gitPaths = (args) => execFileSync('git', ['-C', repoRoot, 'ls-files', '-z'
 }).toString('utf8').split('\0').filter(Boolean);
 
 const paths = new Set(gitPaths(['--cached', '--others', '--exclude-standard']));
-try {
-  if (lstatSync(resolve(repoRoot, 'apps/napplet/dist')).isDirectory()) {
-    for (const path of gitPaths([
-      '--cached', '--others', '--ignored', '--exclude-standard', '--', 'apps/napplet/dist',
-    ])) paths.add(path);
+for (const appDist of ['apps/terrain/dist', 'apps/player/dist', 'apps/field-measurement/dist']) {
+  try {
+    if (lstatSync(resolve(repoRoot, appDist)).isDirectory()) {
+      for (const path of gitPaths([
+        '--cached', '--others', '--ignored', '--exclude-standard', '--', appDist,
+      ])) paths.add(path);
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
   }
-} catch (error) {
-  if (error.code !== 'ENOENT') throw error;
 }
 
 const repoPrefix = repoRoot.endsWith(sep) ? repoRoot : `${repoRoot}${sep}`;
@@ -106,7 +108,7 @@ printf '%s\n' \
   'secret_scan: PASS' \
   'tool: gitleaks' \
   "version: ${actual_version}" \
-  'coverage_mode: detached Git inventory mirror (tracked + untracked non-ignored repository files + apps/napplet/dist including ignored files when present; raw .git object internals excluded)' \
+  'coverage_mode: detached Git inventory mirror (tracked + untracked non-ignored repository files + apps/*/dist including ignored files when present; raw .git object internals excluded)' \
   "timestamp_utc: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   'summary: 0 findings; secret values redacted; raw scanner output not persisted' \
   >"$evidence_tmp"

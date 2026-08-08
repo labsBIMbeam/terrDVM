@@ -18,32 +18,11 @@ importers:
         specifier: 8.46.4
         version: 8.46.4(eslint@9.39.2)(typescript@5.9.3)
 
-  apps/napplet:
+  apps/field-measurement:
     dependencies:
-      '@napplet/sdk':
-        specifier: 0.25.0
-        version: 0.25.0
-      '@noble/curves':
-        specifier: 2.0.1
-        version: 2.0.1
-      '@terrcvm/geo-protocol':
+      '@terrcvm/napplet-kit':
         specifier: workspace:*
-        version: link:../../packages/geo-protocol
-      '@terrcvm/terrain-engine':
-        specifier: workspace:*
-        version: link:../../packages/terrain-engine
-      '@turf/area':
-        specifier: 7.3.5
-        version: 7.3.5
-      maplibre-gl:
-        specifier: 5.24.0
-        version: 5.24.0
-      terra-draw:
-        specifier: 1.32.2
-        version: 1.32.2
-      terra-draw-maplibre-gl-adapter:
-        specifier: 1.4.1
-        version: 1.4.1(maplibre-gl@5.24.0)(terra-draw@1.32.2)
+        version: link:../../packages/napplet-kit
     devDependencies:
       '@napplet/conformance-cli':
         specifier: 0.2.16
@@ -51,9 +30,71 @@ importers:
       '@napplet/vite-plugin':
         specifier: 0.12.0
         version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
+  apps/player:
+    dependencies:
+      '@terrcvm/geo-protocol':
+        specifier: workspace:*
+        version: link:../../packages/geo-protocol
+      '@terrcvm/napplet-kit':
+        specifier: workspace:*
+        version: link:../../packages/napplet-kit
+      '@terrcvm/terrain-engine':
+        specifier: workspace:*
+        version: link:../../packages/terrain-engine
+    devDependencies:
+      '@napplet/conformance-cli':
+        specifier: 0.2.16
+        version: 0.2.16
+      '@napplet/vite-plugin':
+        specifier: 0.12.0
+        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      '@noble/curves':
+        specifier: 2.0.1
+        version: 2.0.1
       '@noble/hashes':
         specifier: 2.0.1
         version: 2.0.1
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
+  apps/terrain:
+    dependencies:
+      '@terrcvm/napplet-kit':
+        specifier: workspace:*
+        version: link:../../packages/napplet-kit
+      '@terrcvm/terrain-engine':
+        specifier: workspace:*
+        version: link:../../packages/terrain-engine
+    devDependencies:
+      '@napplet/conformance-cli':
+        specifier: 0.2.16
+        version: 0.2.16
+      '@napplet/vite-plugin':
+        specifier: 0.12.0
+        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -72,6 +113,40 @@ importers:
 
   packages/geo-protocol:
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
+  packages/napplet-kit:
+    dependencies:
+      '@napplet/sdk':
+        specifier: 0.25.0
+        version: 0.25.0
+      '@noble/curves':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@terrcvm/terrain-engine':
+        specifier: workspace:*
+        version: link:../terrain-engine
+      maplibre-gl:
+        specifier: 5.24.0
+        version: 5.24.0
+      terra-draw:
+        specifier: 1.32.2
+        version: 1.32.2
+      terra-draw-maplibre-gl-adapter:
+        specifier: 1.4.1
+        version: 1.4.1(maplibre-gl@5.24.0)(terra-draw@1.32.2)
+    devDependencies:
+      '@noble/hashes':
+        specifier: 2.0.1
+        version: 2.0.1
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)

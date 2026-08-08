@@ -400,7 +400,7 @@ top of it.
 `generateTerrain` resolves the chain, builds and allowlists these URLs, fetches
 them cache-first, and — when the route is absent — demotes to the next source
 and finally to Terrarium. That failover is covered by
-`apps/napplet/tests/unit/terrain-source-chain.test.ts`. Nothing fabricates a
+`packages/napplet-kit/tests/unit/terrain-source-chain.test.ts`. Nothing fabricates a
 surface, and no code pretends the transcode exists.
 
 **Why Terrarium out and not a new encoding.** `decodeTerrarium` and
@@ -442,7 +442,7 @@ there:
   and `isApprovedDemUrl` never touch pixel dimensions at all.
 * `sampleHeightfield` reads `size` off each decoded `DemTileRaster` rather than
   off the endpoint, so the bilinear maths follows the bitmap.
-* `decodeRaster` in `apps/napplet/src/terrain/generate.ts` calls
+* `decodeRaster` in `packages/napplet-kit/src/terrain/generate.ts` calls
   `createImageBitmap(blob)`, which sniffs the container bytes. PNG and WebP go
   down the same line; the `format` field is documentation and allowlist
   material, not a decoder switch.
@@ -460,7 +460,7 @@ silent, plausible-looking corruption. Mapterhorn's tiles were checked byte-wise
 and carry a `VP8L` chunk. Any future WebP source must be checked the same way.
 
 **One hardcode remains, and it is app-side.**
-`cachedDemTileUrl(z, x, y)` in `apps/napplet/src/job/collection.ts` returns
+`cachedDemTileUrl(z, x, y)` in `packages/napplet-kit/src/job/collection.ts` returns
 `/dem/{z}/{x}/{y}.png` and is used as the collection-cache URL for *any* direct
 source. With Terrarium as the only direct source that was fine. With a second
 one it is a cache-namespace collision: a Mapterhorn tile request would be
@@ -478,7 +478,7 @@ sources other than Terrarium must skip the cache entirely.
 demAttribution: 'Elevation: Mapzen Terrain Tiles via AWS Open Data'
 ```
 
-in `apps/napplet/src/ui/copy.ts`. That string was true when Terrarium was the
+in `packages/napplet-kit/src/ui/copy.ts`. That string was true when Terrarium was the
 only source. It is now false whenever any other link answers, and rendering a
 CC BY source under someone else's credit is a licence breach rather than a
 cosmetic slip — the same class of defect this whole document exists to prevent

@@ -7,12 +7,17 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /**
  * Every source root that must respect the boundary.
  *
- * Apps get one privileged directory — `<root>/shell` — where `window.napplet`
- * and `@napplet/sdk` may be touched. Shared packages get none at all: they are
- * transport-free by construction, so a shell import there is always a bug.
+ * `@terrcvm/napplet-kit` owns the single privileged directory —
+ * `packages/napplet-kit/src/shell` — where `window.napplet` and
+ * `@napplet/sdk` may be touched. Apps consume that adapter and get no shell
+ * directory of their own; the protocol and engine packages are transport-free
+ * by construction, so a shell import there is always a bug.
  */
 const sourceRoots = [
-  { root: join(repositoryRoot, 'apps', 'napplet', 'src'), shell: 'shell' },
+  { root: join(repositoryRoot, 'apps', 'terrain', 'src'), shell: null },
+  { root: join(repositoryRoot, 'apps', 'player', 'src'), shell: null },
+  { root: join(repositoryRoot, 'apps', 'field-measurement', 'src'), shell: null },
+  { root: join(repositoryRoot, 'packages', 'napplet-kit', 'src'), shell: 'shell' },
   { root: join(repositoryRoot, 'packages', 'terrain-engine', 'src'), shell: null },
   { root: join(repositoryRoot, 'packages', 'geo-protocol', 'src'), shell: null },
 ];

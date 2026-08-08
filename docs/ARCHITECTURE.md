@@ -4,7 +4,8 @@ Two halves that never share a process:
 
 | | What it is | Why |
 |---|---|---|
-| `apps/napplet` | Sandboxed browser client | Selection, terrain generation, 3D preview |
+| `apps/terrain`, `apps/player`, `apps/field-measurement` | Sandboxed browser clients — one napplet, one job | Terrain: selection, generation, 3D preview. Player: presence, placement, the walkable world. Field-measurement: the measurement-protocol field sheet and ingest |
+| `packages/napplet-kit` | Shared client modules | The shell adapter (sole privileged boundary), verification, the generation pipeline, the map view |
 | `services/blossom-gis` | Python collection server | Crawling, content-addressed storage, source qualification |
 
 The split is forced by the sandbox, not chosen for taste. A napplet runs in an
