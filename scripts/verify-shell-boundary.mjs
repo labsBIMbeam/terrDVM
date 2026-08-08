@@ -17,6 +17,7 @@ const sourceRoots = [
   { root: join(repositoryRoot, 'apps', 'terrain', 'src'), shell: null },
   { root: join(repositoryRoot, 'apps', 'player', 'src'), shell: null },
   { root: join(repositoryRoot, 'apps', 'field-measurement', 'src'), shell: null },
+  { root: join(repositoryRoot, 'apps', 'corpus', 'src'), shell: null },
   { root: join(repositoryRoot, 'packages', 'napplet-kit', 'src'), shell: 'shell' },
   { root: join(repositoryRoot, 'packages', 'terrain-engine', 'src'), shell: null },
   { root: join(repositoryRoot, 'packages', 'geo-protocol', 'src'), shell: null },
