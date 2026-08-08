@@ -17,6 +17,7 @@ Design constraints, in order of importance:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 import urllib.error
@@ -29,8 +30,16 @@ from pathlib import Path
 from .featuretile import Building, FeatureTile, Landuse, Road, encode_feature_tile
 from .geo import BBox, tile_bbox, tile_for_point
 
-OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
-OVERPASS_STATUS = "https://overpass-api.de/api/status"
+#: Env-overridable because public Overpass instances are run by independent
+#: operators who set their own admission policies — on 2026-08-02
+#: overpass-api.de began answering this crawler's User-Agent with HTTP 406
+#: (UA-keyed, verified differentially), recorded in the fallback ledger. The
+#: UA is never changed to dodge such a block; the operator picks another
+#: instance instead.
+OVERPASS_ENDPOINT = os.environ.get(
+    "OVERPASS_ENDPOINT", "https://overpass-api.de/api/interpreter"
+)
+OVERPASS_STATUS = os.environ.get("OVERPASS_STATUS", "https://overpass-api.de/api/status")
 USER_AGENT = "terrCVM-crawler/0.1 (+https://github.com/labsBIMbeam/terrCVM)"
 
 #: Terrarium-encoded elevation, AWS Open Data. No key, no published quota.
@@ -158,18 +167,56 @@ class CrawlQueue:
         self._connection.commit()
         return len(rows)
 
-    def claim(self, region: str, limit: int, kind: str | None = None) -> list[Tile]:
+    def seed_tile(
+        self,
+        region: str,
+        z: int,
+        x: int,
+        y: int,
+        kinds: tuple[str, ...] = KINDS,
+    ) -> int:
+        """Enqueue one tile for targeted crawling, per kind.
+
+        Unlike seed(), an existing row is reset to pending: a tile's identity
+        is (region, kind, z, x, y), so a targeted re-crawl replaces (rule 4 in
+        the module docstring).
+        """
+        unknown = set(kinds) - set(KINDS)
+        if unknown:
+            raise ValueError(f"unknown crawl kinds: {sorted(unknown)}")
+        self._connection.executemany(
+            """
+            INSERT INTO crawl_items (region, kind, z, x, y) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (region, kind, z, x, y)
+                DO UPDATE SET status='pending', attempts=0, last_error=NULL
+            """,
+            [(region, kind, z, x, y) for kind in kinds],
+        )
+        self._connection.commit()
+        return len(kinds)
+
+    def claim(
+        self,
+        region: str,
+        limit: int,
+        kind: str | None = None,
+        tile: tuple[int, int, int] | None = None,
+    ) -> list[Tile]:
         """Next items to process, terrain and imagery first."""
-        clause = "AND kind = ?" if kind else ""
+        clauses: list[str] = []
         params: list = [region, MAX_ATTEMPTS]
         if kind:
+            clauses.append("AND kind = ?")
             params.append(kind)
+        if tile:
+            clauses.append("AND z = ? AND x = ? AND y = ?")
+            params.extend(tile)
         params.append(limit)
         rows = self._connection.execute(
             f"""
             SELECT region, kind, z, x, y FROM crawl_items
              WHERE region = ? AND status IN ('pending', 'failed') AND attempts < ?
-                   {clause}
+                   {" ".join(clauses)}
              ORDER BY CASE kind WHEN 'dem' THEN 0 WHEN 'ortho' THEN 1 ELSE 2 END ASC,
                       attempts ASC, y ASC, x ASC
              LIMIT ?
@@ -177,6 +224,17 @@ class CrawlQueue:
             params,
         ).fetchall()
         return [Tile(**dict(row)) for row in rows]
+
+    def result(self, region: str, kind: str, z: int, x: int, y: int) -> dict | None:
+        """The stored crawl result for one tile, or None if it was never seeded."""
+        row = self._connection.execute(
+            """
+            SELECT status, sha256, bytes, updated_at FROM crawl_items
+             WHERE region=? AND kind=? AND z=? AND x=? AND y=?
+            """,
+            (region, kind, z, x, y),
+        ).fetchone()
+        return dict(row) if row else None
 
     def mark_done(self, tile: Tile, *, sha256: str, size: int, counts: dict[str, int]) -> None:
         self._connection.execute(
@@ -424,12 +482,14 @@ def run(
     raster_limiter: RateLimiter | None = None,
     fetcher=fetch_tile,
     raster_fetcher=fetch_raster,
+    tile: tuple[int, int, int] | None = None,
 ) -> Iterator[dict]:
     """Process up to `max_tiles`. Yields one record per tile for logging."""
     limiter = limiter or RateLimiter()
     raster_limiter = raster_limiter or RateLimiter(RASTER_REQUEST_INTERVAL_S)
 
-    for tile in queue.claim(region, max_tiles):
+    claimed = queue.claim(region, max_tiles, tile=tile)
+    for tile in claimed:
         # Only the slot-limited upstream needs asking. Raster CDNs publish no
         # slot count, and gating them on Overpass would stall the layers the
         # demo actually needs first.

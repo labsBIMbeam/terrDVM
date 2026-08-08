@@ -1,0 +1,61 @@
+name: terrcvm-corpus
+
+# The corpus stack (VERTICAL-SLICE.md VS-1): strfry announces, blossom-server owns
+# bytes, blossom-gis keeps the spatial index and runs the crawler's HTTP side.
+# Bring-up: cp .env.example .env  →  node render-config.mjs  →  docker compose up -d
+# →  node verify-stack.mjs. TLS fronting for real shells is documented in README.md.
+
+services:
+  strfry:
+    build: ./strfry
+    restart: unless-stopped
+    ports:
+      - "7777:7777"
+    environment:
+      # Public key only. The write policy rejects every event not signed by it.
+      CRAWLER_PUBKEY: ${CRAWLER_PUBKEY:?deploy/.env must set CRAWLER_PUBKEY (64-hex public key; the secret never enters this repo)}
+    volumes:
+      - strfry-db:/app/strfry-db
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 7777 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  blossom-server:
+    image: ghcr.io/hzrd149/blossom-server:6.2.0
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Rendered from blossom-server/config.template.yml by render-config.mjs so the
+      # committed template never carries a concrete pubkey.
+      - ./.local/blossom-server.config.yml:/app/config.yml:ro
+      - blossom-blobs:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  blossom-gis:
+    build:
+      context: ../services/blossom-gis
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      BLOSSOM_GIS_DATA: /data
+      BLOSSOM_GIS_BASE_URL: ${BLOSSOM_GIS_BASE_URL:-http://127.0.0.1:8787}
+    volumes:
+      - blossom-gis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; u.urlopen('http://127.0.0.1:8787/', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  strfry-db:
+  blossom-blobs:
+  blossom-gis-data:

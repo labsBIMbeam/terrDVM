@@ -1,8 +1,9 @@
 """Test helpers.
 
-The production package verifies signatures only and never touches private keys.
-Signing lives here, in test scope, so end-to-end tests can mint real kind-24242
-authorization events.
+The server verifies signatures only and never touches private keys. Production
+signing exists for the crawler CLI alone (blossom_gis.signer — the stance shift
+recorded in VERTICAL-SLICE.md). Tests reuse that signer with a fixed aux
+default so fixture events stay reproducible.
 """
 
 from __future__ import annotations
@@ -14,38 +15,13 @@ from typing import Any
 
 import pytest
 
-from blossom_gis.schnorr import G, N, P, _point_mul, tagged_hash
-
-
-def _x_only(point: tuple[int, int]) -> bytes:
-    return point[0].to_bytes(32, "big")
-
-
-def public_key_from_secret(secret: int) -> bytes:
-    point = _point_mul(G, secret)
-    assert point is not None
-    return _x_only(point)
+from blossom_gis.signer import public_key_from_secret as public_key_from_secret
+from blossom_gis.signer import sign as _sign
 
 
 def sign(secret: int, message: bytes, aux: bytes = b"\x00" * 32) -> bytes:
-    """BIP-340 sign. Test-only."""
-    point = _point_mul(G, secret)
-    assert point is not None
-    d = secret if point[1] % 2 == 0 else N - secret
-    px = _x_only(point)
-
-    t = d ^ int.from_bytes(tagged_hash("BIP0340/aux", aux), "big")
-    rand = tagged_hash("BIP0340/nonce", t.to_bytes(32, "big") + px + message)
-    k0 = int.from_bytes(rand, "big") % N
-    assert k0 != 0
-
-    r_point = _point_mul(G, k0)
-    assert r_point is not None
-    k = k0 if r_point[1] % 2 == 0 else N - k0
-    rx = _x_only(r_point)
-
-    e = int.from_bytes(tagged_hash("BIP0340/challenge", rx + px + message), "big") % N
-    return rx + ((k + e * d) % N).to_bytes(32, "big")
+    """BIP-340 sign with a deterministic default aux, for reproducible fixtures."""
+    return _sign(secret, message, aux)
 
 
 @pytest.fixture
@@ -110,4 +86,4 @@ def make_auth_event(keypair):
     return _build
 
 
-__all__ = ["sign", "public_key_from_secret", "N", "P", "G"]
+__all__ = ["sign", "public_key_from_secret"]

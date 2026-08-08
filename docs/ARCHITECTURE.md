@@ -10,11 +10,16 @@ Two halves that never share a process:
 
 The split is forced by the sandbox, not chosen for taste. A napplet runs in an
 iframe with no ambient network, no persistence beyond a 512 KB quota, and no
-keys. One Funchal feature tile is 51 kB, so the client structurally cannot cache
-a region — collection has to live server-side.
+keys. One Funchal feature tile is 140 kB (re-measured 2026-08-02 — the earlier
+51 kB predates the Overpass truncation fix), so the client structurally cannot
+cache a region — collection has to live server-side.
 
-`resource.bytes()` is also read-only, so the napplet cannot upload. The server
-is the collector; the client is a reader. That is the whole role split.
+The client-is-a-reader role is **policy, not platform**: NAP-UPLOAD exists, so a
+napplet *can* be granted upload — ours simply never declare it. Every manifest in
+this repo requires `resource` (and, where needed, `outbox`) and deliberately omits
+`upload`, which conformance and `verify-shell-boundary.mjs` can check per artifact.
+The server is the collector; the client is a reader — enforced in the manifest,
+not assumed of the platform.
 
 ---
 

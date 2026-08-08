@@ -54,6 +54,30 @@ class TestQueue:
         assert tile not in remaining
         assert queue.progress("madeira")["done"] == 1
 
+    def test_seed_tile_targets_one_tile_and_recrawl_replaces(self, queue: CrawlQueue) -> None:
+        assert queue.seed_tile("madeira", 13, 3711, 3309, ("dem",)) == 1
+        claimed = queue.claim("madeira", 10)
+        assert [(t.kind, t.z, t.x, t.y) for t in claimed] == [("dem", 13, 3711, 3309)]
+
+        queue.mark_done(claimed[0], sha256="a" * 64, size=10, counts={})
+        assert queue.claim("madeira", 10) == []
+
+        # A tile's identity is (region, kind, z, x, y); re-seeding the same tile
+        # resets it to pending — targeted re-crawl replaces.
+        queue.seed_tile("madeira", 13, 3711, 3309, ("dem",))
+        assert len(queue.claim("madeira", 10)) == 1
+
+    def test_seed_tile_rejects_unknown_kinds(self, queue: CrawlQueue) -> None:
+        with pytest.raises(ValueError):
+            queue.seed_tile("madeira", 13, 3711, 3309, ("basement",))
+
+    def test_claim_with_tile_filter_ignores_other_pending_work(self, queue: CrawlQueue) -> None:
+        queue.seed("madeira", MADEIRA, 11, ("dem", "features"))
+        queue.seed_tile("madeira", 13, 3711, 3309, ("dem",))
+
+        claimed = queue.claim("madeira", 100, tile=(13, 3711, 3309))
+        assert [(t.kind, t.z, t.x, t.y) for t in claimed] == [("dem", 13, 3711, 3309)]
+
     def test_failures_retry_until_exhausted(self, queue: CrawlQueue) -> None:
         queue.seed("madeira", MADEIRA, 11, ("features",))
         tile = queue.claim("madeira", 1)[0]

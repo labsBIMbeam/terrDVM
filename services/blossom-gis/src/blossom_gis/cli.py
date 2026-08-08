@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from .coverage import summarise, survey, write_geojson
-from .crawl import KINDS, CrawlQueue, RateLimiter, run
+from .crawl import KINDS, MEDIA_TYPES, CrawlQueue, RateLimiter, run
 from .db import BlobIndex, BlobRecord, geo_fields
 from .geo import BBox
 from .source_check import CANDIDATES
@@ -96,6 +96,21 @@ def main(argv: list[str] | None = None) -> int:
         help="also register the blob under this name in characters.json",
     )
 
+    sub.add_parser(
+        "estimate",
+        help="print the corpus size projection against the 40 GB hosting gate (VS-6)",
+    )
+
+    announce_parser = sub.add_parser(
+        "announce",
+        help="publish the collection+item events for a crawled tile to the corpus relay",
+    )
+    announce_parser.add_argument("--region", required=True, choices=sorted(REGIONS))
+    announce_parser.add_argument("--tile", required=True, help="z/x/y of the crawled tile")
+    announce_parser.add_argument(
+        "--kinds", default="dem,features", help="comma-separated datasets to announce"
+    )
+
     for name in ("seed", "run", "status", "coverage"):
         p = sub.add_parser(name)
         p.add_argument("--region", required=True, choices=sorted(REGIONS))
@@ -109,12 +124,29 @@ def main(argv: list[str] | None = None) -> int:
         if name == "run":
             p.add_argument("--max-tiles", type=int, default=5)
             p.add_argument("--min-interval", type=float, default=4.0)
+            p.add_argument(
+                "--tile",
+                default="",
+                help="target one tile as z/x/y — seeds it and crawls it alone; "
+                "re-running replaces",
+            )
+            p.add_argument(
+                "--kinds",
+                default=",".join(KINDS),
+                help="with --tile: comma-separated layers to (re)enqueue",
+            )
         if name == "coverage":
             p.add_argument("--zoom", type=int, default=11)
             p.add_argument("--sources", default="", help="comma-separated source ids")
 
     args = parser.parse_args(argv)
     blob_dir, index_path, queue_path = _paths()
+
+    if args.command == "estimate":
+        from .estimate import render_report
+
+        print(render_report())
+        return 0
 
     if args.command == "character":
         import time
@@ -319,6 +351,64 @@ def main(argv: list[str] | None = None) -> int:
     queue = CrawlQueue(queue_path)
 
     try:
+        if args.command == "announce":
+            import time
+
+            from .announce import assemble, publish
+            from .geo_protocol import GeoProtocolError, validate_tile
+            from .signer import load_secret, public_key_from_secret, sign_event
+
+            relay_url = os.environ.get("RELAY_URL", "ws://127.0.0.1:7777")
+            server_url = (
+                os.environ.get("BLOSSOM_PUBLIC_URL") or os.environ.get("BLOSSOM_SERVER_URL", "")
+            ).strip()
+            secret_file = os.environ.get("CRAWLER_SECRET_FILE", "").strip()
+            if not server_url or not secret_file:
+                print(
+                    "announce needs BLOSSOM_PUBLIC_URL (or BLOSSOM_SERVER_URL) for the "
+                    "server tag and CRAWLER_SECRET_FILE for signing"
+                )
+                return 2
+            try:
+                z, x, y = (int(part) for part in args.tile.split("/"))
+                validate_tile(z, x, y)
+            except (ValueError, GeoProtocolError) as error:
+                print(f"--tile must be a valid z/x/y: {error}")
+                return 2
+
+            secret = load_secret(secret_file)
+            pubkey = public_key_from_secret(secret).hex()
+            events = []
+            for kind in (k.strip() for k in args.kinds.split(",") if k.strip()):
+                row = queue.result(args.region, kind, z, x, y)
+                if not row or row["status"] != "done" or not row["sha256"]:
+                    # Only crawled, stored bytes are announced — an announcement
+                    # for bytes that do not exist would be a lie on the relay.
+                    print(f"refusing to announce {kind}:{z}/{x}/{y} — tile is not done")
+                    return 1
+                collection, item = assemble(
+                    dataset=kind,
+                    region_bbox=REGIONS[args.region],
+                    z=z,
+                    x=x,
+                    y=y,
+                    sha256=row["sha256"],
+                    size=row["bytes"],
+                    acquired_at=row["updated_at"],
+                    server=server_url,
+                    pubkey=pubkey,
+                    now=int(time.time()),
+                )
+                events.extend((sign_event(collection, secret), sign_event(item, secret)))
+
+            rejected = 0
+            for event_id, accepted, message in publish(relay_url, events):
+                status = "ok" if accepted else f"REJECTED {message}"
+                print(f"  {event_id[:12]} {status}")
+                rejected += 0 if accepted else 1
+            print(f"announced {len(events) - rejected}/{len(events)} events to {relay_url}")
+            return 1 if rejected else 0
+
         if args.command == "seed":
             kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
             count = queue.seed(args.region, REGIONS[args.region], args.zoom, kinds)
@@ -382,10 +472,45 @@ def main(argv: list[str] | None = None) -> int:
             print(f"wrote {out}")
             return 0
 
+        target: tuple[int, int, int] | None = None
+        if args.tile:
+            from .geo_protocol import GeoProtocolError, validate_tile
+
+            try:
+                z, x, y = (int(part) for part in args.tile.split("/"))
+                target = validate_tile(z, x, y)
+            except (ValueError, GeoProtocolError) as error:
+                print(f"--tile must be a valid z/x/y: {error}")
+                return 2
+            kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
+            try:
+                queue.seed_tile(args.region, *target, kinds)
+            except ValueError as error:
+                print(str(error))
+                return 2
+
+        # Write-through: with BLOSSOM_SERVER_URL set, every stored blob must
+        # also land on the byte-owning blossom-server, authorized by the
+        # crawler key. Missing key material fails before any crawling starts.
+        blossom_url = os.environ.get("BLOSSOM_SERVER_URL", "").strip()
+        sink_secret: int | None = None
+        if blossom_url:
+            from .signer import load_secret
+
+            secret_file = os.environ.get("CRAWLER_SECRET_FILE", "").strip()
+            if not secret_file:
+                print(
+                    "BLOSSOM_SERVER_URL is set but CRAWLER_SECRET_FILE is not — "
+                    "refusing to crawl without write-through authorization"
+                )
+                return 2
+            sink_secret = load_secret(secret_file)
+
         store = BlobStore(blob_dir)
         index = BlobIndex(index_path)
         limiter = RateLimiter(args.min_interval)
         processed = 0
+        write_failures = 0
 
         for record in run(
             queue=queue,
@@ -394,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
             region=args.region,
             max_tiles=args.max_tiles,
             limiter=limiter,
+            tile=target,
         ):
             tile = record["tile"]
             label = f"{tile.kind:<8} z{tile.z}/{tile.x}/{tile.y}"
@@ -411,13 +537,29 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {label} ok {record['bytes']:>8,}B  {extra}{record['sha256'][:12]}")
                 processed += 1
 
+                if blossom_url and sink_secret is not None:
+                    from .writethrough import WriteThroughError, upload
+
+                    payload = store.read(record["sha256"])
+                    try:
+                        if payload is None:
+                            raise WriteThroughError("blob missing from local store")
+                        upload(blossom_url, payload, MEDIA_TYPES[tile.kind], sink_secret)
+                        # ASCII on purpose: this CLI runs under Windows Task
+                        # Scheduler consoles that still decode cp1252.
+                        print(f"  {'':<8} -> blossom-server ok")
+                    except WriteThroughError as error:
+                        write_failures += 1
+                        print(f"  {'':<8} -> blossom-server FAILED: {error}")
+
         summary = queue.progress(args.region)
         print(
             f"{args.region}: processed {processed} this run; "
             f"{summary.get('done', 0)}/{summary['total']} done"
+            + (f"; {write_failures} write-through FAILURES" if write_failures else "")
         )
         index.close()
-        return 0
+        return 1 if write_failures else 0
     finally:
         queue.close()
 
