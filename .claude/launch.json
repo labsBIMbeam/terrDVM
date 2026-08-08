@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "corpus",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--filter", "@terrcvm/napplet-corpus", "dev", "--port", "5175", "--strictPort"],
+      "port": 5175
+    }
+  ]
+}
