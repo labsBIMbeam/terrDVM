@@ -52,43 +52,69 @@ export function blobUrlAllowed(url: string, servers: readonly string[]): boolean
   });
 }
 
+export class RelayUnreachable extends Error {
+  constructor(relay: string) {
+    super(`the relay ${relay} refused the connection or dropped it before answering`);
+    this.name = 'RelayUnreachable';
+  }
+}
+
+/** Is the development transport compiled into this build at all? */
+export function devTransportAvailable(): boolean {
+  return import.meta.env.DEV;
+}
+
 /**
  * One REQ over a plain socket — development only.
  *
- * Collects EVENTs until EOSE, then closes. Returns null outside dev so the
- * caller can tell "no transport" from "no events".
+ * Collects EVENTs until EOSE, then closes. THROWS on a socket error rather
+ * than reporting absence: "there is no way to ask" and "the relay would not
+ * talk to me" are different facts, and the first version of this function
+ * returned the former for both — so a dead relay produced a message blaming a
+ * missing shell capability. Caught live on the first run against the stack.
  */
 async function devQuery(
   relay: string,
   filters: RelayFilter[],
   timeoutMs: number,
-): Promise<RelayEvent[] | null> {
-  if (!import.meta.env.DEV) return null;
+): Promise<RelayEvent[]> {
+  // The guard must WRAP the socket, not merely precede it. Hoisting this check
+  // into a helper left `new WebSocket(` reachable in the bundle, and both
+  // verify-dist and conformance's forbidden-globals scan failed the build —
+  // working exactly as intended. `if (import.meta.env.DEV)` becomes
+  // `if (false)` at build time and the whole block is eliminated.
+  if (!import.meta.env.DEV) throw new TransportUnavailable('the shell OUTBOX capability');
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let socket: WebSocket;
     try {
       socket = new WebSocket(relay);
     } catch {
-      resolve(null);
+      reject(new RelayUnreachable(relay));
       return;
     }
 
     const collected: RelayEvent[] = [];
     const subscription = `corpus-${Math.random().toString(36).slice(2, 10)}`;
-    const finish = (value: RelayEvent[] | null): void => {
+    let settled = false;
+    const finish = (value: RelayEvent[] | null, error?: Error): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       try {
         socket.close();
       } catch {
         /* already closing */
       }
-      resolve(value);
+      if (error !== undefined) reject(error);
+      else resolve(value ?? []);
     };
+    // A timeout is not a failure here: EOSE may simply be slow, and the events
+    // already collected are real. An unreachable relay errors instead.
     const timer = setTimeout(() => finish(collected), timeoutMs);
 
     socket.onopen = () => socket.send(JSON.stringify(['REQ', subscription, ...filters]));
-    socket.onerror = () => finish(null);
+    socket.onerror = () => finish(null, new RelayUnreachable(relay));
     socket.onmessage = (message) => {
       let frame: unknown;
       try {
@@ -134,10 +160,8 @@ export function createCorpusTransport(options: CorpusTransportOptions): CorpusTr
       });
       if (viaShell !== null) return viaShell;
 
-      const viaDev = await devQuery(options.relay, filters, timeoutMs);
-      if (viaDev !== null) return viaDev;
-
-      throw new TransportUnavailable('the shell OUTBOX capability');
+      if (!devTransportAvailable()) throw new TransportUnavailable('the shell OUTBOX capability');
+      return await devQuery(options.relay, filters, timeoutMs);
     },
 
     bytes: async (url) => {
