@@ -37,8 +37,7 @@ function sign(unsigned: { kind: number; created_at: number; tags: string[][]; co
   return { ...unsigned, id, pubkey, sig };
 }
 
-function demCollection(secret = SECRET) {
-  const pubkey = toHex(schnorr.getPublicKey(secret));
+function demCollection(secret = SECRET): RelayEvent {
   return sign(
     buildCollection({
       dataset: 'dem',
@@ -51,7 +50,7 @@ function demCollection(secret = SECRET) {
       createdAt: 1_754_000_000,
     }) as never,
     secret,
-  ) as RelayEvent & { pubkey: typeof pubkey };
+  );
 }
 
 function demItem(secret = SECRET, sha = DEM_SHA) {
