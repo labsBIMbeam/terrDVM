@@ -1,5 +1,35 @@
 # Spike verdicts — R1/R2 (VS-4 entry conditions), plus R4
 
+## VS-4 / VS-5 — the corpus napplet, verified live
+
+**Verdict: the slice thesis holds `[measured]`, 2026-08-03 against the local stack.**
+`apps/corpus` renders tile 14/7422/6618 from relay events and blob hashes alone. Three
+states observed in a real browser, all from the same build:
+
+| Tile | Result |
+|---|---|
+| `14/7422/6618` (covered) | Rendered: −3–182 m, 4,668 buildings, 3,826 roads, 139 land-use areas, attribution read from the collection events |
+| `14/7423/6618` (neighbour) | **Elevation only**: −9–437 m from the z13 parent, `features: no item covers this tile` |
+| `14/8500/6618` (uncovered) | Nothing rendered, both datasets named missing, no upstream request |
+
+**The one observable.** During the covered render the network log contains exactly two
+data requests — `http://127.0.0.1:3000/<sha>` twice, the two blobs by hash — plus the
+relay websocket. No Mapzen, no Overpass, no Esri. (The `localhost:5175` entries are the
+vite dev server serving the app's own modules; the artifact is a single 102 kB file.)
+
+**The negative case has changed shape, and the change is an improvement.**
+VERTICAL-SLICE.md §1 step 9 expects the neighbour to show "no data for this tile". Since
+the DEM moved to z13 (decided 2026-08-02) the z13 parent legitimately covers the
+neighbour, so the honest answer is per-dataset: elevation yes, features no. The client
+reports both rather than collapsing them — "this tile has no features" and "there is no
+data here" are different facts about the world. VS-7 should carry this wording.
+
+**Two defects the live run and the gates caught**, both fixed and pinned by tests:
+a dead relay was reported as a missing shell capability (two different facts, one
+message), and hoisting the `import.meta.env.DEV` guard out of the socket function left
+`WebSocket(` in the artifact — `verify-dist` and conformance's forbidden-globals scan
+both failed the build, which is the gate working.
+
 ## R4 — strfry addressable replacement and tag indexing
 
 **Verdict: retired `[measured]`, live on the corpus stack 2026-08-02.** Re-announcing

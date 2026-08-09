@@ -18,6 +18,43 @@ importers:
         specifier: 8.46.4
         version: 8.46.4(eslint@9.39.2)(typescript@5.9.3)
 
+  apps/corpus:
+    dependencies:
+      '@terrcvm/geo-protocol':
+        specifier: workspace:*
+        version: link:../../packages/geo-protocol
+      '@terrcvm/napplet-kit':
+        specifier: workspace:*
+        version: link:../../packages/napplet-kit
+      '@terrcvm/terrain-engine':
+        specifier: workspace:*
+        version: link:../../packages/terrain-engine
+    devDependencies:
+      '@napplet/conformance-cli':
+        specifier: 0.2.16
+        version: 0.2.16
+      '@napplet/vite-plugin':
+        specifier: 0.12.0
+        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      '@noble/curves':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@noble/hashes':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@vitest/coverage-v8':
+        specifier: ^4.1.10
+        version: 4.1.10(vitest@4.1.10)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
+
   apps/field-measurement:
     dependencies:
       '@terrcvm/napplet-kit':
@@ -80,6 +117,25 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
 
+  apps/shell-probe:
+    dependencies:
+      '@napplet/sdk':
+        specifier: 0.25.0
+        version: 0.25.0
+    devDependencies:
+      '@napplet/conformance-cli':
+        specifier: 0.2.16
+        version: 0.2.16
+      '@napplet/vite-plugin':
+        specifier: 0.12.0
+        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5
+
   apps/terrain:
     dependencies:
       '@terrcvm/napplet-kit':
@@ -110,25 +166,6 @@ importers:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@vitest/coverage-v8@4.1.10)(vite@8.1.5)
-
-  apps/shell-probe:
-    dependencies:
-      '@napplet/sdk':
-        specifier: 0.25.0
-        version: 0.25.0
-    devDependencies:
-      '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
-      '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vite:
-        specifier: 8.1.5
-        version: 8.1.5
 
   packages/geo-protocol:
     devDependencies:

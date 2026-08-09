@@ -1,0 +1,70 @@
+/* Deliberately small. This napplet has one screen and one job; the design
+   tokens come from the kit so it reads as part of the same family. */
+
+.corpus {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  max-width: 1024px;
+  margin: 0 auto;
+  font-family: var(--font-ui, ui-sans-serif, system-ui, sans-serif);
+  color: var(--fg, #d8d8e0);
+}
+
+.corpus-title {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.corpus-subtitle,
+.corpus-attribution,
+.corpus-rejected {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.corpus-status {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--accent, #f79420);
+  background: var(--surface, #17171c);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.corpus-canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  background: var(--surface, #17171c);
+  border-radius: 4px;
+}
+
+.corpus-coverage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.corpus-coverage li {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  background: var(--surface, #17171c);
+}
+
+/* Missing data is stated, not hidden — same visual weight as a hit. */
+.corpus-coverage .is-missing {
+  border: 1px dashed var(--accent, #f79420);
+}
+
+.corpus-coverage .is-covered {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
