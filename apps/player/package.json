@@ -16,8 +16,8 @@
     "@terrcvm/terrain-engine": "workspace:*"
   },
   "devDependencies": {
-    "@napplet/conformance-cli": "0.2.16",
-    "@napplet/vite-plugin": "0.12.0",
+    "@napplet/conformance-cli": "0.2.19",
+    "@napplet/vite-plugin": "0.14.1",
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@vitest/coverage-v8": "^4.1.10",

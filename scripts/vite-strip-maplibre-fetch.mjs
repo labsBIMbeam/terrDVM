@@ -2,7 +2,7 @@
  * Strip maplibre-gl's direct-network fallback from production artifacts.
  *
  * A conformant napplet may not contain direct browser network authority —
- * `napplet-conformance` (conformance-cli 0.2.16, src/scan.ts) statically
+ * `napplet-conformance` (conformance-cli 0.2.19, src/scan.ts) statically
  * scans the built artifact for `fetch(` and friends and fails on any hit.
  * maplibre-gl 5.24.0 ships one `fetch(` call site in its prebuilt bundle:
  * the `makeFetchRequest` fallback that fires only for requests no registered
