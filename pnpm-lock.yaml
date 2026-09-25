@@ -31,11 +31,11 @@ importers:
         version: link:../../packages/terrain-engine
     devDependencies:
       '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
+        specifier: 0.2.19
+        version: 0.2.19
       '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.3)(vite@8.1.5)
       '@noble/curves':
         specifier: 2.0.1
         version: 2.0.1
@@ -62,11 +62,11 @@ importers:
         version: link:../../packages/napplet-kit
     devDependencies:
       '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
+        specifier: 0.2.19
+        version: 0.2.19
       '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.3)(vite@8.1.5)
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -93,11 +93,11 @@ importers:
         version: link:../../packages/terrain-engine
     devDependencies:
       '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
+        specifier: 0.2.19
+        version: 0.2.19
       '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.3)(vite@8.1.5)
       '@noble/curves':
         specifier: 2.0.1
         version: 2.0.1
@@ -120,15 +120,15 @@ importers:
   apps/shell-probe:
     dependencies:
       '@napplet/sdk':
-        specifier: 0.25.0
-        version: 0.25.0
+        specifier: 0.28.0
+        version: 0.28.0
     devDependencies:
       '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
+        specifier: 0.2.19
+        version: 0.2.19
       '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.3)(vite@8.1.5)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -146,11 +146,11 @@ importers:
         version: link:../../packages/terrain-engine
     devDependencies:
       '@napplet/conformance-cli':
-        specifier: 0.2.16
-        version: 0.2.16
+        specifier: 0.2.19
+        version: 0.2.19
       '@napplet/vite-plugin':
-        specifier: 0.12.0
-        version: 0.12.0(typescript@5.9.3)(vite@8.1.5)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.3)(vite@8.1.5)
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -182,8 +182,8 @@ importers:
   packages/napplet-kit:
     dependencies:
       '@napplet/sdk':
-        specifier: 0.25.0
-        version: 0.25.0
+        specifier: 0.28.0
+        version: 0.28.0
       '@noble/curves':
         specifier: 2.0.1
         version: 2.0.1
@@ -374,29 +374,29 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@napplet/conformance-cli@0.2.16':
-    resolution: {integrity: sha512-ZwJ4TC0bROnIBpZqHcMWMb1uDpciJh3DAy/dDjtwdgdUj32dfyxzcMyaRcVOqBHqtwsJPPUA9L9zudXVjAeVrA==}
+  '@napplet/conformance-cli@0.2.19':
+    resolution: {integrity: sha512-3OYnYca8Xy5OQ6wnF+kdPv98Ece8XgG7P94dv+WmvtU/wHDhvZs7AQi2OpS9/FJIzPeYeU3Sii8YnqIemwDC3g==}
     hasBin: true
 
-  '@napplet/conformance@0.14.0':
-    resolution: {integrity: sha512-b2nBGm+LgJOXVj+fDpq6D7nZpUmfDGwAGkVPBePKK10eZvPKf7GMlaOtzO55NVNZWTqNCbi8ye+ern+miK3wvw==}
+  '@napplet/conformance@0.17.0':
+    resolution: {integrity: sha512-EycR0WoSGrMURYeH8frahrAgEU6AGIORXgJK+3jiPHwlVUDs9dlyKLgEVoH6vRlBkr0ptAZGtH4iV/NSNFCPfQ==}
 
-  '@napplet/core@0.29.0':
-    resolution: {integrity: sha512-P0/Cf0gC2yWEcAWZf5jWD5wbInTL77ZGyjeQoA+uUQwz5YpvRREdM/V3zrFM6NlVmK+c4x39xP+DZygk2mCpoA==}
+  '@napplet/core@0.32.0':
+    resolution: {integrity: sha512-gP+U7xd32gD7uFYINK+NWDJfW2TMvhLcIPr+Boafta7tZWTRIlyzozvqsooyFg7XUapCOnGKqnjIUa0DFo6Brw==}
 
-  '@napplet/nap@0.29.0':
-    resolution: {integrity: sha512-4Z2M/eOZo8EI/FrUnUSUfSa7cBaKTcles9qvFfecKQnex3Ql/Vuhtw4VfMNpfkGbevDObSFoKcTu9jNxpRlH8w==}
+  '@napplet/nap@0.32.0':
+    resolution: {integrity: sha512-DvlneleMpcUtOZmLGRGj9QSCor67veL4gWOYGTWaXPDkBEaEuiU4Ijtreb3+kVky/4ghjL3qmScOFMW6WorWQw==}
     peerDependencies:
       json-schema-to-ts: ^3.1.1
     peerDependenciesMeta:
       json-schema-to-ts:
         optional: true
 
-  '@napplet/sdk@0.25.0':
-    resolution: {integrity: sha512-LOc0awH2kxRLBA6pXYyVWaGDBZ279bOQVFpL2QEUYIbB0sYQD+JvkFPuIZ3WUczV71ikqXrbsqFufaZlzyL+aQ==}
+  '@napplet/sdk@0.28.0':
+    resolution: {integrity: sha512-4khbR2mhqJMWLmQIZM++XVJ1vRYrACkktt3nOnblQP28AGOpDPrI8PiYhv5QVYXzU0fKYZqjaA/rISEvSLYyJw==}
 
-  '@napplet/vite-plugin@0.12.0':
-    resolution: {integrity: sha512-qEMhTTVnWn64emFoDJMB9fnrslt/YiEssc+URChgb6vRg+q+xEk4haf+5+yTZqz2Ht3APWG6JXoqPPaMBAOO7A==}
+  '@napplet/vite-plugin@0.14.1':
+    resolution: {integrity: sha512-WIs5CP9+lWOOuuItlO39tjvlWxuFJmb1xLyXcuM6BlV9LTmbO2bAkU1mXcz9G0mPSRQnxzTRf4RckP9J0O6Yug==}
     peerDependencies:
       vite: '>=5.0.0'
 
@@ -1534,34 +1534,34 @@ snapshots:
       '@tybys/wasm-util': 0.10.3
     optional: true
 
-  '@napplet/conformance-cli@0.2.16':
+  '@napplet/conformance-cli@0.2.19':
     dependencies:
-      '@napplet/conformance': 0.14.0
+      '@napplet/conformance': 0.17.0
       playwright: 1.59.1
     transitivePeerDependencies:
       - json-schema-to-ts
 
-  '@napplet/conformance@0.14.0':
+  '@napplet/conformance@0.17.0':
     dependencies:
-      '@napplet/core': 0.29.0
-      '@napplet/nap': 0.29.0
+      '@napplet/core': 0.32.0
+      '@napplet/nap': 0.32.0
     transitivePeerDependencies:
       - json-schema-to-ts
 
-  '@napplet/core@0.29.0': {}
+  '@napplet/core@0.32.0': {}
 
-  '@napplet/nap@0.29.0':
+  '@napplet/nap@0.32.0':
     dependencies:
-      '@napplet/core': 0.29.0
+      '@napplet/core': 0.32.0
 
-  '@napplet/sdk@0.25.0':
+  '@napplet/sdk@0.28.0':
     dependencies:
-      '@napplet/core': 0.29.0
-      '@napplet/nap': 0.29.0
+      '@napplet/core': 0.32.0
+      '@napplet/nap': 0.32.0
     transitivePeerDependencies:
       - json-schema-to-ts
 
-  '@napplet/vite-plugin@0.12.0(typescript@5.9.3)(vite@8.1.5)':
+  '@napplet/vite-plugin@0.14.1(typescript@5.9.3)(vite@8.1.5)':
     dependencies:
       nostr-tools: 2.24.1(typescript@5.9.3)
       vite: 8.1.5

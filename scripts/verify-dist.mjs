@@ -11,12 +11,19 @@ if (!appArgument) {
 const appRoot = resolve(repositoryRoot, appArgument);
 const distRoot = join(appRoot, 'dist');
 const indexPath = join(distRoot, 'index.html');
+/**
+ * `@napplet/vite-plugin` 0.14 writes its kind 35129 manifest template next to
+ * the artifact after every build. It is build metadata for `napplet deploy`,
+ * never a served asset, so it is the one file allowed beside index.html.
+ */
+const MANIFEST_SIDECAR = '.nip5a-manifest.json';
+const manifestPath = join(distRoot, MANIFEST_SIDECAR);
 const findings = [];
 
 /**
  * Direct browser authority surfaces a napplet artifact must not contain.
  *
- * Mirrors the static scan in `@napplet/conformance-cli` 0.2.16 (src/scan.ts)
+ * Mirrors the static scan in `@napplet/conformance-cli` 0.2.19 (src/scan.ts)
  * so a violation fails the build here, with a named finding, instead of
  * surfacing later as a bare conformance FAIL. Every byte of I/O goes through
  * the shell resource capability; anything matching below is either app code
@@ -117,9 +124,11 @@ try {
   process.exit(1);
 }
 
-if (files.length !== 1 || files[0] !== 'index.html') {
+const artifactFiles = files.filter((file) => file !== MANIFEST_SIDECAR);
+if (artifactFiles.length !== 1 || artifactFiles[0] !== 'index.html') {
   findings.push(
-    `dist must contain only index.html; found: ${files.length === 0 ? '(none)' : files.join(', ')}`,
+    `dist must contain only index.html (plus the ${MANIFEST_SIDECAR} build sidecar); found: ` +
+      (files.length === 0 ? '(none)' : files.join(', ')),
   );
 }
 
@@ -140,6 +149,40 @@ const nonCommentHtml = html
   .join('\n');
 if (nonCommentHtml.trim() === '') {
   findings.push('dist/index.html has no non-comment content');
+}
+
+/**
+ * The napplet's identity and shell needs, stamped by
+ * `scripts/vite-napplet-meta.mjs`: both metas must be present and must say
+ * the same as the manifest sidecar the plugin wrote from the same config.
+ */
+function metaContent(name) {
+  return html.match(new RegExp(`<meta\\s+name="${name}"\\s+content="([^"]*)"`, 'i'))?.[1];
+}
+const typeMeta = metaContent('napplet-type');
+const requiresMeta = metaContent('napplet-requires');
+if (!typeMeta) findings.push('missing <meta name="napplet-type" content="…">');
+if (requiresMeta === undefined) findings.push('missing <meta name="napplet-requires" content="…">');
+if (files.includes(MANIFEST_SIDECAR)) {
+  try {
+    const { tags } = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const dTag = tags.find(([name]) => name === 'd')?.[1];
+    const requiresTags = tags
+      .filter(([name]) => name === 'requires')
+      .map(([, domain]) => domain)
+      .join(',');
+    if (typeMeta && typeMeta !== dTag) {
+      findings.push(`napplet-type meta "${typeMeta}" differs from the manifest d tag "${dTag}"`);
+    }
+    if (requiresMeta !== undefined && requiresMeta !== requiresTags) {
+      findings.push(
+        `napplet-requires meta "${requiresMeta}" differs from the manifest requires tags ` +
+          `"${requiresTags}"`,
+      );
+    }
+  } catch (error) {
+    findings.push(`${MANIFEST_SIDECAR} is unreadable: ${String(error)}`);
+  }
 }
 
 addTagReferenceFindings(html);
@@ -206,6 +249,7 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `verify-dist: PASS (${appArgument}: ${files.length} file, dist/index.html is self-contained, ` +
-    'no direct browser authority surface)',
+  `verify-dist: PASS (${appArgument}: ${artifactFiles.length} file, dist/index.html is ` +
+    `self-contained, no direct browser authority surface, napplet-type "${typeMeta}", ` +
+    `napplet-requires "${requiresMeta}")`,
 );

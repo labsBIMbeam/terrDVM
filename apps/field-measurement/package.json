@@ -14,8 +14,8 @@
     "@terrcvm/napplet-kit": "workspace:*"
   },
   "devDependencies": {
-    "@napplet/conformance-cli": "0.2.16",
-    "@napplet/vite-plugin": "0.12.0",
+    "@napplet/conformance-cli": "0.2.19",
+    "@napplet/vite-plugin": "0.14.1",
     "@vitest/coverage-v8": "^4.1.10",
     "typescript": "5.9.3",
     "vite": "8.1.5",
